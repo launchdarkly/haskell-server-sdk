@@ -1,0 +1,27 @@
+version: 2.1
+jobs:
+  build:
+    docker:
+      - image: fpco/stack-build:lts
+    steps:
+      - checkout
+      - restore_cache:
+          name: Restore Cached Dependencies
+          keys:
+            - haskell-v1-{{ checksum "stack.yaml" }}-{{ checksum "package.yaml" }}
+            - haskell-v1-{{ checksum "stack.yaml" }}
+      - run:
+          name: Resolve/Update Dependencies
+          command: stack --no-terminal setup
+      - run:
+          name: Build
+          command: stack --no-terminal build
+      - run:
+          name: Run tests
+          command: stack --no-terminal test
+      - save_cache:
+          name: Cache Dependencies
+          key: haskell-v1-{{ checksum "stack.yaml" }}-{{ checksum "package.yaml" }}
+          paths:
+            - "/root/.stack"
+            - ".stack-work"
