@@ -28,7 +28,6 @@ dependencies:
 - unordered-containers
 - extra
 - scientific
-- HUnit
 - iso8601-time
 - time
 - pcre-light
@@ -37,21 +36,16 @@ dependencies:
 - vector
 - cryptohash
 - base16-bytestring
-- binary
 - bytestring-conversion
 - hashtables
 - http-client
 - containers
-- base64-bytestring
 - http-client-tls
 - attoparsec
 - mtl
 - monad-logger
-- conduit
-- MissingH
 - exceptions
 - http-types
-- concurrent-extra
 - lrucache
 - hedis
 - retry
@@ -96,3 +90,4 @@ tests:
     - -with-rtsopts=-N
     dependencies:
     - launchdarkly-server-sdk
+    - HUnit

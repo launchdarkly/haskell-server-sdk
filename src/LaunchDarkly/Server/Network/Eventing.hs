@@ -14,10 +14,9 @@ import Control.Concurrent.MVar            (takeMVar, swapMVar)
 import System.Timeout                     (timeout)
 import Data.Text.Encoding                 (decodeUtf8)
 import qualified Data.ByteString.Lazy as  L
-import Data.List.Utils                    (addToAL)
 
 import LaunchDarkly.Server.Client         (Client)
-import LaunchDarkly.Server.Network.Common (tryAuthorized, checkAuthorization, prepareRequest, tryHTTP)
+import LaunchDarkly.Server.Network.Common (tryAuthorized, checkAuthorization, prepareRequest, tryHTTP, addToAL)
 import LaunchDarkly.Server.Events         (processSummary)
 
 processSend :: (MonadIO m, MonadLogger m, MonadMask m, MonadThrow m) => Manager -> Request -> m ()

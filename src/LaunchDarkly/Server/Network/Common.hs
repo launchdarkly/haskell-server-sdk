@@ -4,6 +4,7 @@ module LaunchDarkly.Server.Network.Common
     , tryAuthorized
     , checkAuthorization
     , tryHTTP
+    , addToAL
     ) where
 
 import Data.ByteString            (append)
@@ -11,7 +12,6 @@ import Network.HTTP.Client        (HttpException, Manager, Request(..), Response
 import Network.HTTP.Types.Status  (unauthorized401, forbidden403)
 import Data.Generics.Product      (getField)
 import Data.Text.Encoding         (encodeUtf8)
-import Data.List.Utils            (addToAL)
 import Data.Function              ((&))
 import Data.IORef                 (writeIORef)
 import Control.Monad              (when)
@@ -23,6 +23,9 @@ import LaunchDarkly.Server.Config (Config)
 
 tryHTTP :: MonadCatch m => m a -> m (Either HttpException a)
 tryHTTP = try
+
+addToAL :: Eq k => [(k, v)] -> k -> v -> [(k, v)]
+addToAL l k v = (k, v) : filter ((/=) k . fst) l
 
 prepareRequest :: Config -> Request -> Request
 prepareRequest config request = request
