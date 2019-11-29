@@ -1,0 +1,98 @@
+name:                launchdarkly-server-sdk
+version:             0.1.0.0
+github:              "githubuser/haskell-server-sdk"
+license:             BSD3
+author:              "Author name here"
+maintainer:          "example@example.com"
+copyright:           "2019 Author name here"
+
+extra-source-files:
+- README.md
+- CHANGELOG.md
+
+# Metadata used when publishing your package
+# synopsis:            Short description of your package
+# category:            Web
+
+# To avoid duplicated efforts in documentation and dealing with the
+# complications of embedding Haddock markup inside cabal files, it is
+# common to point users to the README.md file.
+description:         Please see the README on GitHub at <https://github.com/githubuser/haskell-server-sdk#readme>
+
+dependencies:
+- base >= 4.7 && < 5
+- text
+- generic-lens
+- lens
+- aeson
+- unordered-containers
+- extra
+- scientific
+- HUnit
+- iso8601-time
+- time
+- pcre-light
+- bytestring
+- semver
+- vector
+- cryptohash
+- base16-bytestring
+- binary
+- bytestring-conversion
+- hashtables
+- http-client
+- containers
+- base64-bytestring
+- http-client-tls
+- attoparsec
+- mtl
+- monad-logger
+- conduit
+- MissingH
+- exceptions
+- http-types
+- concurrent-extra
+- lrucache
+- hedis
+- retry
+
+default-extensions:
+- DeriveGeneric
+- OverloadedStrings
+- AllowAmbiguousTypes
+- DataKinds
+- DuplicateRecordFields
+- FlexibleContexts
+- NoMonomorphismRestriction
+- TypeApplications
+- DeriveAnyClass
+- MultiParamTypeClasses
+- LambdaCase
+- RankNTypes
+- FlexibleInstances
+- GeneralizedNewtypeDeriving
+- TemplateHaskell
+- MultiWayIf
+- TypeOperators
+- DerivingStrategies
+- ScopedTypeVariables
+- MonoLocalBinds
+- RecordWildCards
+
+library:
+  source-dirs: src
+  ghc-options:
+  - -fwarn-unused-imports
+  - -Wall
+  - -fno-warn-name-shadowing
+
+tests:
+  haskell-server-sdk-test:
+    main:                Spec.hs
+    source-dirs:         test
+    ghc-options:
+    - -threaded
+    - -rtsopts
+    - -with-rtsopts=-N
+    dependencies:
+    - launchdarkly-server-sdk
