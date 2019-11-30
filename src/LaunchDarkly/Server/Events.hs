@@ -1,25 +1,25 @@
 module LaunchDarkly.Server.Events where
 
-import Data.Aeson                       (ToJSON, Value(..), toJSON, object)
-import Data.Text                        (Text)
-import GHC.Natural                      (Natural)
-import GHC.Generics                     (Generic)
-import Data.Generics.Product            (HasField', getField, field, setField)
-import qualified Data.Text as           T
-import Control.Concurrent.MVar          (MVar, putMVar, swapMVar, newEmptyMVar, newMVar, tryTakeMVar, modifyMVar_)
-import qualified Data.HashMap.Strict as HM
-import Data.HashMap.Strict              (HashMap)
-import Data.Time.Clock.POSIX            (getPOSIXTime)
-import Control.Lens                     ((&), (%~))
-import Data.Maybe                       (fromMaybe)
-import Data.Cache.LRU                   (LRU, newLRU)
-import Control.Monad                    (when)
-import qualified Data.Cache.LRU as      LRU
+import Data.Aeson                        (ToJSON, Value(..), toJSON, object)
+import Data.Text                         (Text)
+import GHC.Natural                       (Natural)
+import GHC.Generics                      (Generic)
+import Data.Generics.Product             (HasField', getField, field, setField)
+import qualified Data.Text as            T
+import Control.Concurrent.MVar           (MVar, putMVar, swapMVar, newEmptyMVar, newMVar, tryTakeMVar, modifyMVar_)
+import qualified Data.HashMap.Strict as  HM
+import Data.HashMap.Strict               (HashMap)
+import Data.Time.Clock.POSIX             (getPOSIXTime)
+import Control.Lens                      ((&), (%~))
+import Data.Maybe                        (fromMaybe)
+import Data.Cache.LRU                    (LRU, newLRU)
+import Control.Monad                     (when)
+import qualified Data.Cache.LRU as       LRU
 
-import LaunchDarkly.Server.Config       (Config)
-import LaunchDarkly.Server.User         (User, userSerializeRedacted)
-import LaunchDarkly.Server.Details      (EvaluationReason(..))
-import LaunchDarkly.Server.Features     (Flag)
+import LaunchDarkly.Server.Config        (Config)
+import LaunchDarkly.Server.User.Internal (User, userSerializeRedacted)
+import LaunchDarkly.Server.Details       (EvaluationReason(..))
+import LaunchDarkly.Server.Features      (Flag)
 
 data EvalEvent = EvalEvent
     { key                  :: Text

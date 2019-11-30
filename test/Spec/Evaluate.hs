@@ -103,9 +103,8 @@ testClauseCanMatchCustomAttribute = TestCase $ do
         }, [])
 
     user = (makeUser "x")
-        { name   = pure "bob"
-        , custom = HM.fromList [("legs", Number 4)]
-        }
+        & userSetName   (pure "bob")
+        & userSetCustom (HM.fromList [("legs", Number 4)])
 
     flag = Flag
         { key                  = "feature"

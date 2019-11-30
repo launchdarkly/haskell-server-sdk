@@ -93,7 +93,7 @@ testMatchingRuleWithFullRollout = True ~=? (segmentContainsUser segment user) wh
         , deleted  = False
         }
 
-    user = (makeUser "foo") { email = pure "test@example.com" }
+    user = (makeUser "foo") & userSetEmail (pure "test@example.com")
 
 testMatchingRuleWithZeroRollout :: Test
 testMatchingRuleWithZeroRollout = False ~=? (segmentContainsUser segment user) where
@@ -121,7 +121,7 @@ testMatchingRuleWithZeroRollout = False ~=? (segmentContainsUser segment user) w
         , deleted  = False
         }
 
-    user = (makeUser "foo") { email = pure "test@example.com" }
+    user = (makeUser "foo") & userSetEmail (pure "test@example.com")
 
 testMatchingRuleWithMultipleClauses :: Test
 testMatchingRuleWithMultipleClauses = True ~=? (segmentContainsUser segment user) where
@@ -156,9 +156,8 @@ testMatchingRuleWithMultipleClauses = True ~=? (segmentContainsUser segment user
         }
 
     user = (makeUser "foo")
-        { email = pure "test@example.com"
-        , name  = pure "bob"
-        }
+        & userSetEmail (pure "test@example.com")
+        & userSetName  (pure "bob")
 
 testNonMatchingRuleWithMultipleClauses :: Test
 testNonMatchingRuleWithMultipleClauses = False ~=? (segmentContainsUser segment user) where
@@ -193,9 +192,8 @@ testNonMatchingRuleWithMultipleClauses = False ~=? (segmentContainsUser segment 
         }
 
     user = (makeUser "foo")
-        { email = pure "test@example.com"
-        , name  = pure "bob"
-        }
+        & userSetEmail (pure "test@example.com")
+        & userSetName  (pure "bob")
 
 allTests :: Test
 allTests = TestList

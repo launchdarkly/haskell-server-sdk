@@ -21,18 +21,18 @@ testBucketUserByKey = TestList
 testBucketUserByIntAttr :: Test
 testBucketUserByIntAttr = TestList
     [ TestCase $ assertEqual "intAttr" 0.54771423 $ bucketUser ((makeUser "userKeyD")
-        { custom = HM.singleton "intAttr" (Number 33333) }) "hashKey" "intAttr" "saltyA"
+        & userSetCustom (HM.singleton "intAttr" (Number 33333))) "hashKey" "intAttr" "saltyA"
     , TestCase $ assertEqual "stringAttr" 0.54771423 $ bucketUser ((makeUser "userKeyD")
-        { custom = HM.singleton "stringAttr" (String "33333") }) "hashKey" "stringAttr" "saltyA"
+        & userSetCustom (HM.singleton "stringAttr" (String "33333"))) "hashKey" "stringAttr" "saltyA"
     ]
 
 testBucketUserByFloatAttrNotAllowed :: Test
 testBucketUserByFloatAttrNotAllowed = (~=?) 0 $ bucketUser ((makeUser "userKeyE")
-    {custom = HM.singleton "floatAttr" (Number 999.999) }) "hashKey" "floatAttr" "saltyA"
+    & userSetCustom (HM.singleton "floatAttr" (Number 999.999))) "hashKey" "floatAttr" "saltyA"
 
 testBucketUserByFloatAttrThatIsReallyAnIntIsAllowed :: Test
 testBucketUserByFloatAttrThatIsReallyAnIntIsAllowed = (~=?) 0.54771423 $ bucketUser ((makeUser "userKeyE")
-    { custom = HM.singleton "floatAttr" (Number 33333) }) "hashKey" "floatAttr" "saltyA"
+    & userSetCustom (HM.singleton "floatAttr" (Number 33333))) "hashKey" "floatAttr" "saltyA"
 
 testVariationIndexForUser :: Test
 testVariationIndexForUser = TestCase $ do

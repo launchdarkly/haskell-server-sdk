@@ -1,8 +1,34 @@
 module LaunchDarkly.Server
-    ( User(..)
+    ( User
     , makeUser
-    , Config(..)
+    , userSetKey
+    , userSetSecondary
+    , userSetIP
+    , userSetCountry
+    , userSetEmail
+    , userSetFirstName
+    , userSetLastName
+    , userSetAvatar
+    , userSetName
+    , userSetAnonymous
+    , userSetCustom
+    , userSetPrivateAttributeNames
+    , Config
     , makeConfig
+    , configSetKey
+    , configSetBaseURI
+    , configSetStreamURI
+    , configSetEventsURI
+    , configSetStore
+    , configSetStreaming
+    , configSetAllAttributesPrivate
+    , configSetPrivateAttributeNames
+    , configSetFlushIntervalSeconds
+    , configSetPollIntervalSeconds
+    , configSetUserKeyLRUCapacity
+    , configSetInlineUsersInEvents
+    , configSetEventsCapacity
+    , configSetLogger
     , Client
     , makeClient
     , clientVersion
@@ -39,8 +65,9 @@ import           Data.Maybe                            (isNothing)
 import           Network.HTTP.Client                   (newManager)
 import           Network.HTTP.Client.TLS               (tlsManagerSettings)
 
-import           LaunchDarkly.Server.User              (User(..), makeUser, userSerializeRedacted)
-import           LaunchDarkly.Server.Config            (Config(..), makeConfig)
+import           LaunchDarkly.Server.User
+import           LaunchDarkly.Server.User.Internal     (User(..), userSerializeRedacted)
+import           LaunchDarkly.Server.Config
 import           LaunchDarkly.Server.Client            (Client(..), Status(..), clientVersion)
 import           LaunchDarkly.Server.Details           (EvaluationDetail(..), EvaluationReason(..))
 import           LaunchDarkly.Server.Events            (IdentifyEvent(..), CustomEvent(..), EventType(..), makeBaseEvent, queueEvent, makeEventState, addUserToEvent)

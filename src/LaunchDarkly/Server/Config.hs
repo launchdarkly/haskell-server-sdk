@@ -1,33 +1,31 @@
 module LaunchDarkly.Server.Config
-    ( Config(..)
+    ( Config
     , makeConfig
+    , configSetKey
+    , configSetBaseURI
+    , configSetStreamURI
+    , configSetEventsURI
+    , configSetStore
+    , configSetStreaming
+    , configSetAllAttributesPrivate
+    , configSetPrivateAttributeNames
+    , configSetFlushIntervalSeconds
+    , configSetPollIntervalSeconds
+    , configSetUserKeyLRUCapacity
+    , configSetInlineUsersInEvents
+    , configSetEventsCapacity
+    , configSetLogger
     ) where
 
-import Control.Monad.Logger      (LoggingT, runStdoutLoggingT)
-import Data.Text                 (Text)
-import Data.Set                  (Set)
-import Data.Monoid               (mempty)
-import GHC.Natural               (Natural)
-import GHC.Generics              (Generic)
+import Control.Monad.Logger                (LoggingT, runStdoutLoggingT)
+import Data.Generics.Product               (setField)
+import Data.Set                            (Set)
+import Data.Text                           (Text)
+import Data.Monoid                         (mempty)
+import GHC.Natural                         (Natural)
 
-import LaunchDarkly.Server.Store (StoreHandle)
-
-data Config = Config
-    { key                   :: Text
-    , baseURI               :: Text
-    , streamURI             :: Text
-    , eventsURI             :: Text
-    , store                 :: Maybe (StoreHandle IO)
-    , streaming             :: Bool
-    , allAttributesPrivate  :: Bool
-    , privateAttributeNames :: Set Text
-    , flushIntervalSeconds  :: Natural
-    , pollIntervalSeconds   :: Natural
-    , userKeyLRUCapacity    :: Natural
-    , inlineUsersInEvents   :: Bool
-    , eventsCapacity        :: Natural
-    , logger                :: LoggingT IO () -> IO ()
-    } deriving (Generic)
+import LaunchDarkly.Server.Config.Internal (Config(..))
+import LaunchDarkly.Server.Store           (StoreHandle)
 
 makeConfig :: Text -> Config
 makeConfig key = Config
@@ -46,3 +44,45 @@ makeConfig key = Config
     , eventsCapacity        = 10000
     , logger                = runStdoutLoggingT
     }
+
+configSetKey :: Text -> Config -> Config
+configSetKey = setField @"key"
+
+configSetBaseURI :: Text -> Config -> Config
+configSetBaseURI = setField @"baseURI"
+
+configSetStreamURI :: Text -> Config -> Config
+configSetStreamURI = setField @"streamURI"
+
+configSetEventsURI :: Text -> Config -> Config
+configSetEventsURI = setField @"eventsURI"
+
+configSetStore :: Maybe (StoreHandle IO) -> Config -> Config
+configSetStore = setField @"store"
+
+configSetStreaming :: Bool -> Config -> Config
+configSetStreaming = setField @"streaming"
+
+configSetAllAttributesPrivate :: Bool -> Config -> Config
+configSetAllAttributesPrivate = setField @"allAttributesPrivate"
+
+configSetPrivateAttributeNames :: Set Text -> Config -> Config
+configSetPrivateAttributeNames = setField @"privateAttributeNames"
+
+configSetFlushIntervalSeconds :: Natural -> Config -> Config
+configSetFlushIntervalSeconds = setField @"flushIntervalSeconds"
+
+configSetPollIntervalSeconds :: Natural -> Config -> Config
+configSetPollIntervalSeconds = setField @"pollIntervalSeconds"
+
+configSetUserKeyLRUCapacity :: Natural -> Config -> Config
+configSetUserKeyLRUCapacity = setField @"userKeyLRUCapacity"
+
+configSetInlineUsersInEvents :: Bool -> Config -> Config
+configSetInlineUsersInEvents = setField @"inlineUsersInEvents"
+
+configSetEventsCapacity :: Natural -> Config -> Config
+configSetEventsCapacity = setField @"eventsCapacity"
+
+configSetLogger :: (LoggingT IO () -> IO ()) -> Config -> Config
+configSetLogger = setField @"logger"

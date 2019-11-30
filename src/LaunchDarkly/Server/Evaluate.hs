@@ -21,7 +21,7 @@ import Data.Word                           (Word8)
 import Data.ByteString                     (ByteString)
 
 import LaunchDarkly.Server.Client          (Client)
-import LaunchDarkly.Server.User            (User, valueOf)
+import LaunchDarkly.Server.User.Internal   (User, valueOf)
 import LaunchDarkly.Server.Features        (Flag, Segment, Prerequisite, SegmentRule, Clause, VariationOrRollout, Rule)
 import LaunchDarkly.Server.Store           (LaunchDarklyStoreRead, getFlag, getSegment)
 import LaunchDarkly.Server.Operators       (Op(OpSegmentMatch), getOperation)
