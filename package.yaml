@@ -79,15 +79,20 @@ library:
   - -fwarn-unused-imports
   - -Wall
   - -fno-warn-name-shadowing
+  exposed-modules:
+  - LaunchDarkly.Server
+  - LaunchDarkly.Server.Client
+  - LaunchDarkly.Server.Config
 
 tests:
   haskell-server-sdk-test:
     main:                Spec.hs
-    source-dirs:         test
+    source-dirs:
+    - test
+    - src
     ghc-options:
     - -threaded
     - -rtsopts
     - -with-rtsopts=-N
     dependencies:
-    - launchdarkly-server-sdk
     - HUnit
