@@ -14,7 +14,7 @@ import Control.Monad.IO.Class                  (MonadIO, liftIO)
 import Control.Monad.Catch                     (MonadMask, MonadThrow)
 import Network.HTTP.Types.Status               (ok200)
 
-import LaunchDarkly.Server.Client              (Client)
+import LaunchDarkly.Server.Client.Internal     (Client)
 import LaunchDarkly.Server.Network.Common      (tryAuthorized, checkAuthorization, prepareRequest, tryHTTP)
 import LaunchDarkly.Server.Features            (Flag, Segment)
 import LaunchDarkly.Server.Store               (StoreHandle, storeInitialize)

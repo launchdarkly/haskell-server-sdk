@@ -81,8 +81,9 @@ library:
   - -fno-warn-name-shadowing
   exposed-modules:
   - LaunchDarkly.Server
-  - LaunchDarkly.Server.Client
   - LaunchDarkly.Server.Config
+  - LaunchDarkly.Server.User
+  - LaunchDarkly.Server.Client
 
 tests:
   haskell-server-sdk-test:

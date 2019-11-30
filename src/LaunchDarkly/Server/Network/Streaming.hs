@@ -21,7 +21,7 @@ import Control.Monad                       (forever)
 import Control.Retry                       (RetryPolicyM, RetryStatus, fullJitterBackoff, capDelay, retrying)
 import Network.HTTP.Types.Status           (ok200)
 
-import LaunchDarkly.Server.Client          (Client)
+import LaunchDarkly.Server.Client.Internal (Client)
 import LaunchDarkly.Server.Store           (StoreHandle, LaunchDarklyStoreWrite(..), insertFlag, deleteFlag, deleteSegment, insertSegment)
 import LaunchDarkly.Server.Features        (Flag, Segment)
 import LaunchDarkly.Server.Network.Common  (tryAuthorized, checkAuthorization, prepareRequest, withResponseGeneric, tryHTTP)

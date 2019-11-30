@@ -17,6 +17,11 @@ import           GHC.Generics               (Generic)
 
 import           LaunchDarkly.Server.Config (Config)
 
+-- | User contains specific attributes of a user of your application
+--
+-- The only mandatory property property is the Key, which must uniquely identify
+-- each user. For authenticated users, this may be a username or e-mail address.
+-- For anonymous users, this could be an IP address or session ID.
 data User = User
     { key                   :: Maybe Text
     , secondary             :: Maybe Text

@@ -7,19 +7,19 @@ module LaunchDarkly.Server.Network.Common
     , addToAL
     ) where
 
-import Data.ByteString            (append)
-import Network.HTTP.Client        (HttpException, Manager, Request(..), Response(..), BodyReader, setRequestIgnoreStatus, responseOpen, responseClose)
-import Network.HTTP.Types.Status  (unauthorized401, forbidden403)
-import Data.Generics.Product      (getField)
-import Data.Text.Encoding         (encodeUtf8)
-import Data.Function              ((&))
-import Data.IORef                 (writeIORef)
-import Control.Monad              (when)
-import Control.Monad.Catch        (Exception, MonadCatch, MonadMask, MonadThrow, try, bracket, throwM)
-import Control.Monad.IO.Class     (MonadIO, liftIO)
+import Data.ByteString                     (append)
+import Network.HTTP.Client                 (HttpException, Manager, Request(..), Response(..), BodyReader, setRequestIgnoreStatus, responseOpen, responseClose)
+import Network.HTTP.Types.Status           (unauthorized401, forbidden403)
+import Data.Generics.Product               (getField)
+import Data.Text.Encoding                  (encodeUtf8)
+import Data.Function                       ((&))
+import Data.IORef                          (writeIORef)
+import Control.Monad                       (when)
+import Control.Monad.Catch                 (Exception, MonadCatch, MonadMask, MonadThrow, try, bracket, throwM)
+import Control.Monad.IO.Class              (MonadIO, liftIO)
 
-import LaunchDarkly.Server.Client (Client, Status(Unauthorized), clientVersion)
-import LaunchDarkly.Server.Config (Config)
+import LaunchDarkly.Server.Client.Internal (Client, Status(Unauthorized), clientVersion)
+import LaunchDarkly.Server.Config          (Config)
 
 tryHTTP :: MonadCatch m => m a -> m (Either HttpException a)
 tryHTTP = try

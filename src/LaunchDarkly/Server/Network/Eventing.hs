@@ -1,23 +1,23 @@
 module LaunchDarkly.Server.Network.Eventing (eventThread) where
 
-import Data.Aeson                         (encode)
-import Data.Function                      ((&))
-import Control.Monad.Logger               (MonadLogger, logInfo, logError)
-import Control.Monad.IO.Class             (MonadIO, liftIO)
-import Network.HTTP.Client                (Manager, Request(..), RequestBody(..), httpLbs, parseRequest)
-import Data.Generics.Product              (getField)
-import qualified Data.Text as             T
-import Control.Monad                      (forever)
-import Control.Monad.Catch                (MonadMask, MonadThrow)
-import Control.Monad                      (void)
-import Control.Concurrent.MVar            (takeMVar, swapMVar)
-import System.Timeout                     (timeout)
-import Data.Text.Encoding                 (decodeUtf8)
-import qualified Data.ByteString.Lazy as  L
+import Data.Aeson                          (encode)
+import Data.Function                       ((&))
+import Control.Monad.Logger                (MonadLogger, logInfo, logError)
+import Control.Monad.IO.Class              (MonadIO, liftIO)
+import Network.HTTP.Client                 (Manager, Request(..), RequestBody(..), httpLbs, parseRequest)
+import Data.Generics.Product               (getField)
+import qualified Data.Text as              T
+import Control.Monad                       (forever)
+import Control.Monad.Catch                 (MonadMask, MonadThrow)
+import Control.Monad                       (void)
+import Control.Concurrent.MVar             (takeMVar, swapMVar)
+import System.Timeout                      (timeout)
+import Data.Text.Encoding                  (decodeUtf8)
+import qualified Data.ByteString.Lazy as   L
 
-import LaunchDarkly.Server.Client         (Client)
-import LaunchDarkly.Server.Network.Common (tryAuthorized, checkAuthorization, prepareRequest, tryHTTP, addToAL)
-import LaunchDarkly.Server.Events         (processSummary)
+import LaunchDarkly.Server.Client.Internal (Client)
+import LaunchDarkly.Server.Network.Common  (tryAuthorized, checkAuthorization, prepareRequest, tryHTTP, addToAL)
+import LaunchDarkly.Server.Events          (processSummary)
 
 processSend :: (MonadIO m, MonadLogger m, MonadMask m, MonadThrow m) => Manager -> Request -> m ()
 processSend manager req = (liftIO $ tryHTTP $ httpLbs req manager) >>= \case

@@ -6,29 +6,54 @@ import           Data.Text              (Text)
 import           GHC.Natural            (Natural)
 import           GHC.Generics           (Generic)
 
+-- | Combines the result of a flag evaluation with an explanation of how it was
+-- calculated.
 data EvaluationDetail value = EvaluationDetail
     { value          :: value
+      -- ^ The result of the flag evaluation. This will be either one of the
+      -- flag's variations or the default value passed by the application.
     , variationIndex :: Maybe Natural
+      -- ^ The index of the returned value within the flag's list of variations,
+      -- e.g. 0 for the first variation - or nil if the default value was
+      -- returned.
     , reason         :: EvaluationReason
+      -- ^ Describes the main factor that influenced the flag evaluation value.
     } deriving (Generic, Eq, Show)
 
 instance ToJSON a => ToJSON (EvaluationDetail a) where
     toJSON = toJSON
 
+-- | Defines the possible values of the Kind property of EvaluationReason.
 data EvaluationReason
     = EvaluationReasonOff
+      -- ^ Indicates that the flag was off and therefore returned its configured
+      -- off value.
     | EvaluationReasonTargetMatch
+      -- ^ indicates that the user key was specifically targeted for this flag.
     | EvaluationReasonRuleMatch
           { ruleIndex :: Natural
+            -- ^ The index of the rule that was matched (0 being the first).
           , ruleId    :: Text
+            -- ^ The unique identifier of the rule that was matched.
           }
+      -- ^ Indicates that the user matched one of the flag's rules.
     | EvaluationReasonPrerequisiteFailed
           { prerequisiteKey :: Text
+            -- ^ The flag key of the prerequisite that failed.
           }
+      -- ^ Indicates that the flag was considered off because it had at least
+      -- one prerequisite flag that either was off or did not return the desired
+      -- variation.
     | EvaluationReasonFallthrough
+      -- ^ Indicates that the flag was on but the user did not match any targets
+      -- or rules.
     | EvaluationReasonError
           { errorKind :: EvalErrorKind
+            -- ^ Describes the type of error.
           }
+      -- ^ Indicates that the flag could not be evaluated, e.g. because it does
+      -- not exist or due to an unexpected error. In this case the result value
+      -- will be the default value that the caller passed to the client.
     deriving (Generic, Eq, Show)
 
 instance ToJSON EvaluationReason where
@@ -46,11 +71,20 @@ instance ToJSON EvaluationReason where
         (EvaluationReasonError errorKind)                    ->
             Object $ HM.fromList [("kind", "ERROR"), ("errorKind", toJSON errorKind)]
 
+-- | Defines the possible values of the errorKind property of EvaluationReason.
 data EvalErrorKind
     = EvalErrorKindMalformedFlag
+      -- ^ Indicates that there was an internal inconsistency in the flag data,
+      -- e.g. a rule specified a nonexistent variation.
     | EvalErrorFlagNotFound
+      -- ^ Indicates that the caller provided a flag key that did not match any
+      -- known flag.
     | EvalErrorWrongType
+      -- ^ Indicates that the result value was not of the requested type, e.g.
+      -- you called boolVariationDetail but the value was an integer.
     | EvalErrorUserNotSpecified
+      -- ^ Indicates that the caller passed a user without a key for the user
+      -- parameter.
     deriving (Generic, Eq, Show)
 
 instance ToJSON EvalErrorKind where

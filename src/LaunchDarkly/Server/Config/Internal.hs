@@ -1,14 +1,14 @@
 module LaunchDarkly.Server.Config.Internal (Config(..)) where
 
-import Control.Monad.Logger      (LoggingT, runStdoutLoggingT)
+import Control.Monad.Logger      (LoggingT)
 import Data.Text                 (Text)
 import Data.Set                  (Set)
-import Data.Monoid               (mempty)
 import GHC.Natural               (Natural)
 import GHC.Generics              (Generic)
 
 import LaunchDarkly.Server.Store (StoreHandle)
 
+-- | Config allows advanced configuration of the LaunchDarkly client.
 data Config = Config
     { key                   :: Text
     , baseURI               :: Text
