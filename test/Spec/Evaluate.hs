@@ -33,23 +33,24 @@ testFlagReturnsOffVariationIfFlagIsOff = TestCase $ do
     user = makeUser "x"
 
     flag = Flag
-        { key                  = "feature"
-        , version              = 1
-        , on                   = False
-        , trackEvents          = False
-        , deleted              = False
-        , prerequisites        = []
-        , salt                 = ""
-        , sel                  = ""
-        , targets              = []
-        , rules                = []
-        , fallthrough          = VariationOrRollout
+        { key                    = "feature"
+        , version                = 1
+        , on                     = False
+        , trackEvents            = False
+        , trackEventsFallthrough = False
+        , deleted                = False
+        , prerequisites          = []
+        , salt                   = ""
+        , sel                    = ""
+        , targets                = []
+        , rules                  = []
+        , fallthrough            = VariationOrRollout
             { variation = Just 0
             , rollout   = Nothing
             }
-        , offVariation         = Just 1
-        , variations           = [String "fall", String "off", String "on"]
-        , debugEventsUntilDate = Nothing
+        , offVariation           = Just 1
+        , variations             = [String "fall", String "off", String "on"]
+        , debugEventsUntilDate   = Nothing
         }
 
 testFlagReturnsFallthroughIfFlagIsOnAndThereAreNoRules :: Test
@@ -69,23 +70,24 @@ testFlagReturnsFallthroughIfFlagIsOnAndThereAreNoRules = TestCase $ do
     user = makeUser "x"
 
     flag = Flag
-        { key                  = "feature"
-        , version              = 1
-        , on                   = True
-        , trackEvents          = False
-        , deleted              = False
-        , prerequisites        = []
-        , salt                 = ""
-        , sel                  = ""
-        , targets              = []
-        , rules                = []
-        , fallthrough          = VariationOrRollout
+        { key                    = "feature"
+        , version                = 1
+        , on                     = True
+        , trackEvents            = False
+        , trackEventsFallthrough = False
+        , deleted                = False
+        , prerequisites          = []
+        , salt                   = ""
+        , sel                    = ""
+        , targets                = []
+        , rules                  = []
+        , fallthrough            = VariationOrRollout
             { variation = Just 0
             , rollout   = Nothing
             }
-        , offVariation         = Just 1
-        , variations           = [String "fall", String "off", String "on"]
-        , debugEventsUntilDate = Nothing
+        , offVariation           = Just 1
+        , variations             = [String "fall", String "off", String "on"]
+        , debugEventsUntilDate   = Nothing
         }
 
 testClauseCanMatchCustomAttribute :: Test
@@ -107,16 +109,17 @@ testClauseCanMatchCustomAttribute = TestCase $ do
         & userSetCustom (HM.fromList [("legs", Number 4)])
 
     flag = Flag
-        { key                  = "feature"
-        , version              = 1
-        , on                   = True
-        , trackEvents          = False
-        , deleted              = False
-        , prerequisites        = []
-        , salt                 = ""
-        , sel                  = ""
-        , targets              = []
-        , rules                =
+        { key                    = "feature"
+        , version                = 1
+        , on                     = True
+        , trackEvents            = False
+        , trackEventsFallthrough = False
+        , deleted                = False
+        , prerequisites          = []
+        , salt                   = ""
+        , sel                    = ""
+        , targets                = []
+        , rules                  =
             [ Rule
                 { clauses            =
                     [ Clause
@@ -131,15 +134,16 @@ testClauseCanMatchCustomAttribute = TestCase $ do
                     , rollout   = Nothing
                     }
                 , id                 = "clause"
+                , trackEvents        = False
                 }
             ]
-        , fallthrough          = VariationOrRollout
+        , fallthrough            = VariationOrRollout
             { variation = Just 0
             , rollout   = Nothing
             }
-        , offVariation         = Just 0
-        , variations           = [Bool False, Bool True]
-        , debugEventsUntilDate = Nothing
+        , offVariation           = Just 0
+        , variations             = [Bool False, Bool True]
+        , debugEventsUntilDate   = Nothing
         }
 
 allTests :: Test

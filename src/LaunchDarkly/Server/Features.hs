@@ -17,14 +17,16 @@ data Rule = Rule
     { id                 :: Text
     , clauses            :: [Clause]
     , variationOrRollout :: VariationOrRollout
+    , trackEvents        :: Bool
     } deriving (Generic, ToJSON, Show)
 
 instance FromJSON Rule where
     parseJSON = withObject "Rule" $ \o -> do
-        id        <- o .:  "id"
-        clauses   <- o .:  "clauses"
-        variation <- o .:? "variation"
-        rollout   <- o .:? "rollout"
+        id          <- o .:  "id"
+        clauses     <- o .:  "clauses"
+        variation   <- o .:? "variation"
+        rollout     <- o .:? "rollout"
+        trackEvents <- o .:  "trackEvents"
         pure Rule
             { id                 = id
             , clauses            = clauses
@@ -32,6 +34,7 @@ instance FromJSON Rule where
                 { variation = variation
                 , rollout   = rollout
                 }
+            , trackEvents        = trackEvents
             }
 
 data WeightedVariation = WeightedVariation
@@ -50,20 +53,21 @@ data VariationOrRollout = VariationOrRollout
     } deriving (Generic, FromJSON, ToJSON, Show)
 
 data Flag = Flag
-    { key                  :: Text
-    , version              :: Natural
-    , on                   :: Bool
-    , trackEvents          :: Bool
-    , deleted              :: Bool
-    , prerequisites        :: [Prerequisite]
-    , salt                 :: Text
-    , sel                  :: Text
-    , targets              :: [Target]
-    , rules                :: [Rule]
-    , fallthrough          :: VariationOrRollout
-    , offVariation         :: Maybe Natural
-    , variations           :: [Value]
-    , debugEventsUntilDate :: Maybe Natural
+    { key                    :: Text
+    , version                :: Natural
+    , on                     :: Bool
+    , trackEvents            :: Bool
+    , trackEventsFallthrough :: Bool
+    , deleted                :: Bool
+    , prerequisites          :: [Prerequisite]
+    , salt                   :: Text
+    , sel                    :: Text
+    , targets                :: [Target]
+    , rules                  :: [Rule]
+    , fallthrough            :: VariationOrRollout
+    , offVariation           :: Maybe Natural
+    , variations             :: [Value]
+    , debugEventsUntilDate   :: Maybe Natural
     } deriving (Generic, ToJSON, FromJSON, Show)
 
 data Prerequisite = Prerequisite

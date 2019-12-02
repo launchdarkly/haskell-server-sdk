@@ -30,6 +30,7 @@ data EvalEvent = EvalEvent
     , prereqOf             :: Maybe Text
     , reason               :: EvaluationReason
     , trackEvents          :: Bool
+    , forceIncludeReason   :: Bool
     , debug                :: Bool
     , debugEventsUntilDate :: Maybe Natural
     } deriving (Generic, Eq, Show)
@@ -165,7 +166,8 @@ makeFeatureEvent config user includeReason event = addUserToEvent config user $ 
     , defaultValue = getField @"defaultValue" event
     , version      = getField @"version" event
     , variation    = getField @"variation" event
-    , reason       = if includeReason then pure $ getField @"reason" event else Nothing
+    , reason       = if includeReason || getField @"forceIncludeReason" event
+        then pure $ getField @"reason" event else Nothing
     }
 
 data CustomEvent = CustomEvent
@@ -229,6 +231,7 @@ newUnknownFlagEvent key defaultValue reason = EvalEvent
     , prereqOf             = Nothing
     , reason               = reason
     , trackEvents          = False
+    , forceIncludeReason   = False
     , debug                = False
     , debugEventsUntilDate = Nothing
     }
@@ -242,10 +245,18 @@ newSuccessfulEvalEvent flag variation value defaultValue reason prereqOf = EvalE
     , version              = Just $ getField @"version" flag
     , prereqOf             = prereqOf
     , reason               = reason
-    , trackEvents          = getField @"trackEvents" flag
+    , trackEvents          = getField @"trackEvents" flag || shouldForceReason
+    , forceIncludeReason   = shouldForceReason
     , debug                = False
     , debugEventsUntilDate = getField @"debugEventsUntilDate" flag
     }
+
+    where
+
+    shouldForceReason = case reason of
+        EvaluationReasonFallthrough       -> getField @"trackEventsFallthrough" flag
+        (EvaluationReasonRuleMatch idx _) -> getField @"trackEvents" (getField @"rules" flag !! fromIntegral idx)
+        _                                 -> False
 
 makeSummaryKey :: EvalEvent -> Text
 makeSummaryKey event = T.intercalate "-"
