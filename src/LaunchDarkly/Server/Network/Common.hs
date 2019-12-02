@@ -16,6 +16,7 @@ import Data.Function                       ((&))
 import Data.IORef                          (writeIORef)
 import Control.Monad                       (when)
 import Control.Monad.Catch                 (Exception, MonadCatch, MonadMask, MonadThrow, try, bracket, throwM)
+import Control.Monad.Logger                (MonadLogger, logError)
 import Control.Monad.IO.Class              (MonadIO, liftIO)
 
 import LaunchDarkly.Server.Client.Internal (Client, Status(Unauthorized), clientVersion)
@@ -39,9 +40,11 @@ withResponseGeneric req man f = bracket (liftIO $ responseOpen req man) (liftIO 
 
 data UnauthorizedE = UnauthorizedE deriving (Show, Exception)
 
-tryAuthorized :: (MonadIO m, MonadCatch m) => Client -> m a -> m ()
+tryAuthorized :: (MonadIO m, MonadLogger m, MonadCatch m) => Client -> m a -> m ()
 tryAuthorized client operation = try operation >>= \case
-    (Left UnauthorizedE) -> liftIO $ writeIORef (getField @"status" client) Unauthorized
+    (Left UnauthorizedE) -> do
+        $(logError) "SDK key is unauthorized"
+        liftIO $ writeIORef (getField @"status" client) Unauthorized
     _                    -> pure ()
 
 checkAuthorization :: (MonadThrow m) => Response body -> m ()
