@@ -18,70 +18,70 @@ category:            Web
 description:         Please see the README on GitHub at <https://github.com/launchdarkly/haskell-server-sdk#readme>
 
 dependencies:
-- base >= 4.7 && < 5
-- text
-- generic-lens
-- lens
 - aeson
-- unordered-containers
-- extra
-- scientific
-- iso8601-time
-- time
-- pcre-light
-- bytestring
-- semver
-- vector
-- cryptohash
-- base16-bytestring
-- bytestring-conversion
-- hashtables
-- http-client
-- containers
-- http-client-tls
 - attoparsec
-- mtl
-- monad-logger
+- base >= 4.7 && < 5
+- base16-bytestring
+- bytestring
+- bytestring-conversion
+- containers
+- cryptohash
 - exceptions
-- http-types
-- lrucache
+- extra
+- generic-lens
+- hashtables
 - hedis
+- http-client
+- http-client-tls
+- http-types
+- iso8601-time
+- lens
+- lrucache
+- monad-logger
+- mtl
+- pcre-light
 - retry
+- scientific
+- semver
+- text
+- time
+- unordered-containers
+- vector
 
 default-extensions:
-- DeriveGeneric
-- OverloadedStrings
 - AllowAmbiguousTypes
 - DataKinds
+- DeriveAnyClass
+- DeriveGeneric
+- DerivingStrategies
 - DuplicateRecordFields
 - FlexibleContexts
-- NoMonomorphismRestriction
-- TypeApplications
-- DeriveAnyClass
-- MultiParamTypeClasses
-- LambdaCase
-- RankNTypes
 - FlexibleInstances
 - GeneralizedNewtypeDeriving
-- TemplateHaskell
-- MultiWayIf
-- TypeOperators
-- DerivingStrategies
-- ScopedTypeVariables
+- LambdaCase
 - MonoLocalBinds
+- MultiParamTypeClasses
+- MultiWayIf
+- NoMonomorphismRestriction
+- OverloadedStrings
+- RankNTypes
 - RecordWildCards
+- ScopedTypeVariables
+- TemplateHaskell
+- TypeApplications
+- TypeOperators
 
 library:
   source-dirs: src
   ghc-options:
+  - -fno-warn-name-shadowing
   - -fwarn-unused-imports
   - -Wall
-  - -fno-warn-name-shadowing
   exposed-modules:
   - LaunchDarkly.Server
+  - LaunchDarkly.Server.Client
   - LaunchDarkly.Server.Config
   - LaunchDarkly.Server.User
-  - LaunchDarkly.Server.Client
 
 tests:
   haskell-server-sdk-test:
@@ -90,8 +90,8 @@ tests:
     - test
     - src
     ghc-options:
-    - -threaded
     - -rtsopts
+    - -threaded
     - -with-rtsopts=-N
     dependencies:
     - HUnit
