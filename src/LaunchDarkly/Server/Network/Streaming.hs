@@ -21,7 +21,7 @@ import Control.Monad                       (forever)
 import Control.Retry                       (RetryPolicyM, RetryStatus, fullJitterBackoff, capDelay, retrying)
 import Network.HTTP.Types.Status           (ok200)
 
-import LaunchDarkly.Server.Client.Internal (Client)
+import LaunchDarkly.Server.Client.Internal (ClientI)
 import LaunchDarkly.Server.Store           (StoreHandle, LaunchDarklyStoreWrite(..), insertFlag, deleteFlag, deleteSegment, insertSegment)
 import LaunchDarkly.Server.Features        (Flag, Segment)
 import LaunchDarkly.Server.Network.Common  (tryAuthorized, checkAuthorization, prepareRequest, withResponseGeneric, tryHTTP)
@@ -162,7 +162,7 @@ handleStream manager request store _ = do
         (Left err) -> $(logError) (T.intercalate " " ["HTTP Exception", T.pack $ show err]) >> pure True
         (Right _)  -> pure False
 
-streamingThread :: (MonadIO m, MonadLogger m, MonadMask m) => Manager -> Client -> m ()
+streamingThread :: (MonadIO m, MonadLogger m, MonadMask m) => Manager -> ClientI -> m ()
 streamingThread manager client = do
     let config = getField @"config" client; store = getField @"store" client;
     req <- (liftIO $ parseRequest $ (T.unpack $ getField @"streamURI" config) ++ "/all") >>= pure . prepareRequest config

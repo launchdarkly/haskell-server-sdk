@@ -1,25 +1,25 @@
 module LaunchDarkly.Server.Events where
 
-import Data.Aeson                        (ToJSON, Value(..), toJSON, object)
-import Data.Text                         (Text)
-import GHC.Natural                       (Natural)
-import GHC.Generics                      (Generic)
-import Data.Generics.Product             (HasField', getField, field, setField)
-import qualified Data.Text as            T
-import Control.Concurrent.MVar           (MVar, putMVar, swapMVar, newEmptyMVar, newMVar, tryTakeMVar, modifyMVar_)
-import qualified Data.HashMap.Strict as  HM
-import Data.HashMap.Strict               (HashMap)
-import Data.Time.Clock.POSIX             (getPOSIXTime)
-import Control.Lens                      ((&), (%~))
-import Data.Maybe                        (fromMaybe)
-import Data.Cache.LRU                    (LRU, newLRU)
-import Control.Monad                     (when)
-import qualified Data.Cache.LRU as       LRU
+import Data.Aeson                          (ToJSON, Value(..), toJSON, object)
+import Data.Text                           (Text)
+import GHC.Natural                         (Natural)
+import GHC.Generics                        (Generic)
+import Data.Generics.Product               (HasField', getField, field, setField)
+import qualified Data.Text as              T
+import Control.Concurrent.MVar             (MVar, putMVar, swapMVar, newEmptyMVar, newMVar, tryTakeMVar, modifyMVar_)
+import qualified Data.HashMap.Strict as    HM
+import Data.HashMap.Strict                 (HashMap)
+import Data.Time.Clock.POSIX               (getPOSIXTime)
+import Control.Lens                        ((&), (%~))
+import Data.Maybe                          (fromMaybe)
+import Data.Cache.LRU                      (LRU, newLRU)
+import Control.Monad                       (when)
+import qualified Data.Cache.LRU as         LRU
 
-import LaunchDarkly.Server.Config        (Config)
-import LaunchDarkly.Server.User.Internal (User, userSerializeRedacted)
-import LaunchDarkly.Server.Details       (EvaluationReason(..))
-import LaunchDarkly.Server.Features      (Flag)
+import LaunchDarkly.Server.Config.Internal (ConfigI)
+import LaunchDarkly.Server.User.Internal   (UserI, userSerializeRedacted)
+import LaunchDarkly.Server.Details         (EvaluationReason(..))
+import LaunchDarkly.Server.Features        (Flag)
 
 data EvalEvent = EvalEvent
     { key                  :: Text
@@ -43,7 +43,7 @@ data EventState = EventState
     , userKeyLRU :: MVar (LRU Text ())
     } deriving (Generic)
 
-makeEventState :: Config -> IO EventState
+makeEventState :: ConfigI -> IO EventState
 makeEventState config = do
     events     <- newMVar []
     flush      <- newEmptyMVar
@@ -56,7 +56,7 @@ convertFeatures :: HashMap Text (FlagSummaryContext (HashMap Text CounterContext
     -> HashMap Text (FlagSummaryContext [CounterContext])
 convertFeatures summary = (flip HM.map) summary $ \context -> context & field @"counters" %~ HM.elems
 
-queueEvent :: Config -> EventState -> EventType -> IO ()
+queueEvent :: ConfigI -> EventState -> EventType -> IO ()
 queueEvent config state event = modifyMVar_ (getField @"events" state) $ \events ->
     if length events < fromIntegral (getField @"eventsCapacity" config) then pure (event : events) else pure events
 
@@ -66,7 +66,7 @@ unixMilliseconds = (round . (* 1000)) <$> getPOSIXTime
 makeBaseEvent :: a -> IO (BaseEvent a)
 makeBaseEvent child = unixMilliseconds >>= \now -> pure $ BaseEvent { creationDate = now, event = child }
 
-processSummary :: Config -> EventState -> IO ()
+processSummary :: ConfigI -> EventState -> IO ()
 processSummary config state = tryTakeMVar (getField @"startDate" state) >>= \case
     Nothing          -> pure ()
     (Just startDate) -> do
@@ -152,12 +152,12 @@ instance EventKind DebugEvent where
 instance ToJSON DebugEvent where
     toJSON (DebugEvent x) = toJSON x
 
-addUserToEvent :: (HasField' "user" r (Maybe Value), HasField' "userKey" r (Maybe Text)) => Config -> User -> r -> r
+addUserToEvent :: (HasField' "user" r (Maybe Value), HasField' "userKey" r (Maybe Text)) => ConfigI -> UserI -> r -> r
 addUserToEvent config user event = if getField @"inlineUsersInEvents" config
     then setField @"user" (pure $ userSerializeRedacted config user) event
     else setField @"userKey" (getField @"key" user) event
 
-makeFeatureEvent :: Config -> User -> Bool -> EvalEvent -> FeatureEvent
+makeFeatureEvent :: ConfigI -> UserI -> Bool -> EvalEvent -> FeatureEvent
 makeFeatureEvent config user includeReason event = addUserToEvent config user $ FeatureEvent
     { key          = getField @"key" event
     , user         = Nothing
@@ -289,7 +289,7 @@ runSummary :: Natural -> EventState -> EvalEvent -> Bool -> IO ()
 runSummary now state event unknown = putIfEmptyMVar (getField @"startDate" state) now >>
     modifyMVar_ (getField @"summary" state) (\summary -> pure $ summarizeEvent summary event unknown)
 
-processEvalEvent :: Natural -> Config -> EventState -> User -> Bool -> Bool -> EvalEvent -> IO ()
+processEvalEvent :: Natural -> ConfigI -> EventState -> UserI -> Bool -> Bool -> EvalEvent -> IO ()
 processEvalEvent now config state user includeReason unknown event = do
     let featureEvent = makeFeatureEvent config user includeReason event
     when (getField @"trackEvents" event) $
@@ -299,11 +299,11 @@ processEvalEvent now config state user includeReason unknown event = do
     runSummary now state event unknown
     maybeIndexUser now config user state
 
-processEvalEvents :: Config -> EventState -> User -> Bool -> [EvalEvent] -> Bool -> IO ()
+processEvalEvents :: ConfigI -> EventState -> UserI -> Bool -> [EvalEvent] -> Bool -> IO ()
 processEvalEvents config state user includeReason events unknown = unixMilliseconds >>= \now ->
     mapM_ (processEvalEvent now config state user includeReason unknown) events
 
-maybeIndexUser :: Natural -> Config -> User -> EventState -> IO ()
+maybeIndexUser :: Natural -> ConfigI -> UserI -> EventState -> IO ()
 maybeIndexUser now config user state = modifyMVar_ (getField @"userKeyLRU" state) $ \cache ->
     let key = fromMaybe "" $ getField @"key" user in case LRU.lookup key cache of
         (cache', Just _)  -> pure cache'

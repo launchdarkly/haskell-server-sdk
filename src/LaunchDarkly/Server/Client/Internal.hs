@@ -1,12 +1,22 @@
-module LaunchDarkly.Server.Client.Internal where
+module LaunchDarkly.Server.Client.Internal
+    ( Client(..)
+    , ClientI(..)
+    , Status(..)
+    , clientVersion
+    ) where
 
-import Data.Text                  (Text)
-import Data.IORef                 (IORef)
-import GHC.Generics               (Generic)
+import Data.Text                           (Text)
+import Data.IORef                          (IORef)
+import GHC.Generics                        (Generic)
 
-import LaunchDarkly.Server.Config (Config)
-import LaunchDarkly.Server.Store  (StoreHandle)
-import LaunchDarkly.Server.Events (EventState)
+import LaunchDarkly.Server.Config.Internal (ConfigI)
+import LaunchDarkly.Server.Store           (StoreHandle)
+import LaunchDarkly.Server.Events          (EventState)
+
+-- | Client is the LaunchDarkly client. Client instances are thread-safe.
+-- Applications should instantiate a single instance for the lifetime of their
+-- application.
+newtype Client = Client ClientI
 
 -- | The version string for this library.
 clientVersion :: Text
@@ -21,11 +31,8 @@ data Status
     | Initialized
       -- ^ The client has successfuly connected to LaunchDarkly.
 
--- | Client is the LaunchDarkly client. Client instances are thread-safe.
--- Applications should instantiate a single instance for the lifetime of their
--- application.
-data Client = Client
-    { config :: Config
+data ClientI = ClientI
+    { config :: ConfigI
     , store  :: StoreHandle IO
     , status :: IORef Status
     , events :: EventState

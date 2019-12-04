@@ -10,6 +10,7 @@ import Data.Function ((&))
 import LaunchDarkly.Server.Store
 import LaunchDarkly.Server.Client
 import LaunchDarkly.Server.User
+import LaunchDarkly.Server.User.Internal
 import LaunchDarkly.Server.Features
 import LaunchDarkly.Server.Operators
 import LaunchDarkly.Server.Details
@@ -30,7 +31,7 @@ testFlagReturnsOffVariationIfFlagIsOff = TestCase $ do
         , reason         = EvaluationReasonOff
         }, [])
 
-    user = makeUser "x"
+    user = unwrapUser $ makeUser "x"
 
     flag = Flag
         { key                    = "feature"
@@ -67,7 +68,7 @@ testFlagReturnsFallthroughIfFlagIsOnAndThereAreNoRules = TestCase $ do
         , reason         = EvaluationReasonFallthrough
         }, [])
 
-    user = makeUser "x"
+    user = unwrapUser $ makeUser "x"
 
     flag = Flag
         { key                    = "feature"
@@ -104,7 +105,7 @@ testClauseCanMatchCustomAttribute = TestCase $ do
         , reason         = EvaluationReasonFallthrough
         }, [])
 
-    user = (makeUser "x")
+    user = unwrapUser $ (makeUser "x")
         & userSetName   (pure "bob")
         & userSetCustom (HM.fromList [("legs", Number 4)])
 

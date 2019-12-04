@@ -25,12 +25,12 @@ import Data.Text                           (Text)
 import Data.Monoid                         (mempty)
 import GHC.Natural                         (Natural)
 
-import LaunchDarkly.Server.Config.Internal (Config(..))
+import LaunchDarkly.Server.Config.Internal (Config(..), mapConfig, ConfigI(..))
 import LaunchDarkly.Server.Store           (StoreHandle)
 
 -- | Create a default configuration from a given SDK key.
 makeConfig :: Text -> Config
-makeConfig key = Config
+makeConfig key = Config $ ConfigI
     { key                   = key
     , baseURI               = "https://app.launchdarkly.com"
     , streamURI             = "https://stream.launchdarkly.com"
@@ -49,67 +49,67 @@ makeConfig key = Config
 
 -- | Set the SDK key used to authenticate with LaunchDarkly.
 configSetKey :: Text -> Config -> Config
-configSetKey = setField @"key"
+configSetKey = mapConfig . setField @"key"
 
 -- | The base URI of the main LaunchDarkly service. This should not normally be
 -- changed except for testing.
 configSetBaseURI :: Text -> Config -> Config
-configSetBaseURI = setField @"baseURI"
+configSetBaseURI = mapConfig . setField @"baseURI"
 
 -- | The base URI of the LaunchDarkly streaming service. This should not
 -- normally be changed except for testing.
 configSetStreamURI :: Text -> Config -> Config
-configSetStreamURI = setField @"streamURI"
+configSetStreamURI = mapConfig . setField @"streamURI"
 
 -- | The base URI of the LaunchDarkly service that accepts analytics events.
 -- This should not normally be changed except for testing.
 configSetEventsURI :: Text -> Config -> Config
-configSetEventsURI = setField @"eventsURI"
+configSetEventsURI = mapConfig . setField @"eventsURI"
 
 configSetStore :: Maybe (StoreHandle IO) -> Config -> Config
-configSetStore = setField @"store"
+configSetStore = mapConfig . setField @"store"
 
 -- | Sets whether streaming mode should be enabled. By default, streaming is
 -- enabled. It should only be disabled on the advice of LaunchDarkly support.
 configSetStreaming :: Bool -> Config -> Config
-configSetStreaming = setField @"streaming"
+configSetStreaming = mapConfig . setField @"streaming"
 
 -- | Sets whether or not all user attributes (other than the key) should be
 -- hidden from LaunchDarkly. If this is true, all user attribute values will be
 -- private, not just the attributes specified in PrivateAttributeNames.
 configSetAllAttributesPrivate :: Bool -> Config -> Config
-configSetAllAttributesPrivate = setField @"allAttributesPrivate"
+configSetAllAttributesPrivate = mapConfig . setField @"allAttributesPrivate"
 
 -- | Marks a set of user attribute names private. Any users sent to LaunchDarkly
 -- with this configuration active will have attributes with these names removed.
 configSetPrivateAttributeNames :: Set Text -> Config -> Config
-configSetPrivateAttributeNames = setField @"privateAttributeNames"
+configSetPrivateAttributeNames = mapConfig . setField @"privateAttributeNames"
 
 -- | The time between flushes of the event buffer. Decreasing the flush interval
 -- means that the event buffer is less likely to reach capacity.
 configSetFlushIntervalSeconds :: Natural -> Config -> Config
-configSetFlushIntervalSeconds = setField @"flushIntervalSeconds"
+configSetFlushIntervalSeconds = mapConfig . setField @"flushIntervalSeconds"
 
 -- | The polling interval (when streaming is disabled).
 configSetPollIntervalSeconds :: Natural -> Config -> Config
-configSetPollIntervalSeconds = setField @"pollIntervalSeconds"
+configSetPollIntervalSeconds = mapConfig . setField @"pollIntervalSeconds"
 
 -- | The number of user keys that the event processor can remember at any one
 -- time, so that duplicate user details will not be sent in analytics events.
 configSetUserKeyLRUCapacity :: Natural -> Config -> Config
-configSetUserKeyLRUCapacity = setField @"userKeyLRUCapacity"
+configSetUserKeyLRUCapacity = mapConfig . setField @"userKeyLRUCapacity"
 
 -- | Set to true if you need to see the full user details in every analytics
 -- event.
 configSetInlineUsersInEvents :: Bool -> Config -> Config
-configSetInlineUsersInEvents = setField @"inlineUsersInEvents"
+configSetInlineUsersInEvents = mapConfig . setField @"inlineUsersInEvents"
 
 -- | The capacity of the events buffer. The client buffers up to this many
 -- events in memory before flushing. If the capacity is exceeded before the
 -- buffer is flushed, events will be discarded.
 configSetEventsCapacity :: Natural -> Config -> Config
-configSetEventsCapacity = setField @"eventsCapacity"
+configSetEventsCapacity = mapConfig . setField @"eventsCapacity"
 
 -- | Set the logger to be used by the client.
 configSetLogger :: (LoggingT IO () -> IO ()) -> Config -> Config
-configSetLogger = setField @"logger"
+configSetLogger = mapConfig . setField @"logger"

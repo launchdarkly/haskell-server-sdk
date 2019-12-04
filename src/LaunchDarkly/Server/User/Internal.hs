@@ -1,28 +1,35 @@
 module LaunchDarkly.Server.User.Internal
     ( User(..)
+    , mapUser
+    , UserI(..)
     , valueOf
     , userSerializeRedacted
     ) where
 
-import           Data.Aeson                 (FromJSON, ToJSON, Value(..), (.:?), withObject, object, parseJSON, toJSON)
-import           Data.Foldable              (fold, or)
-import           Data.Generics.Product      (getField)
-import qualified Data.HashMap.Strict as     HM
-import           Data.HashMap.Strict        (HashMap)
-import qualified Data.Set as                S
-import           Data.Set                   (Set)
-import           Data.Text                  (Text)
-import qualified Data.Vector as             V
-import           GHC.Generics               (Generic)
+import           Data.Aeson                          (FromJSON, ToJSON, Value(..), (.:?), withObject, object, parseJSON, toJSON)
+import           Data.Foldable                       (fold, or)
+import           Data.Generics.Product               (getField)
+import qualified Data.HashMap.Strict as              HM
+import           Data.HashMap.Strict                 (HashMap)
+import qualified Data.Set as                         S
+import           Data.Set                            (Set)
+import           Data.Text                           (Text)
+import qualified Data.Vector as                      V
+import           GHC.Generics                        (Generic)
 
-import           LaunchDarkly.Server.Config (Config)
+import           LaunchDarkly.Server.Config.Internal (ConfigI)
+
+mapUser :: (UserI -> UserI) -> User -> User
+mapUser f (User c) = User $ f c
 
 -- | User contains specific attributes of a user of your application
 --
 -- The only mandatory property property is the Key, which must uniquely identify
 -- each user. For authenticated users, this may be a username or e-mail address.
 -- For anonymous users, this could be an IP address or session ID.
-data User = User
+newtype User = User { unwrapUser :: UserI }
+
+data UserI = UserI
     { key                   :: Maybe Text
     , secondary             :: Maybe Text
     , ip                    :: Maybe Text
@@ -43,8 +50,8 @@ falseToNothing x = if x then pure x else Nothing
 emptyToNothing :: (Eq m, Monoid m) => m -> Maybe m
 emptyToNothing x = if x == mempty then mempty else pure x
 
-instance FromJSON User where
-    parseJSON = withObject "User" $ \o -> User
+instance FromJSON UserI where
+    parseJSON = withObject "User" $ \o -> UserI
         <$> o .:? "key"
         <*> o .:? "secondary"
         <*> o .:? "ip"
@@ -58,7 +65,7 @@ instance FromJSON User where
         <*> (fmap fold $ o .:? "custom")
         <*> (fmap fold $ o .:? "privateAttributeNames")
 
-instance ToJSON User where
+instance ToJSON UserI where
     toJSON user = object $ filter ((/=) Null . snd)
         [ ("key",                   toJSON $                  getField @"key"                   user)
         , ("secondary",             toJSON $                  getField @"secondary"             user)
@@ -74,7 +81,7 @@ instance ToJSON User where
         , ("privateAttributeNames", toJSON $ emptyToNothing $ getField @"privateAttributeNames" user)
         ]
 
-valueOf :: User -> Text -> Maybe Value
+valueOf :: UserI -> Text -> Maybe Value
 valueOf user attribute = case attribute of
     "key"       -> String <$> getField @"key" user
     "secondary" -> String <$> getField @"secondary" user
@@ -88,7 +95,7 @@ valueOf user attribute = case attribute of
     "anonymous" -> pure $ Bool $ getField @"anonymous" user
     x           -> HM.lookup x $ getField @"custom" user
 
-userSerializeRedacted :: Config -> User -> Value
+userSerializeRedacted :: ConfigI -> UserI -> Value
 userSerializeRedacted config user = if getField @"allAttributesPrivate" config
     then userSerializeAllPrivate user
     else userSerializeRedactedNotAllPrivate (getField @"privateAttributeNames" config) user
@@ -105,12 +112,12 @@ setPrivateAttrs private redacted = Object $ HM.insert "privateAttrs" (Array $ V.
 redact :: Set Text -> HashMap Text Value -> HashMap Text Value
 redact private = HM.filterWithKey (\k _ -> S.notMember k private)
 
-userSerializeAllPrivate :: User -> Value
+userSerializeAllPrivate :: UserI -> Value
 userSerializeAllPrivate user = setPrivateAttrs private (redact private raw) where
     raw     = HM.delete "custom" $ HM.delete "privateAttributeNames" $ fromObject $ toJSON user
     private = S.delete "anonymous" $ S.delete "key" $ S.union (keysToSet raw) (keysToSet $ getField @"custom" user)
 
-userSerializeRedactedNotAllPrivate :: Set Text -> User -> Value
+userSerializeRedactedNotAllPrivate :: Set Text -> UserI -> Value
 userSerializeRedactedNotAllPrivate globalPrivate user = setPrivateAttrs private redacted where
     raw      = HM.delete "privateAttributeNames" $ fromObject $ toJSON user
     keys     = S.union (keysToSet raw) (keysToSet $ fromObject $ toJSON $ getField @"custom" user)

@@ -15,7 +15,7 @@ import System.Timeout                      (timeout)
 import Data.Text.Encoding                  (decodeUtf8)
 import qualified Data.ByteString.Lazy as   L
 
-import LaunchDarkly.Server.Client.Internal (Client)
+import LaunchDarkly.Server.Client.Internal (ClientI)
 import LaunchDarkly.Server.Network.Common  (tryAuthorized, checkAuthorization, prepareRequest, tryHTTP, addToAL)
 import LaunchDarkly.Server.Events          (processSummary)
 
@@ -31,7 +31,7 @@ setEventHeaders request = request
         & \l -> addToAL l "X-LaunchDarkly-Event-Schema" "3"
     }
 
-eventThread :: (MonadIO m, MonadLogger m, MonadMask m) => Manager -> Client -> m ()
+eventThread :: (MonadIO m, MonadLogger m, MonadMask m) => Manager -> ClientI -> m ()
 eventThread manager client = do
     let state = getField @"events" client; config = getField @"config" client;
     req <- (liftIO $ parseRequest $ (T.unpack $ getField @"eventsURI" config) ++ "/bulk") >>= pure . setEventHeaders . prepareRequest config

@@ -14,7 +14,7 @@ import Control.Monad.IO.Class                  (MonadIO, liftIO)
 import Control.Monad.Catch                     (MonadMask, MonadThrow)
 import Network.HTTP.Types.Status               (ok200)
 
-import LaunchDarkly.Server.Client.Internal     (Client)
+import LaunchDarkly.Server.Client.Internal     (ClientI)
 import LaunchDarkly.Server.Network.Common      (tryAuthorized, checkAuthorization, prepareRequest, tryHTTP)
 import LaunchDarkly.Server.Features            (Flag, Segment)
 import LaunchDarkly.Server.Store               (StoreHandle, storeInitialize)
@@ -33,7 +33,7 @@ processPoll manager store request = liftIO (tryHTTP $ httpLbs request manager) >
             (Left err)   -> $(logError) (T.pack $ show err)
             (Right body) -> liftIO (storeInitialize store (getField @"flags" body) (getField @"segments" body))
 
-pollingThread :: (MonadIO m, MonadLogger m, MonadMask m) => Manager -> Client -> m ()
+pollingThread :: (MonadIO m, MonadLogger m, MonadMask m) => Manager -> ClientI -> m ()
 pollingThread manager client = do
     let config = getField @"config" client; store = getField @"store" client;
     req <- (liftIO $ parseRequest $ (T.unpack $ getField @"baseURI" config) ++ "/sdk/latest-all") >>= pure . prepareRequest config

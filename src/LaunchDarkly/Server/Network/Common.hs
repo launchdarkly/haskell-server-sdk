@@ -19,8 +19,8 @@ import Control.Monad.Catch                 (Exception, MonadCatch, MonadMask, Mo
 import Control.Monad.Logger                (MonadLogger, logError)
 import Control.Monad.IO.Class              (MonadIO, liftIO)
 
-import LaunchDarkly.Server.Client.Internal (Client, Status(Unauthorized), clientVersion)
-import LaunchDarkly.Server.Config          (Config)
+import LaunchDarkly.Server.Client.Internal (ClientI, Status(Unauthorized), clientVersion)
+import LaunchDarkly.Server.Config.Internal (ConfigI)
 
 tryHTTP :: MonadCatch m => m a -> m (Either HttpException a)
 tryHTTP = try
@@ -28,7 +28,7 @@ tryHTTP = try
 addToAL :: Eq k => [(k, v)] -> k -> v -> [(k, v)]
 addToAL l k v = (k, v) : filter ((/=) k . fst) l
 
-prepareRequest :: Config -> Request -> Request
+prepareRequest :: ConfigI -> Request -> Request
 prepareRequest config request = request
     { requestHeaders = (requestHeaders request)
         & \l -> addToAL l "Authorization" (encodeUtf8 $ getField @"key" config)
@@ -40,7 +40,7 @@ withResponseGeneric req man f = bracket (liftIO $ responseOpen req man) (liftIO 
 
 data UnauthorizedE = UnauthorizedE deriving (Show, Exception)
 
-tryAuthorized :: (MonadIO m, MonadLogger m, MonadCatch m) => Client -> m a -> m ()
+tryAuthorized :: (MonadIO m, MonadLogger m, MonadCatch m) => ClientI -> m a -> m ()
 tryAuthorized client operation = try operation >>= \case
     (Left UnauthorizedE) -> do
         $(logError) "SDK key is unauthorized"

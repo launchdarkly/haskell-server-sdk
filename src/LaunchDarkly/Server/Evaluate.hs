@@ -20,8 +20,8 @@ import GHC.Natural                         (Natural, naturalToInt)
 import Data.Word                           (Word8)
 import Data.ByteString                     (ByteString)
 
-import LaunchDarkly.Server.Client.Internal (Client)
-import LaunchDarkly.Server.User.Internal   (User, valueOf)
+import LaunchDarkly.Server.Client.Internal (ClientI)
+import LaunchDarkly.Server.User.Internal   (UserI, valueOf)
 import LaunchDarkly.Server.Features        (Flag, Segment, Prerequisite, SegmentRule, Clause, VariationOrRollout, Rule)
 import LaunchDarkly.Server.Store           (LaunchDarklyStoreRead, getFlag, getSegment)
 import LaunchDarkly.Server.Operators       (Op(OpSegmentMatch), getOperation)
@@ -38,14 +38,14 @@ setValue x v = x { value = v }
 isError :: EvaluationReason -> Bool
 isError reason = case reason of (EvaluationReasonError _) -> True; _ -> False
 
-evaluateTyped :: Client -> Text -> User -> a -> (a -> Value) -> Bool -> (Value -> Maybe a) -> IO (EvaluationDetail a)
+evaluateTyped :: ClientI -> Text -> UserI -> a -> (a -> Value) -> Bool -> (Value -> Maybe a) -> IO (EvaluationDetail a)
 evaluateTyped client key user fallback wrap includeReason convert =
     evaluateInternalClient client key user (wrap fallback) includeReason >>= \r -> pure $ maybe
         (EvaluationDetail fallback Nothing $ if isError (getField @"reason" r)
             then (getField @"reason" r) else EvaluationReasonError EvalErrorWrongType)
         (\d -> setValue r d) (convert $ getField @"value" r)
 
-evaluateInternalClient :: Client -> Text -> User -> Value -> Bool -> IO (EvaluationDetail Value)
+evaluateInternalClient :: ClientI -> Text -> UserI -> Value -> Bool -> IO (EvaluationDetail Value)
 evaluateInternalClient client key user fallback includeReason = do
     (reason, unknown, events) <- getFlag (getField @"store" client) key >>= \case
         Nothing -> do
@@ -72,7 +72,7 @@ getVariation flag index reason = let variations = getField @"variations" flag in
         then EvaluationDetail { value = Null, variationIndex = mzero, reason = reason }
         else EvaluationDetail { value = genericIndex variations index, variationIndex = pure index, reason = reason }
 
-evaluateDetail :: (Monad m, LaunchDarklyStoreRead store m) => Flag -> User -> store
+evaluateDetail :: (Monad m, LaunchDarklyStoreRead store m) => Flag -> UserI -> store
     -> m (EvaluationDetail Value, [EvalEvent])
 evaluateDetail flag user store = if getField @"on" flag
     then checkPrerequisites flag user store >>= \case
@@ -84,7 +84,7 @@ status :: Prerequisite -> EvaluationDetail a -> Flag -> Bool
 status prereq result prereqFlag = getField @"on" prereqFlag && (getField @"variationIndex" result) ==
     (pure $ getField @"variation" prereq)
 
-checkPrerequisite :: (Monad m, LaunchDarklyStoreRead store m) => store -> User -> Flag -> Prerequisite
+checkPrerequisite :: (Monad m, LaunchDarklyStoreRead store m) => store -> UserI -> Flag -> Prerequisite
     -> m (Maybe EvaluationReason, [EvalEvent])
 checkPrerequisite store user flag prereq = getFlag store (getField @"key" prereq) >>= \case
     Nothing         -> pure (pure $ EvaluationReasonPrerequisiteFailed (getField @"key" prereq), [])
@@ -99,13 +99,13 @@ sequenceUntil _ [] = return []
 sequenceUntil p (m:ms) = m >>= \a -> if p a then return [a] else
     sequenceUntil p ms >>= \as -> return (a:as)
 
-checkPrerequisites :: (Monad m, LaunchDarklyStoreRead store m) => Flag -> User -> store
+checkPrerequisites :: (Monad m, LaunchDarklyStoreRead store m) => Flag -> UserI -> store
     -> m (Maybe EvaluationReason, [EvalEvent])
 checkPrerequisites flag user store = let p = getField @"prerequisites" flag in if null p then pure (Nothing, []) else do
     evals <- sequenceUntil (isJust . fst) $ map (checkPrerequisite store user flag) p
     pure (msum $ map fst evals, concat $ map snd evals)
 
-evaluateInternal :: (Monad m, LaunchDarklyStoreRead store m) => Flag -> User -> store -> m (EvaluationDetail Value)
+evaluateInternal :: (Monad m, LaunchDarklyStoreRead store m) => Flag -> UserI -> store -> m (EvaluationDetail Value)
 evaluateInternal flag user store = result where
     checkTarget target = if elem (getField @"key" user) (Just <$> getField @"values" target)
         then Just $ getVariation flag (getField @"variation" target) EvaluationReasonTargetMatch else Nothing
@@ -122,17 +122,17 @@ evaluateInternal flag user store = result where
 errorDetail :: EvalErrorKind -> EvaluationDetail Value
 errorDetail kind = EvaluationDetail { value = Null, variationIndex = mzero, reason = EvaluationReasonError kind }
 
-getValueForVariationOrRollout :: Flag -> VariationOrRollout -> User -> EvaluationReason -> EvaluationDetail Value
+getValueForVariationOrRollout :: Flag -> VariationOrRollout -> UserI -> EvaluationReason -> EvaluationDetail Value
 getValueForVariationOrRollout flag vr user reason =
     case variationIndexForUser vr user (getField @"key" flag) (getField @"salt" flag) of
         Nothing -> errorDetail EvalErrorKindMalformedFlag
         Just x  -> getVariation flag x reason
 
-ruleMatchesUser :: Monad m => LaunchDarklyStoreRead store m => Rule -> User -> store -> m Bool
+ruleMatchesUser :: Monad m => LaunchDarklyStoreRead store m => Rule -> UserI -> store -> m Bool
 ruleMatchesUser rule user store =
     allM (\clause -> clauseMatchesUser store clause user) (getField @"clauses" rule)
 
-variationIndexForUser :: VariationOrRollout -> User -> Text -> Text -> Maybe Natural
+variationIndexForUser :: VariationOrRollout -> UserI -> Text -> Text -> Maybe Natural
 variationIndexForUser vor user key salt
     | (Just variation) <- getField @"variation" vor = pure variation
     | (Just rollout) <- getField @"rollout" vor = let
@@ -155,7 +155,7 @@ hexStringToNumber :: ByteString -> Maybe Natural
 hexStringToNumber bytes = B.foldl' step (Just 0) bytes where
     step acc x = acc >>= \acc' -> hexCharToNumber x >>= pure . (+) (acc' * 16)
 
-bucketUser :: User -> Text -> Text -> Text -> Float
+bucketUser :: UserI -> Text -> Text -> Text -> Float
 bucketUser user key attribute salt = fromMaybe 0 $ do
     i <- valueOf user attribute >>= bucketableStringValue >>= \x -> pure $ B.take 15 $ B16.encode $ hash $ encodeUtf8 $
         T.concat [key, ".", salt, ".", x, maybe "" (T.append ".") $ getField @"secondary" user]
@@ -177,7 +177,7 @@ maybeNegate clause value = if getField @"negate" clause then not value else valu
 matchAny :: (Value -> Value -> Bool) -> Value -> [Value] -> Bool
 matchAny op value list = any (op value) list
 
-clauseMatchesUserNoSegments :: Clause -> User -> Bool
+clauseMatchesUserNoSegments :: Clause -> UserI -> Bool
 clauseMatchesUserNoSegments clause user = case valueOf user $ getField @"attribute" clause of
     Nothing        -> False
     Just (Array a) -> maybeNegate clause $ V.any (\x -> matchAny f x v) a
@@ -186,7 +186,7 @@ clauseMatchesUserNoSegments clause user = case valueOf user $ getField @"attribu
         f = getOperation $ getField @"op" clause
         v = getField @"values" clause
 
-clauseMatchesUser :: (Monad m, LaunchDarklyStoreRead store m) => store -> Clause -> User -> m Bool
+clauseMatchesUser :: (Monad m, LaunchDarklyStoreRead store m) => store -> Clause -> UserI -> m Bool
 clauseMatchesUser store clause user
     | getField @"op" clause == OpSegmentMatch = do
         let values = [ x | String x <- getField @"values" clause]
@@ -196,13 +196,13 @@ clauseMatchesUser store clause user
 
 -- Segment ---------------------------------------------------------------------
 
-segmentRuleMatchesUser :: SegmentRule -> User -> Text -> Text -> Bool
+segmentRuleMatchesUser :: SegmentRule -> UserI -> Text -> Text -> Bool
 segmentRuleMatchesUser rule user key salt = (&&)
     (all (flip clauseMatchesUserNoSegments user) (getField @"clauses" rule))
     (flip (maybe True) (getField @"weight" rule) $ \weight ->
         bucketUser user key (fromMaybe "key" $ getField @"bucketBy" rule) salt < weight / 100000.0)
 
-segmentContainsUser :: Segment -> User -> Bool
+segmentContainsUser :: Segment -> UserI -> Bool
 segmentContainsUser segment user
     | Nothing <- getField @"key" user = False
     | elem (fromJust $ getField @"key" user) (getField @"included" segment) = True

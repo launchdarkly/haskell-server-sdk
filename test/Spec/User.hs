@@ -8,10 +8,11 @@ import Data.HashMap.Strict (HashMap)
 import Data.Function ((&))
 
 import LaunchDarkly.Server.User
+import LaunchDarkly.Server.User.Internal
 
 serializeEmpty :: Test
 serializeEmpty = expected ~=? actual where
-    actual = decode $ encode $ makeUser "abc"
+    actual = decode $ encode $ unwrapUser $ makeUser "abc"
     expected = pure $ Object $ HM.fromList [("key", String "abc")]
 
 allTests :: Test

@@ -39,7 +39,7 @@ import           Data.Maybe                            (isNothing)
 import           Network.HTTP.Client                   (newManager)
 import           Network.HTTP.Client.TLS               (tlsManagerSettings)
 
-import           LaunchDarkly.Server.Config            (Config)
+import           LaunchDarkly.Server.Config.Internal   (Config(..))
 import           LaunchDarkly.Server.Client.Internal
 import           LaunchDarkly.Server.User.Internal     (User(..), userSerializeRedacted)
 import           LaunchDarkly.Server.Details           (EvaluationDetail(..), EvaluationReason(..), EvalErrorKind(..))
@@ -53,7 +53,7 @@ import           LaunchDarkly.Server.Evaluate          (evaluateTyped, evaluateD
 
 -- | Create a new instance of the LaunchDarkly client.
 makeClient :: Config -> IO Client
-makeClient config = do
+makeClient (Config config) = do
     let runLogger = getField @"logger" config
 
     status  <- newIORef Uninitialized
@@ -61,7 +61,7 @@ makeClient config = do
     manager <- newManager tlsManagerSettings
     events  <- makeEventState config
 
-    let client = Client {..}
+    let client = ClientI {..}
 
     void $ forkIO $ runLogger $ eventThread manager client
 
@@ -69,24 +69,24 @@ makeClient config = do
         then streamingThread manager client
         else pollingThread   manager client
 
-    pure client
+    pure $ Client client
 
 -- | Return the initialization status of the Client
 getStatus :: Client -> IO Status
-getStatus = readIORef . getField @"status"
+getStatus (Client client) = readIORef $ getField @"status" client
 
 -- | Returns a map from feature flag keys to values for a given user. If the
 -- result of the flag's evaluation would result in the default value, `nil` will
 -- be returned. This method does not send analytics events back to LaunchDarkly.
 allFlags :: Client -> User -> IO (HashMap Text Value)
-allFlags client user = if isNothing $ getField @"key" user then pure mempty else do
+allFlags (Client client) (User user) = if isNothing $ getField @"key" user then pure mempty else do
     flags <- getAllFlags $ getField @"store" client
     evals <- mapM (\flag -> evaluateDetail flag user $ getField @"store" client) flags
     pure $ HM.map (getField @"value" . fst) evals
 
 -- | Identify reports details about a a user.
 identify :: Client -> User -> IO ()
-identify client user = do
+identify (Client client) (User user) = do
     let user' = userSerializeRedacted (getField @"config" client) user
     x <- makeBaseEvent $ IdentifyEvent { key = getField @"key" user, user = user' }
     queueEvent (getField @"config" client) (getField @"events" client) (EventTypeIdentify x)
@@ -98,7 +98,7 @@ identify client user = do
 -- numeric custom metrics, and will also be returned as part of the custom event
 -- for Data Export.
 track :: Client -> User -> Text -> Maybe Value -> Maybe Double -> IO ()
-track client user key value metric = do
+track (Client client) (User user) key value metric = do
     x <- makeBaseEvent $ addUserToEvent (getField @"config" client) user CustomEvent
         { key = key, user = Nothing, userKey = Nothing, metricValue = metric, value = value }
     queueEvent (getField @"config" client) (getField @"events" client) (EventTypeCustom x)
@@ -107,12 +107,12 @@ track client user key value metric = do
 -- delivered as soon as possible. Flushing is asynchronous, so this method will
 -- return before it is complete.
 flushEvents :: Client -> IO ()
-flushEvents client = putMVar (getField @"flush" $ getField @"events" client) ()
+flushEvents (Client client) = putMVar (getField @"flush" $ getField @"events" client) ()
 
 type ValueConverter a = (a -> Value, Value -> Maybe a)
 
 reorderStuff :: ValueConverter a -> Bool -> Client -> Text -> User -> a -> IO (EvaluationDetail a)
-reorderStuff converter includeReason client key user fallback = evaluateTyped client key user fallback (fst converter) includeReason (snd converter)
+reorderStuff converter includeReason (Client client) key (User user) fallback = evaluateTyped client key user fallback (fst converter) includeReason (snd converter)
 
 dropReason :: (Text -> User -> a -> IO (EvaluationDetail a)) -> Text -> User -> a -> IO a
 dropReason = (((liftM (getField @"value") .) .) .)

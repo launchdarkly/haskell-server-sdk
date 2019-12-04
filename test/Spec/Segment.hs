@@ -8,6 +8,7 @@ import qualified Data.HashSet as HS
 import LaunchDarkly.Server.Client
 import LaunchDarkly.Server.Features
 import LaunchDarkly.Server.User
+import LaunchDarkly.Server.User.Internal
 import LaunchDarkly.Server.Operators
 import LaunchDarkly.Server.Evaluate
 
@@ -23,7 +24,7 @@ testExplicitIncludeUser = True ~=? (segmentContainsUser segment user) where
         , deleted  = False
         }
 
-    user = makeUser "foo"
+    user = unwrapUser $ makeUser "foo"
 
 testExplicitExcludeUser :: Test
 testExplicitExcludeUser = False ~=? (segmentContainsUser segment user) where
@@ -37,7 +38,7 @@ testExplicitExcludeUser = False ~=? (segmentContainsUser segment user) where
         , deleted  = False
         }
 
-    user = makeUser "foo"
+    user = unwrapUser $ makeUser "foo"
 
 testExplicitIncludeHasPrecedence :: Test
 testExplicitIncludeHasPrecedence = True ~=? (segmentContainsUser segment user) where
@@ -51,7 +52,7 @@ testExplicitIncludeHasPrecedence = True ~=? (segmentContainsUser segment user) w
         , deleted  = False
         }
 
-    user = makeUser "foo"
+    user = unwrapUser $ makeUser "foo"
 
 testNeitherIncludedNorExcluded :: Test
 testNeitherIncludedNorExcluded = False ~=? (segmentContainsUser segment user) where
@@ -65,7 +66,7 @@ testNeitherIncludedNorExcluded = False ~=? (segmentContainsUser segment user) wh
         , deleted  = False
         }
 
-    user = makeUser "foo"
+    user = unwrapUser $ makeUser "foo"
 
 testMatchingRuleWithFullRollout :: Test
 testMatchingRuleWithFullRollout = True ~=? (segmentContainsUser segment user) where
@@ -93,7 +94,7 @@ testMatchingRuleWithFullRollout = True ~=? (segmentContainsUser segment user) wh
         , deleted  = False
         }
 
-    user = (makeUser "foo") & userSetEmail (pure "test@example.com")
+    user = unwrapUser $ (makeUser "foo") & userSetEmail (pure "test@example.com")
 
 testMatchingRuleWithZeroRollout :: Test
 testMatchingRuleWithZeroRollout = False ~=? (segmentContainsUser segment user) where
@@ -121,7 +122,7 @@ testMatchingRuleWithZeroRollout = False ~=? (segmentContainsUser segment user) w
         , deleted  = False
         }
 
-    user = (makeUser "foo") & userSetEmail (pure "test@example.com")
+    user = unwrapUser $ (makeUser "foo") & userSetEmail (pure "test@example.com")
 
 testMatchingRuleWithMultipleClauses :: Test
 testMatchingRuleWithMultipleClauses = True ~=? (segmentContainsUser segment user) where
@@ -155,7 +156,7 @@ testMatchingRuleWithMultipleClauses = True ~=? (segmentContainsUser segment user
         , deleted  = False
         }
 
-    user = (makeUser "foo")
+    user = unwrapUser $ (makeUser "foo")
         & userSetEmail (pure "test@example.com")
         & userSetName  (pure "bob")
 
@@ -191,7 +192,7 @@ testNonMatchingRuleWithMultipleClauses = False ~=? (segmentContainsUser segment 
         , deleted  = False
         }
 
-    user = (makeUser "foo")
+    user = unwrapUser $ (makeUser "foo")
         & userSetEmail (pure "test@example.com")
         & userSetName  (pure "bob")
 

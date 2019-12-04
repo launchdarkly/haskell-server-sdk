@@ -1,4 +1,8 @@
-module LaunchDarkly.Server.Config.Internal (Config(..)) where
+module LaunchDarkly.Server.Config.Internal
+    ( Config(..)
+    , mapConfig
+    , ConfigI(..)
+    ) where
 
 import Control.Monad.Logger      (LoggingT)
 import Data.Text                 (Text)
@@ -8,8 +12,13 @@ import GHC.Generics              (Generic)
 
 import LaunchDarkly.Server.Store (StoreHandle)
 
+mapConfig :: (ConfigI -> ConfigI) -> Config -> Config
+mapConfig f (Config c) = Config $ f c
+
 -- | Config allows advanced configuration of the LaunchDarkly client.
-data Config = Config
+newtype Config = Config ConfigI
+
+data ConfigI = ConfigI
     { key                   :: Text
     , baseURI               :: Text
     , streamURI             :: Text
