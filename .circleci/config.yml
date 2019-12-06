@@ -1,6 +1,6 @@
 version: 2.1
 jobs:
-  build:
+  build-test-linux:
     docker:
       - image: fpco/stack-build:lts
     steps:
@@ -8,8 +8,8 @@ jobs:
       - restore_cache:
           name: Restore Cached Dependencies
           keys:
-            - haskell-v1-{{ checksum "stack.yaml" }}-{{ checksum "package.yaml" }}
-            - haskell-v1-{{ checksum "stack.yaml" }}
+            - haskell-v1-linux-{{ checksum "stack.yaml" }}-{{ checksum "package.yaml" }}
+            - haskell-v1-linux-{{ checksum "stack.yaml" }}
       - run:
           name: Resolve/Update Dependencies
           command: stack --no-terminal setup
@@ -21,7 +21,43 @@ jobs:
           command: stack --no-terminal test
       - save_cache:
           name: Cache Dependencies
-          key: haskell-v1-{{ checksum "stack.yaml" }}-{{ checksum "package.yaml" }}
+          key: haskell-v1-linux-{{ checksum "stack.yaml" }}-{{ checksum "package.yaml" }}
           paths:
             - "/root/.stack"
             - ".stack-work"
+
+  build-test-osx:
+    macos:
+      xcode: "11.2.1"
+    steps:
+      - checkout
+      - run:
+          name: Install deps
+          command: brew install haskell-stack pcre pkg-config
+      - restore_cache:
+          name: Restore Cached Dependencies
+          keys:
+            - haskell-v1-osx-{{ checksum "stack.yaml" }}-{{ checksum "package.yaml" }}
+            - haskell-v1-osx-{{ checksum "stack.yaml" }}
+      - run:
+          name: Resolve/Update Dependencies
+          command: stack --no-terminal setup
+      - run:
+          name: Build
+          command: stack --no-terminal build
+      - run:
+          name: Run tests
+          command: stack --no-terminal test
+      - save_cache:
+          name: Cache Dependencies
+          key: haskell-v1-osx-{{ checksum "stack.yaml" }}-{{ checksum "package.yaml" }}
+          paths:
+            - "/root/.stack"
+            - ".stack-work"
+
+workflows:
+  version: 2
+  build_and_test_all:
+    jobs:
+      - build-test-linux
+      - build-test-osx
