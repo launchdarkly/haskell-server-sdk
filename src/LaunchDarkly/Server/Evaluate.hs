@@ -1,32 +1,33 @@
 module LaunchDarkly.Server.Evaluate where
 
-import Control.Monad                       (mzero, msum)
-import Control.Monad.Extra                 (ifM, anyM, allM, firstJustM)
-import Crypto.Hash.SHA1                    (hash)
-import Data.Scientific                     (Scientific, floatingOrInteger)
-import Data.Either                         (either, fromLeft)
-import Data.Aeson.Types                    (Value(..))
-import Data.Maybe                          (maybe, fromJust, isJust)
-import Data.Text                           (Text)
-import Data.Generics.Product               (getField)
-import Data.List                           (genericIndex, null, find)
-import qualified Data.Vector as            V
-import qualified Data.Text as              T
-import qualified Data.ByteString as        B
-import qualified Data.ByteString.Base16 as B16
-import Data.Maybe                          (fromMaybe)
-import Data.Text.Encoding                  (encodeUtf8)
-import GHC.Natural                         (Natural, naturalToInt)
-import Data.Word                           (Word8)
-import Data.ByteString                     (ByteString)
+import           Control.Monad                       (mzero, msum)
+import           Control.Monad.Extra                 (ifM, anyM, allM, firstJustM)
+import           Crypto.Hash.SHA1                    (hash)
+import           Data.Scientific                     (Scientific, floatingOrInteger)
+import           Data.Either                         (either, fromLeft)
+import           Data.Aeson.Types                    (Value(..))
+import           Data.Maybe                          (maybe, fromJust, isJust)
+import           Data.Text                           (Text)
+import           Data.Generics.Product               (getField)
+import           Data.List                           (genericIndex, null, find)
+import qualified Data.Vector as                      V
+import qualified Data.Text as                        T
+import qualified Data.ByteString as                  B
+import qualified Data.ByteString.Base16 as           B16
+import           Data.Maybe                          (fromMaybe)
+import           Data.Text.Encoding                  (encodeUtf8)
+import           GHC.Natural                         (Natural, naturalToInt)
+import           Data.Word                           (Word8)
+import           Data.ByteString                     (ByteString)
+import           Data.IORef                          (readIORef)
 
-import LaunchDarkly.Server.Client.Internal (ClientI)
-import LaunchDarkly.Server.User.Internal   (UserI, valueOf)
-import LaunchDarkly.Server.Features        (Flag, Segment, Prerequisite, SegmentRule, Clause, VariationOrRollout, Rule)
-import LaunchDarkly.Server.Store           (LaunchDarklyStoreRead, getFlag, getSegment)
-import LaunchDarkly.Server.Operators       (Op(OpSegmentMatch), getOperation)
-import LaunchDarkly.Server.Events          (EvalEvent, newUnknownFlagEvent, newSuccessfulEvalEvent, processEvalEvents)
-import LaunchDarkly.Server.Details         (EvaluationDetail(..), EvaluationReason(..), EvalErrorKind(..))
+import           LaunchDarkly.Server.Client.Internal (ClientI, Status(Initialized))
+import           LaunchDarkly.Server.User.Internal   (UserI, valueOf)
+import           LaunchDarkly.Server.Features        (Flag, Segment, Prerequisite, SegmentRule, Clause, VariationOrRollout, Rule)
+import           LaunchDarkly.Server.Store           (LaunchDarklyStoreRead, getFlag, getSegment)
+import           LaunchDarkly.Server.Operators       (Op(OpSegmentMatch), getOperation)
+import           LaunchDarkly.Server.Events          (EvalEvent, newUnknownFlagEvent, newSuccessfulEvalEvent, processEvalEvents)
+import           LaunchDarkly.Server.Details         (EvaluationDetail(..), EvaluationReason(..), EvalErrorKind(..))
 
 setFallback :: EvaluationDetail Value -> Value -> EvaluationDetail Value
 setFallback detail fallback = case getField @"variationIndex" detail of
@@ -39,8 +40,9 @@ isError :: EvaluationReason -> Bool
 isError reason = case reason of (EvaluationReasonError _) -> True; _ -> False
 
 evaluateTyped :: ClientI -> Text -> UserI -> a -> (a -> Value) -> Bool -> (Value -> Maybe a) -> IO (EvaluationDetail a)
-evaluateTyped client key user fallback wrap includeReason convert =
-    evaluateInternalClient client key user (wrap fallback) includeReason >>= \r -> pure $ maybe
+evaluateTyped client key user fallback wrap includeReason convert = readIORef (getField @"status" client ) >>= \status -> if status /= Initialized
+    then pure $ EvaluationDetail fallback Nothing $ EvaluationReasonError EvalErrorClientNotReady
+    else evaluateInternalClient client key user (wrap fallback) includeReason >>= \r -> pure $ maybe
         (EvaluationDetail fallback Nothing $ if isError (getField @"reason" r)
             then (getField @"reason" r) else EvaluationReasonError EvalErrorWrongType)
         (\d -> setValue r d) (convert $ getField @"value" r)
@@ -95,7 +97,7 @@ checkPrerequisite store user flag prereq = getFlag store (getField @"key" prereq
             pure (pure $ EvaluationReasonPrerequisiteFailed (getField @"key" prereq), event : events)
 
 sequenceUntil :: Monad m => (a -> Bool) -> [m a] -> m [a]
-sequenceUntil _ [] = return []
+sequenceUntil _ []     = return []
 sequenceUntil p (m:ms) = m >>= \a -> if p a then return [a] else
     sequenceUntil p ms >>= \as -> return (a:as)
 

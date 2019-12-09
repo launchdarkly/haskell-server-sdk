@@ -85,6 +85,9 @@ data EvalErrorKind
     | EvalErrorUserNotSpecified
       -- ^ Indicates that the caller passed a user without a key for the user
       -- parameter.
+    | EvalErrorClientNotReady
+      -- ^ Indicates that the caller tried to evaluate a flag before the client
+      -- had successfully initialized.
     deriving (Generic, Eq, Show)
 
 instance ToJSON EvalErrorKind where
@@ -93,3 +96,4 @@ instance ToJSON EvalErrorKind where
         EvalErrorFlagNotFound      -> "FLAG_NOT_FOUND"
         EvalErrorWrongType         -> "WRONG_TYPE"
         EvalErrorUserNotSpecified  -> "USER_NOT_SPECIFIED"
+        EvalErrorClientNotReady    -> "CLIENT_NOT_READY"

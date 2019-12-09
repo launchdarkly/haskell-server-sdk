@@ -1,30 +1,30 @@
 module LaunchDarkly.Server.Network.Streaming (streamingThread) where
 
-import Data.Text                           (Text)
-import qualified Data.Text as              T
-import Data.Attoparsec.Text             as P
-import Control.Monad                       (void, mzero)
-import Data.ByteString                     (ByteString)
-import Control.Applicative                 (many)
-import Data.Text.Encoding                  (decodeUtf8, encodeUtf8)
-import Data.HashMap.Strict                 (HashMap)
-import Network.HTTP.Client                 (Manager, Response(..), Request, parseRequest, brRead, throwErrorStatusCodes)
-import Control.Monad.Logger                (MonadLogger, logInfo, logWarn, logError)
-import Control.Monad.IO.Class              (MonadIO, liftIO)
-import Data.Generics.Product               (getField)
-import Data.Aeson                          (FromJSON, parseJSON, withObject, eitherDecode, (.:), Object, encode)
-import qualified Data.ByteString.Lazy as   L
-import GHC.Natural                         (Natural)
-import GHC.Generics                        (Generic)
-import Control.Monad.Catch                 (MonadMask)
-import Control.Monad                       (forever)
-import Control.Retry                       (RetryPolicyM, RetryStatus, fullJitterBackoff, capDelay, retrying)
-import Network.HTTP.Types.Status           (ok200)
+import           Data.Text                           (Text)
+import qualified Data.Text as                        T
+import           Data.Attoparsec.Text as             P
+import           Control.Monad                       (void, mzero)
+import           Data.ByteString                     (ByteString)
+import           Control.Applicative                 (many)
+import           Data.Text.Encoding                  (decodeUtf8, encodeUtf8)
+import           Data.HashMap.Strict                 (HashMap)
+import           Network.HTTP.Client                 (Manager, Response(..), Request, parseRequest, brRead, throwErrorStatusCodes)
+import           Control.Monad.Logger                (MonadLogger, logInfo, logWarn, logError)
+import           Control.Monad.IO.Class              (MonadIO, liftIO)
+import           Data.Generics.Product               (getField)
+import           Data.Aeson                          (FromJSON, parseJSON, withObject, eitherDecode, (.:), Object, encode)
+import qualified Data.ByteString.Lazy as             L
+import           GHC.Natural                         (Natural)
+import           GHC.Generics                        (Generic)
+import           Control.Monad.Catch                 (MonadMask)
+import           Control.Monad                       (forever)
+import           Control.Retry                       (RetryPolicyM, RetryStatus, fullJitterBackoff, capDelay, retrying)
+import           Network.HTTP.Types.Status           (ok200)
 
-import LaunchDarkly.Server.Client.Internal (ClientI)
-import LaunchDarkly.Server.Store           (StoreHandle, LaunchDarklyStoreWrite(..), insertFlag, deleteFlag, deleteSegment, insertSegment)
-import LaunchDarkly.Server.Features        (Flag, Segment)
-import LaunchDarkly.Server.Network.Common  (tryAuthorized, checkAuthorization, prepareRequest, withResponseGeneric, tryHTTP)
+import           LaunchDarkly.Server.Client.Internal (ClientI, Status(Initialized), setStatus)
+import           LaunchDarkly.Server.Store           (StoreHandle, LaunchDarklyStoreWrite(..), insertFlag, deleteFlag, deleteSegment, insertSegment)
+import           LaunchDarkly.Server.Features        (Flag, Segment)
+import           LaunchDarkly.Server.Network.Common  (tryAuthorized, checkAuthorization, prepareRequest, withResponseGeneric, tryHTTP)
 
 data PutBody = PutBody
     { flags    :: HashMap Text Flag
@@ -90,11 +90,12 @@ parseEvent = do
     let event = foldr processField (SSE "" "" mzero mzero) fields
     if (T.null $ name event) || (T.null $ buffer event) then parseEvent else pure event
 
-processPut :: (MonadIO m, MonadLogger m) => StoreHandle IO -> L.ByteString -> m ()
-processPut store value = case eitherDecode value :: Either String (PathData PutBody) of
+processPut :: (MonadIO m, MonadLogger m) => ClientI -> StoreHandle IO -> L.ByteString -> m ()
+processPut client store value = case eitherDecode value :: Either String (PathData PutBody) of
     Right (PathData _ (PutBody flags segments)) -> do
         $(logInfo) "initializing store with put"
         liftIO $ storeInitialize store flags segments
+        liftIO $ setStatus client Initialized
     Left err -> do
         $(logError) $ T.append "failed to parse put body" (T.pack err)
 
@@ -132,18 +133,18 @@ processDelete store value = case eitherDecode value :: Either String (PathVersio
     Left err -> do
         $(logError) $ T.append "failed to parse delete" (T.pack err)
 
-processEvent :: (MonadIO m, MonadLogger m) => StoreHandle IO -> Text -> L.ByteString -> m ()
-processEvent store name value = case name of
-    "put"    -> processPut store value
+processEvent :: (MonadIO m, MonadLogger m) => ClientI -> StoreHandle IO -> Text -> L.ByteString -> m ()
+processEvent client store name value = case name of
+    "put"    -> processPut client store value
     "patch"  -> processPatch store value
     "delete" -> processDelete store value
     _        -> $(logWarn) "unknown event type"
 
-readStream :: (MonadIO m, MonadLogger m) => (IO ByteString) -> StoreHandle IO -> m ()
-readStream body store = loop "" where
+readStream :: (MonadIO m, MonadLogger m) => ClientI -> (IO ByteString) -> StoreHandle IO -> m ()
+readStream client body store = loop "" where
     loop initial = (liftIO $ parseWith (fmap decodeUtf8 $ brRead body) parseEvent initial) >>= \case
         (Done remaining event) -> do
-            processEvent store (name event) (L.fromStrict $ encodeUtf8 $ buffer event)
+            processEvent client store (name event) (L.fromStrict $ encodeUtf8 $ buffer event)
             loop remaining
         (Fail _ context err) -> do
             $(logError) $ T.intercalate " " ["failed parsing SSE frame", T.pack $ show context, T.pack err]
@@ -153,11 +154,11 @@ readStream body store = loop "" where
 retryPolicy :: MonadIO m => RetryPolicyM m
 retryPolicy = capDelay (3600 * 1000000) $ fullJitterBackoff (1 * 1000000)
 
-handleStream :: (MonadIO m, MonadLogger m, MonadMask m) => Manager -> Request -> StoreHandle IO -> RetryStatus -> m Bool
-handleStream manager request store _ = do
+handleStream :: (MonadIO m, MonadLogger m, MonadMask m) => ClientI -> Manager -> Request -> StoreHandle IO -> RetryStatus -> m Bool
+handleStream client manager request store _ = do
     status <- tryHTTP $ withResponseGeneric request manager $ \response -> checkAuthorization response >>
         if responseStatus response /= ok200 then throwErrorStatusCodes request response else
-            readStream (responseBody response) store
+            readStream client (responseBody response) store
     case status of
         (Left err) -> $(logError) (T.intercalate " " ["HTTP Exception", T.pack $ show err]) >> pure True
         (Right _)  -> pure False
@@ -166,4 +167,4 @@ streamingThread :: (MonadIO m, MonadLogger m, MonadMask m) => Manager -> ClientI
 streamingThread manager client = do
     let config = getField @"config" client; store = getField @"store" client;
     req <- (liftIO $ parseRequest $ (T.unpack $ getField @"streamURI" config) ++ "/all") >>= pure . prepareRequest config
-    tryAuthorized client $ forever $ retrying retryPolicy (\_ status -> pure status) $ handleStream manager req store
+    tryAuthorized client $ forever $ retrying retryPolicy (\_ status -> pure status) $ handleStream client manager req store

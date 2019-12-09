@@ -16,6 +16,9 @@ module LaunchDarkly.Server.Config
     , configSetInlineUsersInEvents
     , configSetEventsCapacity
     , configSetLogger
+    , configSetSendEvents
+    , configSetOffline
+    , configSetRequestTimeoutSeconds
     ) where
 
 import Control.Monad.Logger                (LoggingT, runStdoutLoggingT)
@@ -45,6 +48,9 @@ makeConfig key = Config $ ConfigI
     , inlineUsersInEvents   = False
     , eventsCapacity        = 10000
     , logger                = runStdoutLoggingT
+    , sendEvents            = True
+    , offline               = False
+    , requestTimeoutSeconds = 30
     }
 
 -- | Set the SDK key used to authenticate with LaunchDarkly.
@@ -113,3 +119,19 @@ configSetEventsCapacity = mapConfig . setField @"eventsCapacity"
 -- | Set the logger to be used by the client.
 configSetLogger :: (LoggingT IO () -> IO ()) -> Config -> Config
 configSetLogger = mapConfig . setField @"logger"
+
+-- | Sets whether to send analytics events back to LaunchDarkly. By default, the
+-- client will send events. This differs from Offline in that it only affects
+-- sending events, not streaming or polling for events from the server.
+configSetSendEvents :: Bool -> Config -> Config
+configSetSendEvents = mapConfig . setField @"sendEvents"
+
+-- | Sets whether this client is offline. An offline client will not make any
+-- network connections to LaunchDarkly, and will return default values for all
+-- feature flags.
+configSetOffline :: Bool -> Config -> Config
+configSetOffline = mapConfig . setField @"offline"
+
+-- | Sets how long an the HTTP client should wait before a response is returned.
+configSetRequestTimeoutSeconds :: Natural -> Config -> Config
+configSetRequestTimeoutSeconds = mapConfig . setField @"requestTimeoutSeconds"

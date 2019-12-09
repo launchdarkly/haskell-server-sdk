@@ -18,6 +18,7 @@ module LaunchDarkly.Server.Client
     , EvaluationReason(..)
     , EvalErrorKind(..)
     , allFlags
+    , close
     , flushEvents
     , identify
     , track
@@ -25,21 +26,23 @@ module LaunchDarkly.Server.Client
     , getStatus
     ) where
 
-import           Control.Concurrent.MVar               (putMVar)
-import           Control.Concurrent                    (forkIO)
-import           Control.Monad                         (void, liftM)
-import           Data.IORef                            (newIORef, readIORef)
+import           Control.Concurrent                    (forkFinally, killThread)
+import           Control.Concurrent.MVar               (putMVar, takeMVar, newEmptyMVar)
+import           Control.Monad                         (liftM, void)
+import           Control.Monad.IO.Class                (liftIO)
+import           Control.Monad.Logger                  (LoggingT, logDebug)
+import           Data.IORef                            (newIORef, readIORef, writeIORef)
 import           Data.HashMap.Strict                   (HashMap)
 import qualified Data.HashMap.Strict as                HM
 import           Data.Text                             (Text)
 import           Data.Aeson                            (Value(..))
-import           Data.Generics.Product                 (getField)
+import           Data.Generics.Product                 (getField, setField)
 import           Data.Scientific                       (toRealFloat, fromFloatDigits)
 import           Data.Maybe                            (isNothing)
 import           Network.HTTP.Client                   (newManager)
 import           Network.HTTP.Client.TLS               (tlsManagerSettings)
 
-import           LaunchDarkly.Server.Config.Internal   (Config(..))
+import           LaunchDarkly.Server.Config.Internal   (Config(..), shouldSendEvents)
 import           LaunchDarkly.Server.Client.Internal
 import           LaunchDarkly.Server.User.Internal     (User(..), userSerializeRedacted)
 import           LaunchDarkly.Server.Details           (EvaluationDetail(..), EvaluationReason(..), EvalErrorKind(..))
@@ -54,22 +57,34 @@ import           LaunchDarkly.Server.Evaluate          (evaluateTyped, evaluateD
 -- | Create a new instance of the LaunchDarkly client.
 makeClient :: Config -> IO Client
 makeClient (Config config) = do
-    let runLogger = getField @"logger" config
+    let runLogger          = getField @"logger" config
+        eventThreadPair    = Nothing
+        downloadThreadPair = Nothing
 
     status  <- newIORef Uninitialized
     store   <- case getField @"store" config of Nothing -> makeMemoryStoreIO; Just x -> pure x
     manager <- newManager tlsManagerSettings
     events  <- makeEventState config
 
-    let client = ClientI {..}
+    let client          = ClientI {..}
+        downloadThreadF = if getField @"streaming" config then streamingThread else pollingThread
 
-    void $ forkIO $ runLogger $ eventThread manager client
+    eventThreadPair'    <- if not (shouldSendEvents config) then pure Nothing else do
+        sync   <- newEmptyMVar
+        thread <- forkFinally (runLogger $ eventThread manager client) (\_ -> putMVar sync ())
+        pure $ pure (thread, sync)
 
-    void $ forkIO $ runLogger $ if getField @"streaming" config
-        then streamingThread manager client
-        else pollingThread   manager client
+    downloadThreadPair' <- if getField @"offline" config then pure Nothing else do
+        sync   <- newEmptyMVar
+        thread <- forkFinally (runLogger $ downloadThreadF manager client) (\_ -> putMVar sync ())
+        pure $ pure (thread, sync)
 
-    pure $ Client client
+    pure $ Client
+        $ setField @"downloadThreadPair" downloadThreadPair'
+        $ setField @"eventThreadPair"    eventThreadPair' client
+
+clientRunLogger :: ClientI -> (LoggingT IO () -> IO ())
+clientRunLogger client = getField @"logger" $ getField @"config" client
 
 -- | Return the initialization status of the Client
 getStatus :: Client -> IO Status
@@ -108,6 +123,25 @@ track (Client client) (User user) key value metric = do
 -- return before it is complete.
 flushEvents :: Client -> IO ()
 flushEvents (Client client) = putMVar (getField @"flush" $ getField @"events" client) ()
+
+-- | Close shuts down the LaunchDarkly client. After calling this, the
+-- LaunchDarkly client should no longer be used. The method will block until all
+-- pending analytics events have been sent.
+close :: Client -> IO ()
+close outer@(Client client) = clientRunLogger client $ do
+    $(logDebug) "Setting client status to ShuttingDown"
+    liftIO $ writeIORef (getField @"status" client) ShuttingDown
+    (flip mapM_) (getField @"downloadThreadPair" client) $ \(thread, sync) -> do
+        $(logDebug) "Killing download thread"
+        liftIO $ killThread thread
+        $(logDebug) "Waiting on download thread to die"
+        liftIO $ void $ takeMVar sync
+    (flip mapM_) (getField @"eventThreadPair" client) $ \(_, sync) -> do
+        $(logDebug) "Triggering event flush"
+        liftIO $ flushEvents outer
+        $(logDebug) "Waiting on event thread to die"
+        liftIO $ void $ takeMVar sync
+    $(logDebug) "Client background resources destroyed"
 
 type ValueConverter a = (a -> Value, Value -> Maybe a)
 
