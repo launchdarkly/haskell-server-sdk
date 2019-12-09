@@ -1,0 +1,97 @@
+name:                launchdarkly-server-sdk
+version:             0.1.0
+github:              "launchdarkly/haskell-server-sdk"
+license:             Apache-2.0
+license-file:        "LICENSE"
+author:              "LaunchDarkly"
+maintainer:          "dev@launchdarkly.com"
+copyright:           "2019 Catamorphic, Co"
+
+extra-source-files:
+- README.md
+- CHANGELOG.md
+- LICENSE
+
+synopsis:            Server-side SDK for integrating with LaunchDarkly
+category:            Web
+
+description:         Please see the README on GitHub at <https://github.com/launchdarkly/haskell-server-sdk#readme>
+
+dependencies:
+- aeson
+- attoparsec
+- base >= 4.7 && < 5
+- base16-bytestring
+- bytestring
+- bytestring-conversion
+- containers
+- cryptohash
+- exceptions
+- extra
+- generic-lens
+- hashtables
+- hedis
+- http-client
+- http-client-tls
+- http-types
+- iso8601-time
+- lens
+- lrucache
+- monad-logger
+- mtl
+- pcre-light
+- retry
+- scientific
+- semver
+- text
+- time
+- unordered-containers
+- vector
+
+default-extensions:
+- AllowAmbiguousTypes
+- DataKinds
+- DeriveAnyClass
+- DeriveGeneric
+- DerivingStrategies
+- DuplicateRecordFields
+- FlexibleContexts
+- FlexibleInstances
+- GeneralizedNewtypeDeriving
+- LambdaCase
+- MonoLocalBinds
+- MultiParamTypeClasses
+- MultiWayIf
+- NoMonomorphismRestriction
+- OverloadedStrings
+- RankNTypes
+- RecordWildCards
+- ScopedTypeVariables
+- TemplateHaskell
+- TypeApplications
+- TypeOperators
+
+library:
+  source-dirs: src
+  ghc-options:
+  - -fno-warn-name-shadowing
+  - -fwarn-unused-imports
+  - -Wall
+  exposed-modules:
+  - LaunchDarkly.Server
+  - LaunchDarkly.Server.Client
+  - LaunchDarkly.Server.Config
+  - LaunchDarkly.Server.User
+
+tests:
+  haskell-server-sdk-test:
+    main:                Spec.hs
+    source-dirs:
+    - test
+    - src
+    ghc-options:
+    - -rtsopts
+    - -threaded
+    - -with-rtsopts=-N
+    dependencies:
+    - HUnit

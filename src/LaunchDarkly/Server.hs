@@ -1,0 +1,63 @@
+-- | This module re-exports the User, Client, and Config modules.
+
+module LaunchDarkly.Server
+    ( Config
+    , makeConfig
+    , configSetKey
+    , configSetBaseURI
+    , configSetStreamURI
+    , configSetEventsURI
+    , configSetStreaming
+    , configSetAllAttributesPrivate
+    , configSetPrivateAttributeNames
+    , configSetFlushIntervalSeconds
+    , configSetPollIntervalSeconds
+    , configSetUserKeyLRUCapacity
+    , configSetInlineUsersInEvents
+    , configSetEventsCapacity
+    , configSetLogger
+    , configSetSendEvents
+    , configSetOffline
+    , configSetRequestTimeoutSeconds
+    , User
+    , makeUser
+    , userSetKey
+    , userSetSecondary
+    , userSetIP
+    , userSetCountry
+    , userSetEmail
+    , userSetFirstName
+    , userSetLastName
+    , userSetAvatar
+    , userSetName
+    , userSetAnonymous
+    , userSetCustom
+    , userSetPrivateAttributeNames
+    , Client
+    , makeClient
+    , clientVersion
+    , close
+    , boolVariation
+    , boolVariationDetail
+    , stringVariation
+    , stringVariationDetail
+    , intVariation
+    , intVariationDetail
+    , doubleVariation
+    , doubleVariationDetail
+    , jsonVariation
+    , jsonVariationDetail
+    , EvaluationDetail(..)
+    , EvaluationReason(..)
+    , EvalErrorKind(..)
+    , allFlags
+    , flushEvents
+    , identify
+    , track
+    , getStatus
+    , Status(..)
+    ) where
+
+import LaunchDarkly.Server.User
+import LaunchDarkly.Server.Config
+import LaunchDarkly.Server.Client
