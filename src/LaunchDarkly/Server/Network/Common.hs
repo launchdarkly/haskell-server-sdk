@@ -31,7 +31,7 @@ prepareRequest :: ConfigI -> Request -> Request
 prepareRequest config request = request
     { requestHeaders       = (requestHeaders request)
         & \l -> addToAL l "Authorization" (encodeUtf8 $ getField @"key" config)
-        & \l -> addToAL l "User-Agent" (append "HaskellSDK-" $ encodeUtf8 clientVersion)
+        & \l -> addToAL l "User-Agent" (append "HaskellServerClient/" $ encodeUtf8 clientVersion)
     , responseTimeout      = responseTimeoutMicro $ (fromIntegral $ getField @"requestTimeoutSeconds" config) * 1000000
     } & setRequestIgnoreStatus
 
