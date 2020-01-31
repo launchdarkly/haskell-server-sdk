@@ -17,7 +17,7 @@ import           Network.HTTP.Types.Status               (ok200)
 import           LaunchDarkly.Server.Client.Internal     (ClientI, Status(Initialized), setStatus)
 import           LaunchDarkly.Server.Network.Common      (tryAuthorized, checkAuthorization, prepareRequest, tryHTTP)
 import           LaunchDarkly.Server.Features            (Flag, Segment)
-import           LaunchDarkly.Server.Store               (StoreHandle, storeInitialize)
+import           LaunchDarkly.Server.Store.Internal      (StoreHandle, initializeStore)
 
 data PollingResponse = PollingResponse
     { flags    :: HashMap Text Flag
@@ -32,8 +32,12 @@ processPoll client manager store request = liftIO (tryHTTP $ httpLbs request man
         else case (eitherDecode (responseBody response) :: Either String PollingResponse) of
             (Left err)   -> $(logError) (T.pack $ show err)
             (Right body) -> do
-                liftIO (storeInitialize store (getField @"flags" body) (getField @"segments" body))
-                liftIO $ setStatus client Initialized
+                status <- liftIO (initializeStore store (getField @"flags" body) (getField @"segments" body))
+                case status of
+                    Right () -> liftIO $ setStatus client Initialized
+                    Left err -> do
+                        $(logError) $ T.append "store failed put: " err
+                        pure ()
 
 pollingThread :: (MonadIO m, MonadLogger m, MonadMask m) => Manager -> ClientI -> m ()
 pollingThread manager client = do

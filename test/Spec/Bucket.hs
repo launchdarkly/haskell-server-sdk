@@ -1,16 +1,16 @@
 module Spec.Bucket (allTests) where
 
-import Test.HUnit
-import Data.Aeson.Types (Value(..))
-import qualified Data.HashMap.Strict as HM
-import Data.HashMap.Strict (HashMap)
-import Data.Function ((&))
+import           Test.HUnit
+import           Data.Aeson.Types                  (Value(..))
+import qualified Data.HashMap.Strict as            HM
+import           Data.HashMap.Strict               (HashMap)
+import           Data.Function                     ((&))
 
-import LaunchDarkly.Server.User
-import LaunchDarkly.Server.User.Internal
-import LaunchDarkly.Server.Client
-import LaunchDarkly.Server.Features
-import LaunchDarkly.Server.Evaluate
+import           LaunchDarkly.Server.User
+import           LaunchDarkly.Server.User.Internal
+import           LaunchDarkly.Server.Client
+import           LaunchDarkly.Server.Features
+import           LaunchDarkly.Server.Evaluate
 
 testBucketUserByKey :: Test
 testBucketUserByKey = TestList

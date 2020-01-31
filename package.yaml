@@ -47,6 +47,7 @@ dependencies:
 - time
 - unordered-containers
 - vector
+- clock
 
 default-extensions:
 - AllowAmbiguousTypes
@@ -74,9 +75,9 @@ default-extensions:
 library:
   source-dirs: src
   ghc-options:
-  - -fno-warn-name-shadowing
   - -fwarn-unused-imports
   - -Wall
+  - -Wno-name-shadowing
   exposed-modules:
   - LaunchDarkly.Server
   - LaunchDarkly.Server.Client
@@ -93,5 +94,6 @@ tests:
     - -rtsopts
     - -threaded
     - -with-rtsopts=-N
+    - -Wno-name-shadowing
     dependencies:
     - HUnit

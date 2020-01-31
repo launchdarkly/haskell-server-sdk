@@ -1,14 +1,14 @@
 module Spec.User (allTests) where
 
-import Test.HUnit
-import Data.Aeson
-import Data.Aeson.Types (Value(..))
-import qualified Data.HashMap.Strict as HM
-import Data.HashMap.Strict (HashMap)
-import Data.Function ((&))
+import           Test.HUnit
+import           Data.Aeson
+import           Data.Aeson.Types                  (Value(..))
+import qualified Data.HashMap.Strict as            HM
+import           Data.HashMap.Strict               (HashMap)
+import           Data.Function                     ((&))
 
-import LaunchDarkly.Server.User
-import LaunchDarkly.Server.User.Internal
+import           LaunchDarkly.Server.User
+import           LaunchDarkly.Server.User.Internal
 
 serializeEmpty :: Test
 serializeEmpty = expected ~=? actual where

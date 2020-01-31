@@ -50,8 +50,7 @@ import           LaunchDarkly.Server.Events            (IdentifyEvent(..), Custo
 import           LaunchDarkly.Server.Network.Eventing  (eventThread)
 import           LaunchDarkly.Server.Network.Streaming (streamingThread)
 import           LaunchDarkly.Server.Network.Polling   (pollingThread)
-import           LaunchDarkly.Server.Store             (getAllFlags)
-import           LaunchDarkly.Server.Store.Memory      (makeMemoryStoreIO)
+import           LaunchDarkly.Server.Store.Internal    (makeStoreIO, getAllFlagsC)
 import           LaunchDarkly.Server.Evaluate          (evaluateTyped, evaluateDetail)
 
 -- | Create a new instance of the LaunchDarkly client.
@@ -62,7 +61,8 @@ makeClient (Config config) = do
         downloadThreadPair = Nothing
 
     status  <- newIORef Uninitialized
-    store   <- case getField @"store" config of Nothing -> makeMemoryStoreIO; Just x -> pure x
+    -- store   <- case getField @"store" config of Nothing -> makeMemoryStoreIO; Just x -> pure x
+    store  <- makeStoreIO Nothing 0
     manager <- newManager tlsManagerSettings
     events  <- makeEventState config
 
@@ -95,9 +95,12 @@ getStatus (Client client) = readIORef $ getField @"status" client
 -- be returned. This method does not send analytics events back to LaunchDarkly.
 allFlags :: Client -> User -> IO (HashMap Text Value)
 allFlags (Client client) (User user) = if isNothing $ getField @"key" user then pure mempty else do
-    flags <- getAllFlags $ getField @"store" client
-    evals <- mapM (\flag -> evaluateDetail flag user $ getField @"store" client) flags
-    pure $ HM.map (getField @"value" . fst) evals
+    status <- getAllFlagsC $ getField @"store" client
+    case status of
+        Left _      -> pure HM.empty
+        Right flags -> do
+            evals <- mapM (\flag -> evaluateDetail flag user $ getField @"store" client) flags
+            pure $ HM.map (getField @"value" . fst) evals
 
 -- | Identify reports details about a a user.
 identify :: Client -> User -> IO ()

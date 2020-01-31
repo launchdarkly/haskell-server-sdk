@@ -22,7 +22,7 @@ import           Control.Retry                       (RetryPolicyM, RetryStatus,
 import           Network.HTTP.Types.Status           (ok200)
 
 import           LaunchDarkly.Server.Client.Internal (ClientI, Status(Initialized), setStatus)
-import           LaunchDarkly.Server.Store           (StoreHandle, LaunchDarklyStoreWrite(..), insertFlag, deleteFlag, deleteSegment, insertSegment)
+import           LaunchDarkly.Server.Store.Internal  (StoreHandle, initializeStore, insertFlag, deleteFlag, deleteSegment, insertSegment)
 import           LaunchDarkly.Server.Features        (Flag, Segment)
 import           LaunchDarkly.Server.Network.Common  (tryAuthorized, checkAuthorization, prepareRequest, withResponseGeneric, tryHTTP)
 
@@ -94,8 +94,10 @@ processPut :: (MonadIO m, MonadLogger m) => ClientI -> StoreHandle IO -> L.ByteS
 processPut client store value = case eitherDecode value :: Either String (PathData PutBody) of
     Right (PathData _ (PutBody flags segments)) -> do
         $(logInfo) "initializing store with put"
-        liftIO $ storeInitialize store flags segments
-        liftIO $ setStatus client Initialized
+        status <- liftIO $ initializeStore store flags segments
+        case status of
+            Right () -> liftIO $ setStatus client Initialized
+            Left err -> $(logError) $ T.append "store failed put: " err
     Left err -> do
         $(logError) $ T.append "failed to parse put body" (T.pack err)
 
@@ -106,14 +108,22 @@ processPatch store value = case eitherDecode value :: Either String (PathData Ob
             case eitherDecode (encode body) :: Either String (Flag) of
                 (Right flag) -> do
                     $(logInfo) $ T.append "patching flag with path " path
-                    liftIO $ insertFlag store flag
+                    status <- liftIO $ insertFlag store flag
+                    case status of
+                        Right () -> pure ()
+                        Left err -> do
+                            $(logError) $ T.append "store failed flag patch: " err
                 (Left err)   -> do
                     $(logError) $ T.append "failed to parse patch flag" (T.pack err)
         | T.isPrefixOf "/segments/" path -> do
             case eitherDecode (encode body) :: Either String (Segment) of
                 (Right segment) -> do
                     $(logInfo) $ T.append "patching segment with path " path
-                    liftIO $ insertSegment store segment
+                    status <- liftIO $ insertSegment store segment
+                    case status of
+                        Right () -> pure ()
+                        Left err -> do
+                            $(logError) $ T.append "store failed segment patch: " err
                 (Left err)   -> do
                     $(logError) $ T.append "failed to parse patch segment" (T.pack err)
         | otherwise -> $(logError) "unknown patch path"
@@ -125,10 +135,18 @@ processDelete store value = case eitherDecode value :: Either String (PathVersio
     Right (PathVersion path version)
         | T.isPrefixOf "/flags/" path -> do
             $(logInfo) $ T.append "deleting flag with path " path
-            liftIO $ deleteFlag store (T.drop 7 path) version
+            status <- liftIO $ deleteFlag store (T.drop 7 path) version
+            case status of
+                Right () -> pure ()
+                Left err -> do
+                    $(logError) $ T.append "store failed flag delete: " err
         | T.isPrefixOf "/segments/" path -> do
             $(logInfo) $ T.append "deleting segment with path " path
-            liftIO $ deleteSegment store (T.drop 10 path) version
+            status <- liftIO $ deleteSegment store (T.drop 10 path) version
+            case status of
+                Right () -> pure ()
+                Left err -> do
+                    $(logError) $ T.append "store failed segment delete: " err
         | otherwise -> $(logError) "unknown delete path"
     Left err -> do
         $(logError) $ T.append "failed to parse delete" (T.pack err)

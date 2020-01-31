@@ -1,25 +1,25 @@
 module Spec.Evaluate (allTests) where
 
-import Test.HUnit
-import Data.Aeson
-import Data.Aeson.Types (Value(..))
-import qualified Data.HashMap.Strict as HM
-import Data.HashMap.Strict (HashMap)
-import Data.Function ((&))
+import           Test.HUnit
+import           Data.Aeson
+import           Data.Aeson.Types                  (Value(..))
+import qualified Data.HashMap.Strict as            HM
+import           Data.HashMap.Strict               (HashMap)
+import           Data.Function                     ((&))
 
-import LaunchDarkly.Server.Store
-import LaunchDarkly.Server.Client
-import LaunchDarkly.Server.User
-import LaunchDarkly.Server.User.Internal
-import LaunchDarkly.Server.Features
-import LaunchDarkly.Server.Operators
-import LaunchDarkly.Server.Details
-import LaunchDarkly.Server.Store.Memory
-import LaunchDarkly.Server.Evaluate
+import           LaunchDarkly.Server.Store
+import           LaunchDarkly.Server.Client
+import           LaunchDarkly.Server.User
+import           LaunchDarkly.Server.User.Internal
+import           LaunchDarkly.Server.Features
+import           LaunchDarkly.Server.Operators
+import           LaunchDarkly.Server.Details
+import           LaunchDarkly.Server.Store.Internal
+import           LaunchDarkly.Server.Evaluate
 
 testFlagReturnsOffVariationIfFlagIsOff :: Test
 testFlagReturnsOffVariationIfFlagIsOff = TestCase $ do
-    store <- makeMemoryStoreIO
+    store <- makeStoreIO Nothing 0
     x <- evaluateDetail flag user store
     assertEqual "test" expected x
 
@@ -56,7 +56,7 @@ testFlagReturnsOffVariationIfFlagIsOff = TestCase $ do
 
 testFlagReturnsFallthroughIfFlagIsOnAndThereAreNoRules :: Test
 testFlagReturnsFallthroughIfFlagIsOnAndThereAreNoRules = TestCase $ do
-    store <- makeMemoryStoreIO
+    store <- makeStoreIO Nothing 0
     x <- evaluateDetail flag user store
     assertEqual "test" expected x
 
@@ -93,7 +93,7 @@ testFlagReturnsFallthroughIfFlagIsOnAndThereAreNoRules = TestCase $ do
 
 testClauseCanMatchCustomAttribute :: Test
 testClauseCanMatchCustomAttribute = TestCase $ do
-    store <- makeMemoryStoreIO
+    store <- makeStoreIO Nothing 0
     x <- evaluateDetail flag user store
     assertEqual "test" expected x
 

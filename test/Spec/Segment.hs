@@ -1,9 +1,9 @@
 module Spec.Segment (allTests) where
 
-import Test.HUnit
-import Data.Aeson.Types (Value(..))
-import Data.Function ((&))
-import qualified Data.HashSet as HS
+import           Test.HUnit
+import           Data.Aeson.Types        (Value(..))
+import           Data.Function           ((&))
+import qualified Data.HashSet as         HS
 
 import LaunchDarkly.Server.Client
 import LaunchDarkly.Server.Features

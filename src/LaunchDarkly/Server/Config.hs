@@ -29,7 +29,7 @@ import Data.Monoid                         (mempty)
 import GHC.Natural                         (Natural)
 
 import LaunchDarkly.Server.Config.Internal (Config(..), mapConfig, ConfigI(..))
-import LaunchDarkly.Server.Store           (StoreHandle)
+import LaunchDarkly.Server.Store.Internal  (StoreHandle)
 
 -- | Create a default configuration from a given SDK key.
 makeConfig :: Text -> Config

@@ -5,14 +5,14 @@ module LaunchDarkly.Server.Config.Internal
     , shouldSendEvents
     ) where
 
-import Control.Monad.Logger      (LoggingT)
-import Data.Generics.Product     (getField)
-import Data.Text                 (Text)
-import Data.Set                  (Set)
-import GHC.Natural               (Natural)
-import GHC.Generics              (Generic)
+import Control.Monad.Logger               (LoggingT)
+import Data.Generics.Product              (getField)
+import Data.Text                          (Text)
+import Data.Set                           (Set)
+import GHC.Natural                        (Natural)
+import GHC.Generics                       (Generic)
 
-import LaunchDarkly.Server.Store (StoreHandle)
+import LaunchDarkly.Server.Store.Internal (StoreHandle)
 
 mapConfig :: (ConfigI -> ConfigI) -> Config -> Config
 mapConfig f (Config c) = Config $ f c

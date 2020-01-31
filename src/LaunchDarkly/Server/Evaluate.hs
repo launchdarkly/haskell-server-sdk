@@ -6,7 +6,7 @@ import           Crypto.Hash.SHA1                    (hash)
 import           Data.Scientific                     (Scientific, floatingOrInteger)
 import           Data.Either                         (either, fromLeft)
 import           Data.Aeson.Types                    (Value(..))
-import           Data.Maybe                          (maybe, fromJust, isJust)
+import           Data.Maybe                          (maybe, fromJust, isJust, fromMaybe)
 import           Data.Text                           (Text)
 import           Data.Generics.Product               (getField)
 import           Data.List                           (genericIndex, null, find)
@@ -14,7 +14,6 @@ import qualified Data.Vector as                      V
 import qualified Data.Text as                        T
 import qualified Data.ByteString as                  B
 import qualified Data.ByteString.Base16 as           B16
-import           Data.Maybe                          (fromMaybe)
 import           Data.Text.Encoding                  (encodeUtf8)
 import           GHC.Natural                         (Natural, naturalToInt)
 import           Data.Word                           (Word8)
@@ -24,7 +23,7 @@ import           Data.IORef                          (readIORef)
 import           LaunchDarkly.Server.Client.Internal (ClientI, Status(Initialized))
 import           LaunchDarkly.Server.User.Internal   (UserI, valueOf)
 import           LaunchDarkly.Server.Features        (Flag, Segment, Prerequisite, SegmentRule, Clause, VariationOrRollout, Rule)
-import           LaunchDarkly.Server.Store           (LaunchDarklyStoreRead, getFlag, getSegment)
+import           LaunchDarkly.Server.Store.Internal  (LaunchDarklyStoreRead, getFlagC, getSegmentC)
 import           LaunchDarkly.Server.Operators       (Op(OpSegmentMatch), getOperation)
 import           LaunchDarkly.Server.Events          (EvalEvent, newUnknownFlagEvent, newSuccessfulEvalEvent, processEvalEvents)
 import           LaunchDarkly.Server.Details         (EvaluationDetail(..), EvaluationReason(..), EvalErrorKind(..))
@@ -40,7 +39,7 @@ isError :: EvaluationReason -> Bool
 isError reason = case reason of (EvaluationReasonError _) -> True; _ -> False
 
 evaluateTyped :: ClientI -> Text -> UserI -> a -> (a -> Value) -> Bool -> (Value -> Maybe a) -> IO (EvaluationDetail a)
-evaluateTyped client key user fallback wrap includeReason convert = readIORef (getField @"status" client ) >>= \status -> if status /= Initialized
+evaluateTyped client key user fallback wrap includeReason convert = readIORef (getField @"status" client) >>= \status -> if status /= Initialized
     then pure $ EvaluationDetail fallback Nothing $ EvaluationReasonError EvalErrorClientNotReady
     else evaluateInternalClient client key user (wrap fallback) includeReason >>= \r -> pure $ maybe
         (EvaluationDetail fallback Nothing $ if isError (getField @"reason" r)
@@ -49,11 +48,14 @@ evaluateTyped client key user fallback wrap includeReason convert = readIORef (g
 
 evaluateInternalClient :: ClientI -> Text -> UserI -> Value -> Bool -> IO (EvaluationDetail Value)
 evaluateInternalClient client key user fallback includeReason = do
-    (reason, unknown, events) <- getFlag (getField @"store" client) key >>= \case
-        Nothing -> do
+    (reason, unknown, events) <- getFlagC (getField @"store" client) key >>= \case
+        Left err          -> do
+            let event = newUnknownFlagEvent key fallback (EvaluationReasonError $ EvalErrorExternalStore err)
+            pure (errorDetail $ EvalErrorExternalStore err, True, pure event)
+        Right Nothing     -> do
             let event = newUnknownFlagEvent key fallback (EvaluationReasonError EvalErrorFlagNotFound)
             pure (errorDetail EvalErrorFlagNotFound, True, pure event)
-        Just flag -> do
+        Right (Just flag) -> do
             (reason, events) <- case getField @"key" user of
                 Nothing -> pure (errorDetail EvalErrorUserNotSpecified, [])
                 Just _  -> evaluateDetail flag user $ getField @"store" client
@@ -88,9 +90,10 @@ status prereq result prereqFlag = getField @"on" prereqFlag && (getField @"varia
 
 checkPrerequisite :: (Monad m, LaunchDarklyStoreRead store m) => store -> UserI -> Flag -> Prerequisite
     -> m (Maybe EvaluationReason, [EvalEvent])
-checkPrerequisite store user flag prereq = getFlag store (getField @"key" prereq) >>= \case
-    Nothing         -> pure (pure $ EvaluationReasonPrerequisiteFailed (getField @"key" prereq), [])
-    Just prereqFlag -> evaluateDetail prereqFlag user store >>= \(r, events) -> let
+checkPrerequisite store user flag prereq = getFlagC store (getField @"key" prereq) >>= \case
+    Left err                -> pure (pure $ EvaluationReasonError $ EvalErrorExternalStore err, [])
+    Right Nothing           -> pure (pure $ EvaluationReasonPrerequisiteFailed (getField @"key" prereq), [])
+    Right (Just prereqFlag) -> evaluateDetail prereqFlag user store >>= \(r, events) -> let
         event = newSuccessfulEvalEvent prereqFlag (getField @"variationIndex" r) (getField @"value" r) Nothing
             (getField @"reason" r) (Just $ getField @"key" flag)
         in if status prereq r prereqFlag then pure (Nothing, event : events) else
@@ -192,9 +195,13 @@ clauseMatchesUser :: (Monad m, LaunchDarklyStoreRead store m) => store -> Clause
 clauseMatchesUser store clause user
     | getField @"op" clause == OpSegmentMatch = do
         let values = [ x | String x <- getField @"values" clause]
-        x <- anyM (\k -> getSegment store k >>= (pure . maybe False (flip segmentContainsUser user))) values
+        x <- anyM (\k -> getSegmentC store k >>= pure . checkSegment) values
         pure $ maybeNegate clause x
     | otherwise = pure $ clauseMatchesUserNoSegments clause user
+    where
+        checkSegment :: Either Text (Maybe Segment) -> Bool
+        checkSegment (Right (Just segment)) = segmentContainsUser segment user
+        checkSegment _                      = False
 
 -- Segment ---------------------------------------------------------------------
 

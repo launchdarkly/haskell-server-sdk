@@ -1,7 +1,7 @@
 module Spec.Operators (allTests) where
 
 import Test.HUnit
-import Data.Aeson.Types (Value(..))
+import Data.Aeson.Types              (Value(..))
 
 import LaunchDarkly.Server.Operators
 
