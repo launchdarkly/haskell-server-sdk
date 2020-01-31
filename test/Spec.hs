@@ -10,6 +10,7 @@ import qualified Spec.Streaming
 import qualified Spec.User
 import qualified Spec.Evaluate
 import qualified Spec.Store
+import qualified Spec.StoreInterface
 
 main :: IO ()
 main = void $ runTestTT $ TestList
@@ -20,4 +21,5 @@ main = void $ runTestTT $ TestList
     , Spec.User.allTests
     , Spec.Evaluate.allTests
     , Spec.Store.allTests
+    , Spec.StoreInterface.allTests
     ]

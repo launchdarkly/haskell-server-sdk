@@ -15,12 +15,12 @@ module LaunchDarkly.Server.Store.Internal
     , LaunchDarklyStoreWrite(..)
     , Versioned(..)
     , makeStoreIO
-    , expireAllItems
     , insertFlag
     , deleteFlag
     , insertSegment
     , deleteSegment
     , initializeStore
+    , versionedToRaw
     ) where
 
 import           Control.Monad                (void)
@@ -62,6 +62,7 @@ data StoreHandle m = StoreHandle
     , storeHandleInitialize    :: HashMap Text (Versioned Flag) -> HashMap Text (Versioned Segment) -> StoreResultM m ()
     , storeHandleUpsertSegment :: Text -> Versioned (Maybe Segment) -> StoreResultM m ()
     , storeHandleUpsertFlag    :: Text -> Versioned (Maybe Flag) -> StoreResultM m ()
+    , storeHandleExpireAll     :: StoreResultM m ()
     } deriving (Generic)
 
 instance Monad m => LaunchDarklyStoreRead (StoreHandle m) m where
@@ -102,13 +103,14 @@ makeStoreIO backend ttl = do
         }
     let store = Store state backend ttl
     pure StoreHandle
-        { storeHandleGetFlag       = getFlag       store
-        , storeHandleGetSegment    = getSegment    store
-        , storeHandleAllFlags      = getAllFlags   store
-        , storeHandleInitialized   = isInitialized store
-        , storeHandleInitialize    = initialize    store
-        , storeHandleUpsertSegment = upsertSegment store
-        , storeHandleUpsertFlag    = upsertFlag    store
+        { storeHandleGetFlag       = getFlag        store
+        , storeHandleGetSegment    = getSegment     store
+        , storeHandleAllFlags      = getAllFlags    store
+        , storeHandleInitialized   = isInitialized  store
+        , storeHandleInitialize    = initialize     store
+        , storeHandleUpsertSegment = upsertSegment  store
+        , storeHandleUpsertFlag    = upsertFlag     store
+        , storeHandleExpireAll     = expireAllItems store >> (pure $ Right ())
         }
 
 data Expirable a = Expirable
@@ -131,7 +133,7 @@ data State = State
 
 type StoreResult a = StoreResultM IO a
 
-data StoreInterface = StoreInterace
+data StoreInterface = StoreInterface
     { storeInterfaceAllFeatures   :: Text -> StoreResult (HashMap Text RawFeature)
     , storeInterfaceGetFeature    :: Text -> Text -> StoreResult RawFeature
     , storeInterfaceUpsertFeature :: Text -> Text -> RawFeature -> StoreResult Bool
