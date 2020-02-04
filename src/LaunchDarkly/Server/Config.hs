@@ -19,6 +19,8 @@ module LaunchDarkly.Server.Config
     , configSetSendEvents
     , configSetOffline
     , configSetRequestTimeoutSeconds
+    , configSetStoreBackend
+    , configSetStoreTTL
     ) where
 
 import Control.Monad.Logger                (LoggingT, runStdoutLoggingT)
@@ -29,7 +31,7 @@ import Data.Monoid                         (mempty)
 import GHC.Natural                         (Natural)
 
 import LaunchDarkly.Server.Config.Internal (Config(..), mapConfig, ConfigI(..))
-import LaunchDarkly.Server.Store.Internal  (StoreHandle)
+import LaunchDarkly.Server.Store           (StoreInterface)
 
 -- | Create a default configuration from a given SDK key.
 makeConfig :: Text -> Config
@@ -38,7 +40,8 @@ makeConfig key = Config $ ConfigI
     , baseURI               = "https://app.launchdarkly.com"
     , streamURI             = "https://stream.launchdarkly.com"
     , eventsURI             = "https://events.launchdarkly.com"
-    , store                 = Nothing
+    , storeBackend          = Nothing
+    , storeTTLSeconds       = 10
     , streaming             = True
     , allAttributesPrivate  = False
     , privateAttributeNames = mempty
@@ -72,8 +75,14 @@ configSetStreamURI = mapConfig . setField @"streamURI"
 configSetEventsURI :: Text -> Config -> Config
 configSetEventsURI = mapConfig . setField @"eventsURI"
 
-configSetStore :: Maybe (StoreHandle IO) -> Config -> Config
-configSetStore = mapConfig . setField @"store"
+-- | Configures a handle to an external store such as Redis.
+configSetStoreBackend :: Maybe StoreInterface -> Config -> Config
+configSetStoreBackend = mapConfig . setField @"storeBackend"
+
+-- | When a store backend is configured, control how long values should be
+-- cached in memory before going back to the backend.
+configSetStoreTTL :: Natural -> Config -> Config
+configSetStoreTTL = mapConfig . setField @"storeTTLSeconds"
 
 -- | Sets whether streaming mode should be enabled. By default, streaming is
 -- enabled. It should only be disabled on the advice of LaunchDarkly support.

@@ -11,6 +11,7 @@ import qualified Spec.User
 import qualified Spec.Evaluate
 import qualified Spec.Store
 import qualified Spec.StoreInterface
+import qualified Spec.Redis
 
 main :: IO ()
 main = void $ runTestTT $ TestList
@@ -22,4 +23,5 @@ main = void $ runTestTT $ TestList
     , Spec.Evaluate.allTests
     , Spec.Store.allTests
     , Spec.StoreInterface.allTests
+    , Spec.Redis.allTests
     ]

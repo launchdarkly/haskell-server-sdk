@@ -1,0 +1,53 @@
+name:                launchdarkly-server-sdk-redis
+version:             0.1.0
+github:              "launchdarkly/haskell-server-sdk"
+license:             Apache-2.0
+license-file:        "LICENSE"
+author:              "LaunchDarkly"
+maintainer:          "dev@launchdarkly.com"
+copyright:           "2019 Catamorphic, Co"
+
+synopsis:            Redis store backend for the Server-side SDK integrating with LaunchDarkly
+category:            Web
+
+description:         Please see the README on GitHub at <https://github.com/launchdarkly/haskell-server-sdk#readme>
+
+dependencies:
+- base >= 4.7 && < 5
+- hedis
+- aeson
+- bytestring
+- bytestring-conversion
+- unordered-containers
+- text
+- launchdarkly-server-sdk
+- generic-lens
+- exceptions
+
+default-extensions:
+- AllowAmbiguousTypes
+- DataKinds
+- DeriveAnyClass
+- DeriveGeneric
+- DerivingStrategies
+- DuplicateRecordFields
+- FlexibleContexts
+- FlexibleInstances
+- GeneralizedNewtypeDeriving
+- LambdaCase
+- MonoLocalBinds
+- MultiParamTypeClasses
+- MultiWayIf
+- NoMonomorphismRestriction
+- OverloadedStrings
+- RankNTypes
+- RecordWildCards
+- ScopedTypeVariables
+- TemplateHaskell
+- TypeApplications
+- TypeOperators
+
+library:
+  source-dirs: src
+  exposed-modules:
+  - LaunchDarkly.Server.Store.Redis

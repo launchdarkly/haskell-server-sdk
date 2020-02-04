@@ -83,6 +83,7 @@ library:
   - LaunchDarkly.Server.Client
   - LaunchDarkly.Server.Config
   - LaunchDarkly.Server.User
+  - LaunchDarkly.Server.Store
 
 tests:
   haskell-server-sdk-test:
@@ -90,6 +91,7 @@ tests:
     source-dirs:
     - test
     - src
+    - stores/launchdarkly-server-sdk-redis/src
     ghc-options:
     - -rtsopts
     - -threaded

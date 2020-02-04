@@ -12,7 +12,7 @@ import Data.Set                           (Set)
 import GHC.Natural                        (Natural)
 import GHC.Generics                       (Generic)
 
-import LaunchDarkly.Server.Store.Internal (StoreHandle)
+import LaunchDarkly.Server.Store          (StoreInterface)
 
 mapConfig :: (ConfigI -> ConfigI) -> Config -> Config
 mapConfig f (Config c) = Config $ f c
@@ -28,7 +28,8 @@ data ConfigI = ConfigI
     , baseURI               :: Text
     , streamURI             :: Text
     , eventsURI             :: Text
-    , store                 :: Maybe (StoreHandle IO)
+    , storeBackend          :: Maybe StoreInterface
+    , storeTTLSeconds       :: Natural
     , streaming             :: Bool
     , allAttributesPrivate  :: Bool
     , privateAttributeNames :: Set Text

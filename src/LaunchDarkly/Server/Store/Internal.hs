@@ -21,6 +21,8 @@ module LaunchDarkly.Server.Store.Internal
     , deleteSegment
     , initializeStore
     , versionedToRaw
+    , FeatureKey
+    , FeatureNamespace
     ) where
 
 import           Control.Monad                (void)
@@ -41,7 +43,13 @@ import           GHC.Natural                  (Natural)
 
 import           LaunchDarkly.Server.Features (Segment, Flag)
 
+-- Store result not defined in terms of StoreResultM so we dont have to export.
 type StoreResultM m a = m (Either Text a)
+
+-- | The result type for every `StoreInterface` function. Instead of throwing
+-- an exception, any store related error should return `Left`. Exceptions
+-- unrelated to the store should not be caught.
+type StoreResult a = IO (Either Text a)
 
 class LaunchDarklyStoreRead store m where
     getFlagC        :: store -> Text -> StoreResultM m (Maybe Flag)
@@ -131,20 +139,37 @@ data State = State
     , initialized :: Expirable Bool
     } deriving (Generic)
 
-type StoreResult a = StoreResultM IO a
+-- | Represents the key for a given feature.
+type FeatureKey       = Text
+-- | Represents a namespace such as flags or segments
+type FeatureNamespace = Text
 
+-- | The interface implemented by external stores for use by the SDK.
 data StoreInterface = StoreInterface
-    { storeInterfaceAllFeatures   :: Text -> StoreResult (HashMap Text RawFeature)
-    , storeInterfaceGetFeature    :: Text -> Text -> StoreResult RawFeature
-    , storeInterfaceUpsertFeature :: Text -> Text -> RawFeature -> StoreResult Bool
+    { storeInterfaceAllFeatures   :: FeatureNamespace -> StoreResult (HashMap Text RawFeature)
+      -- ^ A map of all features in a given namespace including deleted.
+    , storeInterfaceGetFeature    :: FeatureNamespace -> FeatureKey -> StoreResult RawFeature
+      -- ^ Return the value of a key in a namespace.
+    , storeInterfaceUpsertFeature :: FeatureNamespace -> FeatureKey -> RawFeature -> StoreResult Bool
+      -- ^ Upsert a given feature. Versions should be compared before upsert.
+      -- The result should indicate if the feature was replaced or not.
     , storeInterfaceIsInitialized :: StoreResult Bool
-    , storeInterfaceInitialize    :: HashMap Text (HashMap Text RawFeature) -> StoreResult ()
-    } deriving (Generic)
+      -- ^ Checks if the external store has been initialized, which may
+      -- have been done by another instance of the SDK.
+    , storeInterfaceInitialize    :: HashMap FeatureNamespace (HashMap FeatureKey RawFeature) -> StoreResult ()
+      -- ^ A map of namespaces, and items in namespaces. The entire store state
+      -- should be replaced with these values.
+    }
 
+-- | An abstract representation of a store object.
 data RawFeature = RawFeature
-    { buffer  :: Maybe ByteString
-    , version :: Natural
-    } deriving (Generic)
+    { rawFeatureBuffer  :: Maybe ByteString
+      -- ^ A serialized item. If the item is deleted or does not exist this
+      -- should be `Nothing`.
+    , rawFeatureVersion :: Natural
+      -- ^ The version of a given item. If the item does not exist this should
+      -- be zero.
+    }
 
 data Store = Store
     { state      :: IORef State
@@ -176,7 +201,9 @@ initialize store flags segments = case getField @"backend" store of
             & setField @"allFlags"    (Expirable (HM.map (\f -> getField @"value" f) flags) True 0)
             & setField @"initialized" (Expirable True False 0)
         pure $ Right ()
-    Just backend -> (getField @"storeInterfaceInitialize" backend) raw
+    Just backend -> (storeInterfaceInitialize backend) raw >>= \case
+        Left err -> pure $ Left err
+        Right () -> expireAllItems store >> pure (Right ())
     where
         raw = HM.empty
             & HM.insert "flags"    (HM.map versionedToRaw $ c flags)
@@ -184,11 +211,11 @@ initialize store flags segments = case getField @"backend" store of
         c x = HM.map (\f -> f & field @"value" %~ Just) x
 
 rawToVersioned :: (FromJSON a) => RawFeature -> Maybe (Versioned (Maybe a))
-rawToVersioned raw = case getField @"buffer" raw of
-    Nothing     -> pure $ Versioned Nothing (getField @"version" raw)
+rawToVersioned raw = case rawFeatureBuffer raw of
+    Nothing     -> pure $ Versioned Nothing (rawFeatureVersion raw)
     Just buffer -> case decode $ fromStrict buffer of
         Nothing      -> Nothing
-        Just decoded -> pure $ Versioned decoded (getField @"version" raw)
+        Just decoded -> pure $ Versioned decoded (rawFeatureVersion raw)
 
 versionedToRaw :: (ToJSON a) => Versioned (Maybe a) -> RawFeature
 versionedToRaw versioned = case getField @"value" versioned of
@@ -197,7 +224,7 @@ versionedToRaw versioned = case getField @"value" versioned of
 
 tryGetBackend :: (FromJSON a) => StoreInterface -> Text -> Text -> StoreResult (Versioned (Maybe a))
 tryGetBackend backend namespace key =
-    ((getField @"storeInterfaceGetFeature" backend) namespace key) >>= \case
+    ((storeInterfaceGetFeature backend) namespace key) >>= \case
         Left err  -> pure $ Left err
         Right raw -> case rawToVersioned raw of
             Nothing        -> pure $ Left "failed to decode from external store"
@@ -243,12 +270,14 @@ upsertGeneric store namespace key versioned lens action = do
             void $ atomicModifyIORef' (getField @"state" store) $ \stateRef -> (flip (,) ()) $ upsertMemory stateRef
             pure $ Right ()
         Just backend -> do
-            result <- (getField @"storeInterfaceUpsertFeature" backend) namespace key (versionedToRaw versioned)
+            result <- (storeInterfaceUpsertFeature backend) namespace key (versionedToRaw versioned)
             case result of
                 Left err      -> pure $ Left err
                 Right updated -> if not updated then pure (Right ()) else do
-                    void $ atomicModifyIORef' (getField @"state" store) $ \stateRef -> (flip (,) ())
-                        (action True stateRef)
+                    now <- getMonotonicTime
+                    void $ atomicModifyIORef' (getField @"state" store) $ \stateRef -> (flip (,) ()) $ stateRef
+                        & lens %~ (HM.insert key (Expirable versioned False now))
+                        & action True
                     pure $ Right ()
     where
         upsertMemory state = case HM.lookup key (state ^. lens) of
@@ -292,7 +321,7 @@ getAllFlags store = do
             if not (isExpired store now $ getField @"allFlags" state)
                 then memoryFlags
                 else do
-                    result <- (getField @"storeInterfaceAllFeatures" backend) "flags"
+                    result <- (storeInterfaceAllFeatures backend) "flags"
                     case result of
                         Left err  -> pure (Left err)
                         Right raw -> do
@@ -311,7 +340,7 @@ isInitialized store = do
                 now <- getMonotonicTime
                 if isExpired store now initialized
                     then do
-                        result <- getField @"storeInterfaceIsInitialized" backend
+                        result <- storeInterfaceIsInitialized backend
                         case result of
                             Left err -> pure $ Left err
                             Right i  -> do

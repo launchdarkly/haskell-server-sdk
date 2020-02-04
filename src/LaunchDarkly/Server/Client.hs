@@ -41,6 +41,7 @@ import           Data.Scientific                       (toRealFloat, fromFloatDi
 import           Data.Maybe                            (isNothing)
 import           Network.HTTP.Client                   (newManager)
 import           Network.HTTP.Client.TLS               (tlsManagerSettings)
+import           System.Clock                          (TimeSpec(..))
 
 import           LaunchDarkly.Server.Config.Internal   (Config(..), shouldSendEvents)
 import           LaunchDarkly.Server.Client.Internal
@@ -61,8 +62,7 @@ makeClient (Config config) = do
         downloadThreadPair = Nothing
 
     status  <- newIORef Uninitialized
-    -- store   <- case getField @"store" config of Nothing -> makeMemoryStoreIO; Just x -> pure x
-    store  <- makeStoreIO Nothing 0
+    store   <- makeStoreIO (getField @"storeBackend" config) (TimeSpec (fromIntegral $ getField @"storeTTLSeconds" config) 0)
     manager <- newManager tlsManagerSettings
     events  <- makeEventState config
 
