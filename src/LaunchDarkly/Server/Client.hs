@@ -28,7 +28,7 @@ module LaunchDarkly.Server.Client
 
 import           Control.Concurrent                    (forkFinally, killThread)
 import           Control.Concurrent.MVar               (putMVar, takeMVar, newEmptyMVar)
-import           Control.Monad                         (liftM, void)
+import           Control.Monad                         (void, forM_)
 import           Control.Monad.IO.Class                (liftIO)
 import           Control.Monad.Logger                  (LoggingT, logDebug)
 import           Data.IORef                            (newIORef, readIORef, writeIORef)
@@ -134,12 +134,12 @@ close :: Client -> IO ()
 close outer@(Client client) = clientRunLogger client $ do
     $(logDebug) "Setting client status to ShuttingDown"
     liftIO $ writeIORef (getField @"status" client) ShuttingDown
-    (flip mapM_) (getField @"downloadThreadPair" client) $ \(thread, sync) -> do
+    forM_ (getField @"downloadThreadPair" client) $ \(thread, sync) -> do
         $(logDebug) "Killing download thread"
         liftIO $ killThread thread
         $(logDebug) "Waiting on download thread to die"
         liftIO $ void $ takeMVar sync
-    (flip mapM_) (getField @"eventThreadPair" client) $ \(_, sync) -> do
+    forM_ (getField @"eventThreadPair" client) $ \(_, sync) -> do
         $(logDebug) "Triggering event flush"
         liftIO $ flushEvents outer
         $(logDebug) "Waiting on event thread to die"
@@ -152,7 +152,7 @@ reorderStuff :: ValueConverter a -> Bool -> Client -> Text -> User -> a -> IO (E
 reorderStuff converter includeReason (Client client) key (User user) fallback = evaluateTyped client key user fallback (fst converter) includeReason (snd converter)
 
 dropReason :: (Text -> User -> a -> IO (EvaluationDetail a)) -> Text -> User -> a -> IO a
-dropReason = (((liftM (getField @"value") .) .) .)
+dropReason = (((fmap (getField @"value") .) .) .)
 
 boolConverter :: ValueConverter Bool
 boolConverter = (,) Bool $ \case Bool x -> pure x; _ -> Nothing

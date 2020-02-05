@@ -9,9 +9,8 @@ import           Network.HTTP.Client                 (Manager, Request(..), Requ
 import           Data.Generics.Product               (getField)
 import qualified Data.Text as                        T
 import           Control.Concurrent                  (killThread, myThreadId)
-import           Control.Monad                       (forever, when)
+import           Control.Monad                       (forever, when, void)
 import           Control.Monad.Catch                 (MonadMask, MonadThrow)
-import           Control.Monad                       (void)
 import           Control.Concurrent.MVar             (takeMVar, swapMVar)
 import           System.Timeout                      (timeout)
 import           Data.Text.Encoding                  (decodeUtf8)

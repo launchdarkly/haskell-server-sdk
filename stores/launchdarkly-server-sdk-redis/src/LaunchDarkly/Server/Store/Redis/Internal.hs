@@ -16,13 +16,12 @@ import           Control.Monad.IO.Class     (MonadIO, liftIO)
 import           Data.Aeson                 (FromJSON, ToJSON, decode, encode)
 import           Data.ByteString            (ByteString)
 import           Data.ByteString.Lazy       (toStrict, fromStrict)
-import           Data.Text.Encoding         (decodeUtf8)
 import           Data.Text                  (Text)
+import qualified Data.Text as               T
+import           Data.Text.Encoding         (decodeUtf8, encodeUtf8)
 import           Data.Typeable              (Typeable)
 import qualified Data.HashMap.Strict as     HM
 import           Data.HashMap.Strict        (HashMap)
-import           Data.Text.Encoding         (decodeUtf8, encodeUtf8)
-import qualified Data.Text as               T
 import           Data.Generics.Product      (getField, setField)
 import           Database.Redis             (ConnectionLostException, Reply, multiExec, runRedis, del, get
                                             , set, hget, hgetall, hset, watch, Redis, Connection, TxResult(..))
