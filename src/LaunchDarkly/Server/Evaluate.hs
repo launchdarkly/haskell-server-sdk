@@ -141,10 +141,12 @@ variationIndexForUser :: VariationOrRollout -> UserI -> Text -> Text -> Maybe Na
 variationIndexForUser vor user key salt
     | (Just variation) <- getField @"variation" vor = pure variation
     | (Just rollout) <- getField @"rollout" vor = let
+        variations = getField @"variations" rollout
         bucket = bucketUser user key (fromMaybe "key" $ getField @"bucketBy" rollout) salt
         c acc i = acc >>= \acc -> let t = acc + ((getField @"weight" i) / 100000.0) in
-            if bucket < t then Left (Just $ getField @"variation" i) else Right t
-        in fromLeft Nothing $ foldl c (Right (0.0 :: Float)) (getField @"variations" rollout)
+            if bucket < t then Left (getField @"variation" i) else Right t
+        in if null variations then Nothing else pure $ fromLeft (getField @"variation" $ last variations) $
+            foldl c (Right (0.0 :: Float)) variations
     | otherwise = Nothing
 
 -- Bucketing -------------------------------------------------------------------
