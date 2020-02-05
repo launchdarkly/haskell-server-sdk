@@ -44,7 +44,7 @@ evaluateTyped client key user fallback wrap includeReason convert = readIORef (g
     else evaluateInternalClient client key user (wrap fallback) includeReason >>= \r -> pure $ maybe
         (EvaluationDetail fallback Nothing $ if isError (getField @"reason" r)
             then (getField @"reason" r) else EvaluationReasonError EvalErrorWrongType)
-        (\d -> setValue r d) (convert $ getField @"value" r)
+        (setValue r) (convert $ getField @"value" r)
 
 evaluateInternalClient :: ClientI -> Text -> UserI -> Value -> Bool -> IO (EvaluationDetail Value)
 evaluateInternalClient client key user fallback includeReason = do
@@ -60,7 +60,7 @@ evaluateInternalClient client key user fallback includeReason = do
                 Nothing -> pure (errorDetail EvalErrorUserNotSpecified, [])
                 Just _  -> evaluateDetail flag user $ getField @"store" client
             let reason' = setFallback reason fallback
-            pure (reason', False, (flip (:)) events $ newSuccessfulEvalEvent flag (getField @"variationIndex" reason')
+            pure (reason', False, flip (:) events $ newSuccessfulEvalEvent flag (getField @"variationIndex" reason')
                 (getField @"value" reason') (Just fallback) (getField @"reason" reason') Nothing)
     processEvalEvents (getField @"config" client) (getField @"events" client) user includeReason events unknown
     pure reason
@@ -86,7 +86,7 @@ evaluateDetail flag user store = if getField @"on" flag
 
 status :: Prerequisite -> EvaluationDetail a -> Flag -> Bool
 status prereq result prereqFlag = getField @"on" prereqFlag && (getField @"variationIndex" result) ==
-    (pure $ getField @"variation" prereq)
+    pure (getField @"variation" prereq)
 
 checkPrerequisite :: (Monad m, LaunchDarklyStoreRead store m) => store -> UserI -> Flag -> Prerequisite
     -> m (Maybe EvaluationReason, [EvalEvent])
@@ -108,7 +108,7 @@ checkPrerequisites :: (Monad m, LaunchDarklyStoreRead store m) => Flag -> UserI 
     -> m (Maybe EvaluationReason, [EvalEvent])
 checkPrerequisites flag user store = let p = getField @"prerequisites" flag in if null p then pure (Nothing, []) else do
     evals <- sequenceUntil (isJust . fst) $ map (checkPrerequisite store user flag) p
-    pure (msum $ map fst evals, concat $ map snd evals)
+    pure (msum $ map fst evals, concatMap snd evals)
 
 evaluateInternal :: (Monad m, LaunchDarklyStoreRead store m) => Flag -> UserI -> store -> m (EvaluationDetail Value)
 evaluateInternal flag user store = result where
@@ -180,7 +180,7 @@ maybeNegate :: Clause -> Bool -> Bool
 maybeNegate clause value = if getField @"negate" clause then not value else value
 
 matchAny :: (Value -> Value -> Bool) -> Value -> [Value] -> Bool
-matchAny op value list = any (op value) list
+matchAny op value = any (op value)
 
 clauseMatchesUserNoSegments :: Clause -> UserI -> Bool
 clauseMatchesUserNoSegments clause user = case valueOf user $ getField @"attribute" clause of

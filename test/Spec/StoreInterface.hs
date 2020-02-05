@@ -85,7 +85,7 @@ testInitializedCache = TestCase $ do
     store   <- makeTestStore $ pure $ makeStoreInterface
         { storeInterfaceIsInitialized = do
             atomicModifyIORef' counter (\c -> (c + 1, ()))
-            readIORef value >>= pure . Right
+            Right <$> readIORef value
         }
     getInitializedC store      >>= (Right False @=?)
     readIORef counter          >>= (1 @=?)
@@ -108,7 +108,7 @@ testGetCache = TestCase $ do
     store   <- makeTestStore $ pure $ makeStoreInterface
         { storeInterfaceGetFeature = \_ _ -> do
             atomicModifyIORef' counter (\c -> (c + 1, ()))
-            readIORef value >>= pure . Right
+            Right <$> readIORef value
         }
     getFlagC store "abc"       >>= (Right Nothing @?=)
     readIORef counter          >>= (1 @=?)

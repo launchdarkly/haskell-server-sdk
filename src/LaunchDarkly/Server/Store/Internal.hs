@@ -178,7 +178,7 @@ data Store = Store
     } deriving (Generic)
 
 expireAllItems :: Store -> IO ()
-expireAllItems store = atomicModifyIORef' (getField @"state" store) $ \state -> (flip (,) ()) $ state
+expireAllItems store = atomicModifyIORef' (getField @"state" store) $ \state -> (, ()) $ state
     & field @"allFlags"    %~ expire
     & field @"initialized" %~ expire
     & field @"flags"       %~ HM.map expire
@@ -195,10 +195,10 @@ getMonotonicTime = getTime Monotonic
 initialize :: Store -> HashMap Text (Versioned Flag) -> HashMap Text (Versioned Segment) -> StoreResult ()
 initialize store flags segments = case getField @"backend" store of
     Nothing      -> do
-        atomicModifyIORef' (getField @"state" store) $ \state -> (flip (,) ()) $ state
+        atomicModifyIORef' (getField @"state" store) $ \state -> (, ()) $ state
             & setField @"flags"       (HM.map (\f -> Expirable f True 0) $ c flags)
             & setField @"segments"    (HM.map (\f -> Expirable f True 0) $ c segments)
-            & setField @"allFlags"    (Expirable (HM.map (\f -> getField @"value" f) flags) True 0)
+            & setField @"allFlags"    (Expirable (HM.map (getField @"value") flags) True 0)
             & setField @"initialized" (Expirable True False 0)
         pure $ Right ()
     Just backend -> (storeInterfaceInitialize backend) raw >>= \case
@@ -231,7 +231,7 @@ tryGetBackend backend namespace key =
             Just versioned -> pure $ Right versioned
 
 getGeneric :: FromJSON a => Store -> Text -> Text
-    -> (Lens' State (HashMap Text (Expirable (Versioned (Maybe a)))))
+    -> Lens' State (HashMap Text (Expirable (Versioned (Maybe a))))
     -> StoreResult (Maybe a)
 getGeneric store namespace key lens = do
     state <- readIORef $ getField @"state" store
@@ -250,7 +250,7 @@ getGeneric store namespace key lens = do
         updateFromBackend backend now = tryGetBackend backend namespace key >>= \case
             Left err -> pure $ Left err
             Right v  -> do
-                atomicModifyIORef' (getField @"state" store) $ \stateRef -> (flip (,) ()) $ stateRef & lens %~
+                atomicModifyIORef' (getField @"state" store) $ \stateRef -> (, ()) $ stateRef & lens %~
                     (HM.insert key (Expirable v False now))
                 pure $ Right $ getField @"value" v
 
@@ -261,13 +261,13 @@ getSegment :: Store -> Text -> StoreResult (Maybe Segment)
 getSegment store key = getGeneric store "segments" key (field @"segments")
 
 upsertGeneric :: (ToJSON a) => Store -> Text -> Text -> Versioned (Maybe a)
-    -> (Lens' State (HashMap Text (Expirable (Versioned (Maybe a)))))
+    -> Lens' State (HashMap Text (Expirable (Versioned (Maybe a))))
     -> (Bool -> State -> State)
     -> StoreResult ()
 upsertGeneric store namespace key versioned lens action = do
     case getField @"backend" store of
         Nothing      -> do
-            void $ atomicModifyIORef' (getField @"state" store) $ \stateRef -> (flip (,) ()) $ upsertMemory stateRef
+            void $ atomicModifyIORef' (getField @"state" store) $ \stateRef -> (, ()) $ upsertMemory stateRef
             pure $ Right ()
         Just backend -> do
             result <- (storeInterfaceUpsertFeature backend) namespace key (versionedToRaw versioned)
@@ -275,7 +275,7 @@ upsertGeneric store namespace key versioned lens action = do
                 Left err      -> pure $ Left err
                 Right updated -> if not updated then pure (Right ()) else do
                     now <- getMonotonicTime
-                    void $ atomicModifyIORef' (getField @"state" store) $ \stateRef -> (flip (,) ()) $ stateRef
+                    void $ atomicModifyIORef' (getField @"state" store) $ \stateRef -> (, ()) $ stateRef
                         & lens %~ (HM.insert key (Expirable versioned False now))
                         & action True
                     pure $ Right ()
@@ -305,7 +305,7 @@ filterAndCacheFlags :: Store -> TimeSpec -> HashMap Text RawFeature -> IO (HashM
 filterAndCacheFlags store now raw = do
     let decoded  = HM.mapMaybe rawToVersioned raw
         allFlags = HM.mapMaybe (getField @"value") decoded
-    atomicModifyIORef' (getField @"state" store) $ \state -> (flip (,) ()) $
+    atomicModifyIORef' (getField @"state" store) $ \state -> (, ()) $
         setField @"allFlags" (Expirable allFlags False now) $
             setField @"flags" (HM.map (\x -> Expirable x False now) decoded) state
     pure allFlags
@@ -344,7 +344,7 @@ isInitialized store = do
                         case result of
                             Left err -> pure $ Left err
                             Right i  -> do
-                                atomicModifyIORef' (getField @"state" store) $ \stateRef -> (flip (,) ()) $
+                                atomicModifyIORef' (getField @"state" store) $ \stateRef -> (, ()) $
                                     setField @"initialized" (Expirable i False now) stateRef
                                 pure $ Right i
                     else pure $ Right False
