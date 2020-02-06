@@ -1,8 +1,9 @@
 module LaunchDarkly.Server.Features where
 
-import Data.Aeson                    (FromJSON(..), ToJSON, Value(..), withObject, (.:), (.:?))
+import Data.Aeson                    (FromJSON(..), ToJSON(..), Value(..), withObject, (.:), (.:?), object, (.=))
 import Data.Text                     (Text)
 import Data.HashSet                  (HashSet)
+import Data.Generics.Product         (getField)
 import GHC.Natural                   (Natural)
 import GHC.Generics                  (Generic)
 
@@ -18,7 +19,7 @@ data Rule = Rule
     , clauses            :: [Clause]
     , variationOrRollout :: VariationOrRollout
     , trackEvents        :: Bool
-    } deriving (Generic, ToJSON, Show, Eq)
+    } deriving (Generic, Show, Eq)
 
 instance FromJSON Rule where
     parseJSON = withObject "Rule" $ \o -> do
@@ -36,6 +37,15 @@ instance FromJSON Rule where
                 }
             , trackEvents        = trackEvents
             }
+
+instance ToJSON Rule where
+    toJSON rule = object
+        [ "id"          .= getField @"id" rule
+        , "clauses"     .= getField @"clauses" rule
+        , "trackEvents" .= getField @"trackEvents" rule
+        , "variation"   .= getField @"variation" (getField @"variationOrRollout" rule)
+        , "rollout"     .= getField @"rollout" (getField @"variationOrRollout" rule)
+        ]
 
 data WeightedVariation = WeightedVariation
     { variation :: Natural
