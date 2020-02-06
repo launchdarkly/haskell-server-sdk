@@ -1,0 +1,14 @@
+repo:
+  public: haskell-server-sdk
+  private: haskell-server-sdk-private
+
+circleci:
+  linux:
+    image: fpco/stack-build:lts
+
+documentation:
+  title: LaunchDarkly Server-Side SDK for Haskell
+  githubPages: true
+
+sdk:
+  displayName: "Haskell (server-side)"
