@@ -73,7 +73,7 @@ getOffValue flag reason = case getField @"offVariation" flag of
 getVariation :: Flag -> Natural -> EvaluationReason -> EvaluationDetail Value
 getVariation flag index reason = let variations = getField @"variations" flag in
     if naturalToInt index >= length variations
-        then EvaluationDetail { value = Null, variationIndex = mzero, reason = reason }
+        then EvaluationDetail { value = Null, variationIndex = mzero, reason = EvaluationReasonError EvalErrorKindMalformedFlag }
         else EvaluationDetail { value = genericIndex variations index, variationIndex = pure index, reason = reason }
 
 evaluateDetail :: (Monad m, LaunchDarklyStoreRead store m) => Flag -> UserI -> store

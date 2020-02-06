@@ -1,9 +1,9 @@
-module Util.Features (makeTestFlag) where
+module Util.Features (makeTestFlag, makeTestSegment) where
 
 import Data.Text                    (Text)
 import GHC.Natural                  (Natural)
 
-import LaunchDarkly.Server.Features (Flag(..), VariationOrRollout(..))
+import LaunchDarkly.Server.Features
 
 makeTestFlag :: Text -> Natural -> Flag
 makeTestFlag key version = Flag
@@ -25,4 +25,15 @@ makeTestFlag key version = Flag
     , offVariation           = Nothing
     , variations             = []
     , debugEventsUntilDate   = Nothing
+    }
+
+makeTestSegment :: Text -> Natural -> Segment
+makeTestSegment key version = Segment
+    { key      = key
+    , included = mempty
+    , excluded = mempty
+    , salt     = ""
+    , rules    = mempty
+    , version  = version
+    , deleted  = False
     }
