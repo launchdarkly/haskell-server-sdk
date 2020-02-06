@@ -19,6 +19,7 @@ module LaunchDarkly.Server
     , configSetSendEvents
     , configSetOffline
     , configSetRequestTimeoutSeconds
+    , configSetUseLdd
     , User
     , makeUser
     , userSetKey

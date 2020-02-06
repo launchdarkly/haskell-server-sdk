@@ -74,7 +74,7 @@ makeClient (Config config) = do
         thread <- forkFinally (runLogger $ eventThread manager client) (\_ -> putMVar sync ())
         pure $ pure (thread, sync)
 
-    downloadThreadPair' <- if getField @"offline" config then pure Nothing else do
+    downloadThreadPair' <- if (getField @"offline" config) || (getField @"useLdd" config) then pure Nothing else do
         sync   <- newEmptyMVar
         thread <- forkFinally (runLogger $ downloadThreadF manager client) (\_ -> putMVar sync ())
         pure $ pure (thread, sync)

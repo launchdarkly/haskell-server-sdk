@@ -42,4 +42,5 @@ data ConfigI = ConfigI
     , sendEvents            :: Bool
     , offline               :: Bool
     , requestTimeoutSeconds :: Natural
+    , useLdd                :: Bool
     } deriving (Generic)

@@ -21,6 +21,7 @@ module LaunchDarkly.Server.Config
     , configSetRequestTimeoutSeconds
     , configSetStoreBackend
     , configSetStoreTTL
+    , configSetUseLdd
     ) where
 
 import Control.Monad.Logger                (LoggingT, runStdoutLoggingT)
@@ -54,6 +55,7 @@ makeConfig key = Config $ ConfigI
     , sendEvents            = True
     , offline               = False
     , requestTimeoutSeconds = 30
+    , useLdd                = False
     }
 
 -- | Set the SDK key used to authenticate with LaunchDarkly.
@@ -144,3 +146,10 @@ configSetOffline = mapConfig . setField @"offline"
 -- | Sets how long an the HTTP client should wait before a response is returned.
 configSetRequestTimeoutSeconds :: Natural -> Config -> Config
 configSetRequestTimeoutSeconds = mapConfig . setField @"requestTimeoutSeconds"
+
+-- | Sets whether this client should use the LaunchDarkly relay in daemon mode.
+-- In this mode, the client does not subscribe to the streaming or polling API,
+-- but reads data only from the feature store. See:
+-- https://docs.launchdarkly.com/docs/the-relay-proxy
+configSetUseLdd :: Bool -> Config -> Config
+configSetUseLdd = mapConfig . setField @"useLdd"
