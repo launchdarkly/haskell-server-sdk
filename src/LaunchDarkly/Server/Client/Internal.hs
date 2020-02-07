@@ -14,7 +14,7 @@ import Control.Concurrent.MVar             (MVar)
 import Data.Generics.Product               (getField)
 
 import LaunchDarkly.Server.Config.Internal (ConfigI)
-import LaunchDarkly.Server.Store           (StoreHandle)
+import LaunchDarkly.Server.Store.Internal  (StoreHandle)
 import LaunchDarkly.Server.Events          (EventState)
 
 -- | Client is the LaunchDarkly client. Client instances are thread-safe.

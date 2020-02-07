@@ -61,9 +61,9 @@ instance FromJSON UserI where
         <*> o .:? "lastName"
         <*> o .:? "avatar"
         <*> o .:? "name"
-        <*> (fmap or $ o .:? "anonymous")
-        <*> (fmap fold $ o .:? "custom")
-        <*> (fmap fold $ o .:? "privateAttributeNames")
+        <*> fmap or (o .:? "anonymous")
+        <*> fmap fold (o .:? "custom")
+        <*> fmap fold (o .:? "privateAttributeNames")
 
 instance ToJSON UserI where
     toJSON user = object $ filter ((/=) Null . snd)

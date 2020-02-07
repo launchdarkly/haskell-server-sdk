@@ -1,25 +1,31 @@
 module Spec.Evaluate (allTests) where
 
-import Test.HUnit
-import Data.Aeson
-import Data.Aeson.Types (Value(..))
-import qualified Data.HashMap.Strict as HM
-import Data.HashMap.Strict (HashMap)
-import Data.Function ((&))
+import           Test.HUnit
+import           Data.Aeson
+import           Data.Aeson.Types                  (Value(..))
+import qualified Data.HashMap.Strict as            HM
+import           Data.HashMap.Strict               (HashMap)
+import           Data.Function                     ((&))
+import           Data.Generics.Product             (getField)
 
-import LaunchDarkly.Server.Store
-import LaunchDarkly.Server.Client
-import LaunchDarkly.Server.User
-import LaunchDarkly.Server.User.Internal
-import LaunchDarkly.Server.Features
-import LaunchDarkly.Server.Operators
-import LaunchDarkly.Server.Details
-import LaunchDarkly.Server.Store.Memory
-import LaunchDarkly.Server.Evaluate
+import           LaunchDarkly.Server.Store
+import           LaunchDarkly.Server.Store.Internal
+import           LaunchDarkly.Server.Client
+import           LaunchDarkly.Server.Client.Internal
+import           LaunchDarkly.Server.User
+import           LaunchDarkly.Server.User.Internal
+import           LaunchDarkly.Server.Features
+import           LaunchDarkly.Server.Operators
+import           LaunchDarkly.Server.Details
+import           LaunchDarkly.Server.Store.Internal
+import           LaunchDarkly.Server.Evaluate
+import           LaunchDarkly.Server.Config
+
+import           Util.Features
 
 testFlagReturnsOffVariationIfFlagIsOff :: Test
 testFlagReturnsOffVariationIfFlagIsOff = TestCase $ do
-    store <- makeMemoryStoreIO
+    store <- makeStoreIO Nothing 0
     x <- evaluateDetail flag user store
     assertEqual "test" expected x
 
@@ -56,7 +62,7 @@ testFlagReturnsOffVariationIfFlagIsOff = TestCase $ do
 
 testFlagReturnsFallthroughIfFlagIsOnAndThereAreNoRules :: Test
 testFlagReturnsFallthroughIfFlagIsOnAndThereAreNoRules = TestCase $ do
-    store <- makeMemoryStoreIO
+    store <- makeStoreIO Nothing 0
     x <- evaluateDetail flag user store
     assertEqual "test" expected x
 
@@ -91,9 +97,217 @@ testFlagReturnsFallthroughIfFlagIsOnAndThereAreNoRules = TestCase $ do
         , debugEventsUntilDate   = Nothing
         }
 
+testFlagReturnsErrorIfFallthroughHasTooHighVariation :: Test
+testFlagReturnsErrorIfFallthroughHasTooHighVariation = TestCase $ do
+    client@(Client clientI) <- makeTestClient
+    insertFlag (getField @"store" clientI) flag >>= (pure () @=?)
+    stringVariationDetail client "a" (makeUser "b") "default" >>= (expected @=?)
+    where
+        flag = (makeTestFlag "a" 52)
+            { on           = True
+            , offVariation = Nothing
+            , fallthrough  = VariationOrRollout
+                { variation = Just 999
+                , rollout   = Nothing
+                }
+            , variations   =
+                [ String "abc"
+                , String "123"
+                , String "456"
+                ]
+            }
+        expected = EvaluationDetail
+            { value          = "default"
+            , variationIndex = Nothing
+            , reason         = EvaluationReasonError EvalErrorKindMalformedFlag
+            }
+
+testFlagReturnsErrorIfFallthroughHasNeitherVariationNorRollout :: Test
+testFlagReturnsErrorIfFallthroughHasNeitherVariationNorRollout = TestCase $ do
+    client@(Client clientI) <- makeTestClient
+    insertFlag (getField @"store" clientI) flag >>= (pure () @=?)
+    stringVariationDetail client "a" (makeUser "b") "default" >>= (expected @=?)
+    where
+        flag = (makeTestFlag "a" 52)
+            { on           = True
+            , offVariation = Nothing
+            , fallthrough  = VariationOrRollout
+                { variation = Nothing
+                , rollout   = Nothing
+                }
+            , variations   = [String "abc"]
+            }
+        expected = EvaluationDetail
+            { value          = "default"
+            , variationIndex = Nothing
+            , reason         = EvaluationReasonError EvalErrorKindMalformedFlag
+            }
+
+testFlagReturnsErrorIfFallthroughHasEmptyRolloutVariationList :: Test
+testFlagReturnsErrorIfFallthroughHasEmptyRolloutVariationList = TestCase $ do
+    client@(Client clientI) <- makeTestClient
+    insertFlag (getField @"store" clientI) flag >>= (pure () @=?)
+    stringVariationDetail client "a" (makeUser "b") "default" >>= (expected @=?)
+    where
+        flag = (makeTestFlag "a" 52)
+            { on           = True
+            , offVariation = Nothing
+            , fallthrough  = VariationOrRollout
+                { variation = Nothing
+                , rollout   = pure Rollout
+                    { variations = []
+                    , bucketBy   = pure "key"
+                    }
+                }
+            , variations   = [String "abc"]
+            }
+        expected = EvaluationDetail
+            { value          = "default"
+            , variationIndex = Nothing
+            , reason         = EvaluationReasonError EvalErrorKindMalformedFlag
+            }
+
+testFlagReturnsOffVariationIfPrerequisiteIsNotFound :: Test
+testFlagReturnsOffVariationIfPrerequisiteIsNotFound = TestCase $ do
+    client@(Client clientI) <- makeTestClient
+    insertFlag (getField @"store" clientI) flag >>= (pure () @=?)
+    stringVariationDetail client "a" (makeUser "b") "default" >>= (expected @=?)
+    where
+        flag = (makeTestFlag "a" 52)
+            { on            = True
+            , offVariation  = pure 1
+            , fallthrough   = VariationOrRollout
+                { variation = pure 0
+                , rollout   = Nothing
+                }
+            , variations    = [String "fall", String "off", String "on"]
+            , prerequisites =
+                [ Prerequisite
+                    { key       = "feature1"
+                    , variation = 1
+                    }
+                ]
+            }
+        expected = EvaluationDetail
+            { value          = "off"
+            , variationIndex = pure 1
+            , reason         = EvaluationReasonPrerequisiteFailed "feature1"
+            }
+
+testFlagReturnsOffVariationIfPrerequisiteIsOff :: Test
+testFlagReturnsOffVariationIfPrerequisiteIsOff = TestCase $ do
+    client@(Client clientI) <- makeTestClient
+    insertFlag (getField @"store" clientI) flag0                     >>= (pure () @=?)
+    insertFlag (getField @"store" clientI) flag1                     >>= (pure () @=?)
+    stringVariationDetail client "feature0" (makeUser "b") "default" >>= (expected @=?)
+    where
+        flag0 = (makeTestFlag "feature0" 52)
+            { on            = True
+            , offVariation  = pure 1
+            , fallthrough   = VariationOrRollout
+                { variation = pure 0
+                , rollout   = Nothing
+                }
+            , variations    = [String "fall", String "off", String "on"]
+            , prerequisites =
+                [ Prerequisite
+                    { key       = "feature1"
+                    , variation = 1
+                    }
+                ]
+            }
+        flag1 = (makeTestFlag "feature1" 52)
+            { on            = False
+            , offVariation  = pure 1
+            , fallthrough   = VariationOrRollout
+                { variation = pure 0
+                , rollout   = Nothing
+                }
+            , variations    = [String "nogo", String "go"]
+            }
+        expected = EvaluationDetail
+            { value          = "off"
+            , variationIndex = pure 1
+            , reason         = EvaluationReasonPrerequisiteFailed "feature1"
+            }
+
+testFlagReturnsOffVariationIfPrerequisiteIsNotMet :: Test
+testFlagReturnsOffVariationIfPrerequisiteIsNotMet = TestCase $ do
+    client@(Client clientI) <- makeTestClient
+    insertFlag (getField @"store" clientI) flag0                     >>= (pure () @=?)
+    insertFlag (getField @"store" clientI) flag1                     >>= (pure () @=?)
+    stringVariationDetail client "feature0" (makeUser "b") "default" >>= (expected @=?)
+    where
+        flag0 = (makeTestFlag "feature0" 52)
+            { on            = True
+            , offVariation  = pure 1
+            , fallthrough   = VariationOrRollout
+                { variation = pure 0
+                , rollout   = Nothing
+                }
+            , variations    = [String "fall", String "off", String "on"]
+            , prerequisites =
+                [ Prerequisite
+                    { key       = "feature1"
+                    , variation = 1
+                    }
+                ]
+            }
+        flag1 = (makeTestFlag "feature1" 52)
+            { on            = True
+            , offVariation  = pure 1
+            , fallthrough   = VariationOrRollout
+                { variation = pure 0
+                , rollout   = Nothing
+                }
+            , variations    = [String "nogo", String "go"]
+            }
+        expected = EvaluationDetail
+            { value          = "off"
+            , variationIndex = pure 1
+            , reason         = EvaluationReasonPrerequisiteFailed "feature1"
+            }
+
+testFlagReturnsFallthroughVariationIfPrerequisiteIsMetAndThereAreNoRules :: Test
+testFlagReturnsFallthroughVariationIfPrerequisiteIsMetAndThereAreNoRules = TestCase $ do
+    client@(Client clientI) <- makeTestClient
+    insertFlag (getField @"store" clientI) flag0                     >>= (pure () @=?)
+    insertFlag (getField @"store" clientI) flag1                     >>= (pure () @=?)
+    stringVariationDetail client "feature0" (makeUser "b") "default" >>= (expected @=?)
+    where
+        flag0 = (makeTestFlag "feature0" 52)
+            { on            = True
+            , offVariation  = pure 1
+            , fallthrough   = VariationOrRollout
+                { variation = pure 0
+                , rollout   = Nothing
+                }
+            , variations    = [String "fall", String "off", String "on"]
+            , prerequisites =
+                [ Prerequisite
+                    { key       = "feature1"
+                    , variation = 1
+                    }
+                ]
+            }
+        flag1 = (makeTestFlag "feature1" 52)
+            { on            = True
+            , offVariation  = pure 1
+            , fallthrough   = VariationOrRollout
+                { variation = pure 1
+                , rollout   = Nothing
+                }
+            , variations    = [String "nogo", String "go"]
+            }
+        expected = EvaluationDetail
+            { value          = "fall"
+            , variationIndex = pure 0
+            , reason         = EvaluationReasonFallthrough
+            }
+
 testClauseCanMatchCustomAttribute :: Test
 testClauseCanMatchCustomAttribute = TestCase $ do
-    store <- makeMemoryStoreIO
+    store <- makeStoreIO Nothing 0
     x <- evaluateDetail flag user store
     assertEqual "test" expected x
 
@@ -101,8 +315,11 @@ testClauseCanMatchCustomAttribute = TestCase $ do
 
     expected = (EvaluationDetail
         { value          = Bool True
-        , variationIndex = pure 0
-        , reason         = EvaluationReasonFallthrough
+        , variationIndex = pure 1
+        , reason         = EvaluationReasonRuleMatch
+            { ruleIndex = 0
+            , ruleId    = "clause"
+            }
         }, [])
 
     user = unwrapUser $ (makeUser "x")
@@ -147,9 +364,69 @@ testClauseCanMatchCustomAttribute = TestCase $ do
         , debugEventsUntilDate   = Nothing
         }
 
+makeTestClient :: IO Client
+makeTestClient = do
+    (Client client) <- makeClient $ (makeConfig "") & configSetOffline True
+    setStatus client Initialized
+    pure (Client client)
+
+testEvaluatingUnknownFlagReturnsDefault :: Test
+testEvaluatingUnknownFlagReturnsDefault = TestCase $ do
+    client <- makeTestClient
+    boolVariation client "a" (makeUser "b") False >>= (False @=?)
+
+testEvaluatingUnknownFlagReturnsDefaultWithDetail :: Test
+testEvaluatingUnknownFlagReturnsDefaultWithDetail = TestCase $ do
+    client <- makeTestClient
+    boolVariationDetail client "a" (makeUser "b") False >>= (expected @=?)
+    where
+        expected = EvaluationDetail
+            { value          = False
+            , variationIndex = Nothing
+            , reason         = EvaluationReasonError EvalErrorFlagNotFound
+            }
+
+testDefaultIsReturnedIfFlagEvaluatesToNil :: Test
+testDefaultIsReturnedIfFlagEvaluatesToNil = TestCase $ do
+    client@(Client clientI) <- makeTestClient
+    insertFlag (getField @"store" clientI) flag >>= (pure () @=?)
+    boolVariation client "a" (makeUser "b") False >>= (False @=?)
+    where
+        flag = (makeTestFlag "a" 52)
+            { on           = False
+            , offVariation = Nothing
+            }
+
+testDefaultIsReturnedIfFlagEvaluatesToNilWithDetail :: Test
+testDefaultIsReturnedIfFlagEvaluatesToNilWithDetail = TestCase $ do
+    client@(Client clientI) <- makeTestClient
+    insertFlag (getField @"store" clientI) flag >>= (pure () @=?)
+    boolVariationDetail client "a" (makeUser "b") False >>= (expected @=?)
+    where
+        flag = (makeTestFlag "a" 52)
+            { on           = False
+            , offVariation = Nothing
+            }
+        expected = EvaluationDetail
+            { value          = False
+            , variationIndex = Nothing
+            , reason         = EvaluationReasonOff
+            }
+
 allTests :: Test
 allTests = TestList
     [ testFlagReturnsOffVariationIfFlagIsOff
     , testFlagReturnsFallthroughIfFlagIsOnAndThereAreNoRules
-    -- , testClauseCanMatchCustomAttribute
+    , testFlagReturnsErrorIfFallthroughHasTooHighVariation
+    , testFlagReturnsErrorIfFallthroughHasNeitherVariationNorRollout
+    , testFlagReturnsErrorIfFallthroughHasEmptyRolloutVariationList
+    , testFlagReturnsOffVariationIfPrerequisiteIsNotFound
+    , testFlagReturnsOffVariationIfPrerequisiteIsOff
+    , testFlagReturnsOffVariationIfPrerequisiteIsNotMet
+    , testFlagReturnsFallthroughVariationIfPrerequisiteIsMetAndThereAreNoRules
+    , testClauseCanMatchCustomAttribute
+    , testEvaluatingUnknownFlagReturnsDefault
+    , testEvaluatingUnknownFlagReturnsDefaultWithDetail
+    , testDefaultIsReturnedIfFlagEvaluatesToNil
+    , testDefaultIsReturnedIfFlagEvaluatesToNilWithDetail
     ]

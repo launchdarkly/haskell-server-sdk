@@ -28,7 +28,7 @@ module LaunchDarkly.Server.Client
 
 import           Control.Concurrent                    (forkFinally, killThread)
 import           Control.Concurrent.MVar               (putMVar, takeMVar, newEmptyMVar)
-import           Control.Monad                         (liftM, void)
+import           Control.Monad                         (void, forM_)
 import           Control.Monad.IO.Class                (liftIO)
 import           Control.Monad.Logger                  (LoggingT, logDebug)
 import           Data.IORef                            (newIORef, readIORef, writeIORef)
@@ -41,6 +41,7 @@ import           Data.Scientific                       (toRealFloat, fromFloatDi
 import           Data.Maybe                            (isNothing)
 import           Network.HTTP.Client                   (newManager)
 import           Network.HTTP.Client.TLS               (tlsManagerSettings)
+import           System.Clock                          (TimeSpec(..))
 
 import           LaunchDarkly.Server.Config.Internal   (Config(..), shouldSendEvents)
 import           LaunchDarkly.Server.Client.Internal
@@ -50,8 +51,7 @@ import           LaunchDarkly.Server.Events            (IdentifyEvent(..), Custo
 import           LaunchDarkly.Server.Network.Eventing  (eventThread)
 import           LaunchDarkly.Server.Network.Streaming (streamingThread)
 import           LaunchDarkly.Server.Network.Polling   (pollingThread)
-import           LaunchDarkly.Server.Store             (getAllFlags)
-import           LaunchDarkly.Server.Store.Memory      (makeMemoryStoreIO)
+import           LaunchDarkly.Server.Store.Internal    (makeStoreIO, getAllFlagsC)
 import           LaunchDarkly.Server.Evaluate          (evaluateTyped, evaluateDetail)
 
 -- | Create a new instance of the LaunchDarkly client.
@@ -62,7 +62,7 @@ makeClient (Config config) = do
         downloadThreadPair = Nothing
 
     status  <- newIORef Uninitialized
-    store   <- case getField @"store" config of Nothing -> makeMemoryStoreIO; Just x -> pure x
+    store   <- makeStoreIO (getField @"storeBackend" config) (TimeSpec (fromIntegral $ getField @"storeTTLSeconds" config) 0)
     manager <- newManager tlsManagerSettings
     events  <- makeEventState config
 
@@ -74,7 +74,7 @@ makeClient (Config config) = do
         thread <- forkFinally (runLogger $ eventThread manager client) (\_ -> putMVar sync ())
         pure $ pure (thread, sync)
 
-    downloadThreadPair' <- if getField @"offline" config then pure Nothing else do
+    downloadThreadPair' <- if (getField @"offline" config) || (getField @"useLdd" config) then pure Nothing else do
         sync   <- newEmptyMVar
         thread <- forkFinally (runLogger $ downloadThreadF manager client) (\_ -> putMVar sync ())
         pure $ pure (thread, sync)
@@ -95,9 +95,12 @@ getStatus (Client client) = readIORef $ getField @"status" client
 -- be returned. This method does not send analytics events back to LaunchDarkly.
 allFlags :: Client -> User -> IO (HashMap Text Value)
 allFlags (Client client) (User user) = if isNothing $ getField @"key" user then pure mempty else do
-    flags <- getAllFlags $ getField @"store" client
-    evals <- mapM (\flag -> evaluateDetail flag user $ getField @"store" client) flags
-    pure $ HM.map (getField @"value" . fst) evals
+    status <- getAllFlagsC $ getField @"store" client
+    case status of
+        Left _      -> pure HM.empty
+        Right flags -> do
+            evals <- mapM (\flag -> evaluateDetail flag user $ getField @"store" client) flags
+            pure $ HM.map (getField @"value" . fst) evals
 
 -- | Identify reports details about a a user.
 identify :: Client -> User -> IO ()
@@ -131,12 +134,12 @@ close :: Client -> IO ()
 close outer@(Client client) = clientRunLogger client $ do
     $(logDebug) "Setting client status to ShuttingDown"
     liftIO $ writeIORef (getField @"status" client) ShuttingDown
-    (flip mapM_) (getField @"downloadThreadPair" client) $ \(thread, sync) -> do
+    forM_ (getField @"downloadThreadPair" client) $ \(thread, sync) -> do
         $(logDebug) "Killing download thread"
         liftIO $ killThread thread
         $(logDebug) "Waiting on download thread to die"
         liftIO $ void $ takeMVar sync
-    (flip mapM_) (getField @"eventThreadPair" client) $ \(_, sync) -> do
+    forM_ (getField @"eventThreadPair" client) $ \(_, sync) -> do
         $(logDebug) "Triggering event flush"
         liftIO $ flushEvents outer
         $(logDebug) "Waiting on event thread to die"
@@ -149,7 +152,7 @@ reorderStuff :: ValueConverter a -> Bool -> Client -> Text -> User -> a -> IO (E
 reorderStuff converter includeReason (Client client) key (User user) fallback = evaluateTyped client key user fallback (fst converter) includeReason (snd converter)
 
 dropReason :: (Text -> User -> a -> IO (EvaluationDetail a)) -> Text -> User -> a -> IO a
-dropReason = (((liftM (getField @"value") .) .) .)
+dropReason = (((fmap (getField @"value") .) .) .)
 
 boolConverter :: ValueConverter Bool
 boolConverter = (,) Bool $ \case Bool x -> pure x; _ -> Nothing

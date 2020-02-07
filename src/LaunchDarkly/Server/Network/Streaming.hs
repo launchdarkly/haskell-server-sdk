@@ -2,8 +2,8 @@ module LaunchDarkly.Server.Network.Streaming (streamingThread) where
 
 import           Data.Text                           (Text)
 import qualified Data.Text as                        T
-import           Data.Attoparsec.Text as             P
-import           Control.Monad                       (void, mzero)
+import           Data.Attoparsec.Text as             P hiding (Result)
+import           Control.Monad                       (void, mzero, forever)
 import           Data.ByteString                     (ByteString)
 import           Control.Applicative                 (many)
 import           Data.Text.Encoding                  (decodeUtf8, encodeUtf8)
@@ -12,17 +12,16 @@ import           Network.HTTP.Client                 (Manager, Response(..), Req
 import           Control.Monad.Logger                (MonadLogger, logInfo, logWarn, logError)
 import           Control.Monad.IO.Class              (MonadIO, liftIO)
 import           Data.Generics.Product               (getField)
-import           Data.Aeson                          (FromJSON, parseJSON, withObject, eitherDecode, (.:), Object, encode)
+import           Data.Aeson                          (FromJSON, parseJSON, withObject, eitherDecode, (.:), fromJSON, Result(..))
 import qualified Data.ByteString.Lazy as             L
 import           GHC.Natural                         (Natural)
 import           GHC.Generics                        (Generic)
 import           Control.Monad.Catch                 (MonadMask)
-import           Control.Monad                       (forever)
 import           Control.Retry                       (RetryPolicyM, RetryStatus, fullJitterBackoff, capDelay, retrying)
 import           Network.HTTP.Types.Status           (ok200)
 
 import           LaunchDarkly.Server.Client.Internal (ClientI, Status(Initialized), setStatus)
-import           LaunchDarkly.Server.Store           (StoreHandle, LaunchDarklyStoreWrite(..), insertFlag, deleteFlag, deleteSegment, insertSegment)
+import           LaunchDarkly.Server.Store.Internal  (StoreHandle, StoreResult, initializeStore, insertFlag, deleteFlag, deleteSegment, insertSegment)
 import           LaunchDarkly.Server.Features        (Flag, Segment)
 import           LaunchDarkly.Server.Network.Common  (tryAuthorized, checkAuthorization, prepareRequest, withResponseGeneric, tryHTTP)
 
@@ -88,50 +87,44 @@ parseEvent = do
     fields <- many (many comment >> parseField >>= pure)
     endOfLineSSE
     let event = foldr processField (SSE "" "" mzero mzero) fields
-    if (T.null $ name event) || (T.null $ buffer event) then parseEvent else pure event
+    if T.null (name event) || T.null (buffer event) then parseEvent else pure event
 
 processPut :: (MonadIO m, MonadLogger m) => ClientI -> StoreHandle IO -> L.ByteString -> m ()
-processPut client store value = case eitherDecode value :: Either String (PathData PutBody) of
+processPut client store value = case eitherDecode value of
     Right (PathData _ (PutBody flags segments)) -> do
         $(logInfo) "initializing store with put"
-        liftIO $ storeInitialize store flags segments
-        liftIO $ setStatus client Initialized
-    Left err -> do
-        $(logError) $ T.append "failed to parse put body" (T.pack err)
+        status <- liftIO $ initializeStore store flags segments
+        either (\err -> $(logError) $ T.append "store failed put: " err)
+               (\_   -> liftIO $ setStatus client Initialized) status
+    Left err -> $(logError) $ T.append "failed to parse put body" (T.pack err)
 
-processPatch :: (MonadIO m, MonadLogger m) => StoreHandle IO -> L.ByteString -> m ()
-processPatch store value = case eitherDecode value :: Either String (PathData Object) of
+processPatch :: forall m. (MonadIO m, MonadLogger m) => StoreHandle IO -> L.ByteString -> m ()
+processPatch store value = case eitherDecode value of
     Right (PathData path body)
-        | T.isPrefixOf "/flags/" path -> do
-            case eitherDecode (encode body) :: Either String (Flag) of
-                (Right flag) -> do
-                    $(logInfo) $ T.append "patching flag with path " path
-                    liftIO $ insertFlag store flag
-                (Left err)   -> do
-                    $(logError) $ T.append "failed to parse patch flag" (T.pack err)
-        | T.isPrefixOf "/segments/" path -> do
-            case eitherDecode (encode body) :: Either String (Segment) of
-                (Right segment) -> do
-                    $(logInfo) $ T.append "patching segment with path " path
-                    liftIO $ insertSegment store segment
-                (Left err)   -> do
-                    $(logError) $ T.append "failed to parse patch segment" (T.pack err)
-        | otherwise -> $(logError) "unknown patch path"
-    Left err -> do
-        $(logError) $ T.append "failed to parse patch generic" (T.pack err)
+        | T.isPrefixOf "/flags/" path    -> insPatch "flag" path insertFlag (fromJSON body)
+        | T.isPrefixOf "/segments/" path -> insPatch "segment" path insertSegment (fromJSON body)
+        | otherwise                      -> $(logError) "unknown patch path"
+    Left err                             -> $(logError) $ T.append "failed to parse patch generic" (T.pack err)
+    where
+      insPatch :: Text -> Text -> (StoreHandle IO -> a -> StoreResult ()) -> Result a -> m ()
+      insPatch name _ _ (Error err) = $(logError) $ T.concat ["failed to parse patch ", name, ": ", T.pack err]
+      insPatch name path insert (Success item) = do
+        $(logInfo) $ T.concat ["patching ", name, " with path: ", path]
+        status <- liftIO $ insert store item
+        either (\err -> $(logError) $ T.concat ["store failed ", name, " patch: ", err]) pure status
 
-processDelete :: (MonadIO m, MonadLogger m) => StoreHandle IO -> L.ByteString -> m ()
-processDelete store value = case eitherDecode value :: Either String (PathVersion) of
+processDelete :: forall m. (MonadIO m, MonadLogger m) => StoreHandle IO -> L.ByteString -> m ()
+processDelete store value = case eitherDecode value :: Either String PathVersion of
     Right (PathVersion path version)
-        | T.isPrefixOf "/flags/" path -> do
-            $(logInfo) $ T.append "deleting flag with path " path
-            liftIO $ deleteFlag store (T.drop 7 path) version
-        | T.isPrefixOf "/segments/" path -> do
-            $(logInfo) $ T.append "deleting segment with path " path
-            liftIO $ deleteSegment store (T.drop 10 path) version
-        | otherwise -> $(logError) "unknown delete path"
-    Left err -> do
-        $(logError) $ T.append "failed to parse delete" (T.pack err)
+        | T.isPrefixOf "/flags/" path    -> logDelete "flag" path (deleteFlag store (T.drop 7 path) version)
+        | T.isPrefixOf "/segments/" path -> logDelete "segment" path (deleteSegment store (T.drop 10 path) version)
+        | otherwise                      -> $(logError) "unknown delete path"
+    Left err                             -> $(logError) $ T.append "failed to parse delete" (T.pack err)
+    where logDelete :: Text -> Text -> StoreResult () -> m ()
+          logDelete name path action = do
+            $(logInfo) $ T.concat ["deleting ", name, " with path: ", path]
+            status <- liftIO action
+            either (\err -> $(logError) $ T.concat ["store failed ", name, " delete: ", err]) pure status
 
 processEvent :: (MonadIO m, MonadLogger m) => ClientI -> StoreHandle IO -> Text -> L.ByteString -> m ()
 processEvent client store name value = case name of
@@ -140,15 +133,15 @@ processEvent client store name value = case name of
     "delete" -> processDelete store value
     _        -> $(logWarn) "unknown event type"
 
-readStream :: (MonadIO m, MonadLogger m) => ClientI -> (IO ByteString) -> StoreHandle IO -> m ()
+readStream :: (MonadIO m, MonadLogger m) => ClientI -> IO ByteString -> StoreHandle IO -> m ()
 readStream client body store = loop "" where
-    loop initial = (liftIO $ parseWith (fmap decodeUtf8 $ brRead body) parseEvent initial) >>= \case
-        (Done remaining event) -> do
+    loop initial = liftIO (parseWith (decodeUtf8 <$> brRead body) parseEvent initial) >>= \case
+        Done remaining event -> do
             processEvent client store (name event) (L.fromStrict $ encodeUtf8 $ buffer event)
             loop remaining
-        (Fail _ context err) -> do
+        Fail _ context err ->
             $(logError) $ T.intercalate " " ["failed parsing SSE frame", T.pack $ show context, T.pack err]
-        (Partial _) -> $(logError) "failed parsing SSE frame unexpected partial"
+        Partial _ -> $(logError) "failed parsing SSE frame unexpected partial"
 
 -- https://aws.amazon.com/blogs/architecture/exponential-backoff-and-jitter/
 retryPolicy :: MonadIO m => RetryPolicyM m
@@ -166,5 +159,5 @@ handleStream client manager request store _ = do
 streamingThread :: (MonadIO m, MonadLogger m, MonadMask m) => Manager -> ClientI -> m ()
 streamingThread manager client = do
     let config = getField @"config" client; store = getField @"store" client;
-    req <- (liftIO $ parseRequest $ (T.unpack $ getField @"streamURI" config) ++ "/all") >>= pure . prepareRequest config
+    req <- prepareRequest config <$> liftIO (parseRequest $ T.unpack (getField @"streamURI" config) ++ "/all")
     tryAuthorized client $ forever $ retrying retryPolicy (\_ status -> pure status) $ handleStream client manager req store

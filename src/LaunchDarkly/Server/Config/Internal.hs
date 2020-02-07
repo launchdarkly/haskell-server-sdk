@@ -5,14 +5,14 @@ module LaunchDarkly.Server.Config.Internal
     , shouldSendEvents
     ) where
 
-import Control.Monad.Logger      (LoggingT)
-import Data.Generics.Product     (getField)
-import Data.Text                 (Text)
-import Data.Set                  (Set)
-import GHC.Natural               (Natural)
-import GHC.Generics              (Generic)
+import Control.Monad.Logger               (LoggingT)
+import Data.Generics.Product              (getField)
+import Data.Text                          (Text)
+import Data.Set                           (Set)
+import GHC.Natural                        (Natural)
+import GHC.Generics                       (Generic)
 
-import LaunchDarkly.Server.Store (StoreHandle)
+import LaunchDarkly.Server.Store          (StoreInterface)
 
 mapConfig :: (ConfigI -> ConfigI) -> Config -> Config
 mapConfig f (Config c) = Config $ f c
@@ -28,7 +28,8 @@ data ConfigI = ConfigI
     , baseURI               :: Text
     , streamURI             :: Text
     , eventsURI             :: Text
-    , store                 :: Maybe (StoreHandle IO)
+    , storeBackend          :: Maybe StoreInterface
+    , storeTTLSeconds       :: Natural
     , streaming             :: Bool
     , allAttributesPrivate  :: Bool
     , privateAttributeNames :: Set Text
@@ -41,4 +42,5 @@ data ConfigI = ConfigI
     , sendEvents            :: Bool
     , offline               :: Bool
     , requestTimeoutSeconds :: Natural
+    , useLdd                :: Bool
     } deriving (Generic)

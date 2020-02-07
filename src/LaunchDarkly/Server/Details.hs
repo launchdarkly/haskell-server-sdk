@@ -88,6 +88,8 @@ data EvalErrorKind
     | EvalErrorClientNotReady
       -- ^ Indicates that the caller tried to evaluate a flag before the client
       -- had successfully initialized.
+    | EvalErrorExternalStore Text
+      -- ^ Indicates that some error was returned by the external feature store.
     deriving (Generic, Eq, Show)
 
 instance ToJSON EvalErrorKind where
@@ -97,3 +99,4 @@ instance ToJSON EvalErrorKind where
         EvalErrorWrongType         -> "WRONG_TYPE"
         EvalErrorUserNotSpecified  -> "USER_NOT_SPECIFIED"
         EvalErrorClientNotReady    -> "CLIENT_NOT_READY"
+        EvalErrorExternalStore _   -> "EXTERNAL_STORE_ERROR"

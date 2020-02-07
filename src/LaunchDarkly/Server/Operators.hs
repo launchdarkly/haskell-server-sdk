@@ -10,7 +10,7 @@ import Data.Text             (Text, isPrefixOf, isInfixOf, isSuffixOf, unpack)
 import Data.Char             (isDigit)
 import Data.Text.Encoding    (encodeUtf8)
 import Data.Scientific       (Scientific, toRealFloat)
-import Data.Aeson.Types      (Value(..), FromJSON, ToJSON, withText, parseJSON)
+import Data.Aeson.Types      (Value(..), FromJSON, ToJSON(..), withText, parseJSON)
 import Data.Time.ISO8601     (parseISO8601)
 import Data.Time.Clock       (UTCTime)
 import Data.Time.Clock.POSIX (POSIXTime, posixSecondsToUTCTime)
@@ -37,7 +37,7 @@ data Op =
     | OpSemVerGreaterThan
     | OpSegmentMatch
     | OpUnknown
-    deriving (Generic, ToJSON, Show, Eq)
+    deriving (Generic, Show, Eq)
 
 instance FromJSON Op where
     parseJSON = withText "Op" $ \v -> case v of
@@ -57,6 +57,25 @@ instance FromJSON Op where
         "semVerGreaterThan"  -> pure OpSemVerGreaterThan
         "segmentMatch"       -> pure OpSegmentMatch
         _                    -> pure OpUnknown
+
+instance ToJSON Op where
+    toJSON op = String $ case op of
+        OpIn                 -> "in"
+        OpEndsWith           -> "endsWith"
+        OpStartsWith         -> "startsWith"
+        OpMatches            -> "matches"
+        OpContains           -> "contains"
+        OpLessThan           -> "lessThan"
+        OpLessThanOrEqual    -> "lessThanOrEqual"
+        OpGreaterThan        -> "greaterThan"
+        OpGreaterThanOrEqual -> "greaterThanOrEqual"
+        OpBefore             -> "before"
+        OpAfter              -> "after"
+        OpSemVerEqual        -> "semVerEqual"
+        OpSemVerLessThan     -> "semVerLessThan"
+        OpSemVerGreaterThan  -> "semVerGreaterThan"
+        OpSegmentMatch       -> "segmentMatch"
+        OpUnknown            -> "unknown"
 
 checkString :: (Text -> Text -> Bool) -> Value -> Value -> Bool
 checkString op (String x) (String y) = op x y

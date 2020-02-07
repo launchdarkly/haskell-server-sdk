@@ -47,6 +47,7 @@ dependencies:
 - time
 - unordered-containers
 - vector
+- clock
 
 default-extensions:
 - AllowAmbiguousTypes
@@ -68,20 +69,22 @@ default-extensions:
 - RecordWildCards
 - ScopedTypeVariables
 - TemplateHaskell
+- TupleSections
 - TypeApplications
 - TypeOperators
 
 library:
   source-dirs: src
   ghc-options:
-  - -fno-warn-name-shadowing
   - -fwarn-unused-imports
   - -Wall
+  - -Wno-name-shadowing
   exposed-modules:
   - LaunchDarkly.Server
   - LaunchDarkly.Server.Client
   - LaunchDarkly.Server.Config
   - LaunchDarkly.Server.User
+  - LaunchDarkly.Server.Store
 
 tests:
   haskell-server-sdk-test:
@@ -89,9 +92,11 @@ tests:
     source-dirs:
     - test
     - src
+    - stores/launchdarkly-server-sdk-redis/src
     ghc-options:
     - -rtsopts
     - -threaded
     - -with-rtsopts=-N
+    - -Wno-name-shadowing
     dependencies:
     - HUnit

@@ -19,6 +19,9 @@ module LaunchDarkly.Server.Config
     , configSetSendEvents
     , configSetOffline
     , configSetRequestTimeoutSeconds
+    , configSetStoreBackend
+    , configSetStoreTTL
+    , configSetUseLdd
     ) where
 
 import Control.Monad.Logger                (LoggingT, runStdoutLoggingT)
@@ -29,7 +32,7 @@ import Data.Monoid                         (mempty)
 import GHC.Natural                         (Natural)
 
 import LaunchDarkly.Server.Config.Internal (Config(..), mapConfig, ConfigI(..))
-import LaunchDarkly.Server.Store           (StoreHandle)
+import LaunchDarkly.Server.Store           (StoreInterface)
 
 -- | Create a default configuration from a given SDK key.
 makeConfig :: Text -> Config
@@ -38,7 +41,8 @@ makeConfig key = Config $ ConfigI
     , baseURI               = "https://app.launchdarkly.com"
     , streamURI             = "https://stream.launchdarkly.com"
     , eventsURI             = "https://events.launchdarkly.com"
-    , store                 = Nothing
+    , storeBackend          = Nothing
+    , storeTTLSeconds       = 10
     , streaming             = True
     , allAttributesPrivate  = False
     , privateAttributeNames = mempty
@@ -51,6 +55,7 @@ makeConfig key = Config $ ConfigI
     , sendEvents            = True
     , offline               = False
     , requestTimeoutSeconds = 30
+    , useLdd                = False
     }
 
 -- | Set the SDK key used to authenticate with LaunchDarkly.
@@ -72,8 +77,14 @@ configSetStreamURI = mapConfig . setField @"streamURI"
 configSetEventsURI :: Text -> Config -> Config
 configSetEventsURI = mapConfig . setField @"eventsURI"
 
-configSetStore :: Maybe (StoreHandle IO) -> Config -> Config
-configSetStore = mapConfig . setField @"store"
+-- | Configures a handle to an external store such as Redis.
+configSetStoreBackend :: Maybe StoreInterface -> Config -> Config
+configSetStoreBackend = mapConfig . setField @"storeBackend"
+
+-- | When a store backend is configured, control how long values should be
+-- cached in memory before going back to the backend.
+configSetStoreTTL :: Natural -> Config -> Config
+configSetStoreTTL = mapConfig . setField @"storeTTLSeconds"
 
 -- | Sets whether streaming mode should be enabled. By default, streaming is
 -- enabled. It should only be disabled on the advice of LaunchDarkly support.
@@ -135,3 +146,10 @@ configSetOffline = mapConfig . setField @"offline"
 -- | Sets how long an the HTTP client should wait before a response is returned.
 configSetRequestTimeoutSeconds :: Natural -> Config -> Config
 configSetRequestTimeoutSeconds = mapConfig . setField @"requestTimeoutSeconds"
+
+-- | Sets whether this client should use the LaunchDarkly relay in daemon mode.
+-- In this mode, the client does not subscribe to the streaming or polling API,
+-- but reads data only from the feature store. See:
+-- https://docs.launchdarkly.com/docs/the-relay-proxy
+configSetUseLdd :: Bool -> Config -> Config
+configSetUseLdd = mapConfig . setField @"useLdd"

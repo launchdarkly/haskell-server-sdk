@@ -1,8 +1,9 @@
 module LaunchDarkly.Server.Features where
 
-import Data.Aeson                    (FromJSON(..), ToJSON, Value(..), withObject, (.:), (.:?))
+import Data.Aeson                    (FromJSON(..), ToJSON(..), Value(..), withObject, (.:), (.:?), object, (.=))
 import Data.Text                     (Text)
 import Data.HashSet                  (HashSet)
+import Data.Generics.Product         (getField)
 import GHC.Natural                   (Natural)
 import GHC.Generics                  (Generic)
 
@@ -11,14 +12,14 @@ import LaunchDarkly.Server.Operators (Op)
 data Target = Target
     { values    :: [Text]
     , variation :: Natural
-    } deriving (Generic, FromJSON, ToJSON, Show)
+    } deriving (Generic, FromJSON, ToJSON, Show, Eq)
 
 data Rule = Rule
     { id                 :: Text
     , clauses            :: [Clause]
     , variationOrRollout :: VariationOrRollout
     , trackEvents        :: Bool
-    } deriving (Generic, ToJSON, Show)
+    } deriving (Generic, Show, Eq)
 
 instance FromJSON Rule where
     parseJSON = withObject "Rule" $ \o -> do
@@ -37,20 +38,29 @@ instance FromJSON Rule where
             , trackEvents        = trackEvents
             }
 
+instance ToJSON Rule where
+    toJSON rule = object
+        [ "id"          .= getField @"id" rule
+        , "clauses"     .= getField @"clauses" rule
+        , "trackEvents" .= getField @"trackEvents" rule
+        , "variation"   .= getField @"variation" (getField @"variationOrRollout" rule)
+        , "rollout"     .= getField @"rollout" (getField @"variationOrRollout" rule)
+        ]
+
 data WeightedVariation = WeightedVariation
     { variation :: Natural
     , weight    :: Float
-    } deriving (Generic, FromJSON, ToJSON, Show)
+    } deriving (Generic, FromJSON, ToJSON, Show, Eq)
 
 data Rollout = Rollout
     { variations :: [WeightedVariation]
     , bucketBy   :: Maybe Text
-    } deriving (Generic, FromJSON, ToJSON, Show)
+    } deriving (Generic, FromJSON, ToJSON, Show, Eq)
 
 data VariationOrRollout = VariationOrRollout
     { variation :: Maybe Natural
     , rollout   :: Maybe Rollout
-    } deriving (Generic, FromJSON, ToJSON, Show)
+    } deriving (Generic, FromJSON, ToJSON, Show, Eq)
 
 data Flag = Flag
     { key                    :: Text
@@ -68,19 +78,19 @@ data Flag = Flag
     , offVariation           :: Maybe Natural
     , variations             :: [Value]
     , debugEventsUntilDate   :: Maybe Natural
-    } deriving (Generic, ToJSON, FromJSON, Show)
+    } deriving (Generic, ToJSON, FromJSON, Show, Eq)
 
 data Prerequisite = Prerequisite
     { key       :: Text
     , variation :: Natural
-    } deriving (Generic, FromJSON, ToJSON, Show)
+    } deriving (Generic, FromJSON, ToJSON, Show, Eq)
 
 data SegmentRule = SegmentRule
     { id       :: Text
     , clauses  :: [Clause]
     , weight   :: Maybe Float
     , bucketBy :: Maybe Text
-    } deriving (Generic, FromJSON, ToJSON, Show)
+    } deriving (Generic, FromJSON, ToJSON, Show, Eq)
 
 data Segment = Segment
     { key      :: Text
@@ -90,11 +100,11 @@ data Segment = Segment
     , rules    :: [SegmentRule]
     , version  :: Natural
     , deleted  :: Bool
-    } deriving (Generic, FromJSON, ToJSON, Show)
+    } deriving (Generic, FromJSON, ToJSON, Show, Eq)
 
 data Clause = Clause
     { attribute :: Text
     , negate    :: Bool
     , op        :: Op
     , values    :: [Value]
-    } deriving (Generic, FromJSON, ToJSON, Show)
+    } deriving (Generic, FromJSON, ToJSON, Show, Eq)
