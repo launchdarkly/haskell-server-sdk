@@ -4,6 +4,7 @@ repo:
 
 circleci:
   linux:
+    timeoutMinutes: 45
     image: fpco/stack-build:lts
 
 documentation:
