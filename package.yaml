@@ -48,6 +48,8 @@ dependencies:
 - unordered-containers
 - vector
 - clock
+- uuid
+- random
 
 default-extensions:
 - AllowAmbiguousTypes
