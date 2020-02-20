@@ -22,25 +22,25 @@ import           LaunchDarkly.Server.Details         (EvaluationReason(..))
 import           LaunchDarkly.Server.Features        (Flag)
 
 data EvalEvent = EvalEvent
-    { key                  :: Text
-    , variation            :: Maybe Natural
-    , value                :: Value
-    , defaultValue         :: Maybe Value
-    , version              :: Maybe Natural
-    , prereqOf             :: Maybe Text
-    , reason               :: EvaluationReason
-    , trackEvents          :: Bool
-    , forceIncludeReason   :: Bool
-    , debug                :: Bool
-    , debugEventsUntilDate :: Maybe Natural
+    { key                  :: !Text
+    , variation            :: !(Maybe Natural)
+    , value                :: !Value
+    , defaultValue         :: !(Maybe Value)
+    , version              :: !(Maybe Natural)
+    , prereqOf             :: !(Maybe Text)
+    , reason               :: !EvaluationReason
+    , trackEvents          :: !Bool
+    , forceIncludeReason   :: !Bool
+    , debug                :: !Bool
+    , debugEventsUntilDate :: !(Maybe Natural)
     } deriving (Generic, Eq, Show)
 
 data EventState = EventState
-    { events     :: MVar [EventType]
-    , flush      :: MVar ()
-    , summary    :: MVar (HashMap Text (FlagSummaryContext (HashMap Text CounterContext)))
-    , startDate  :: MVar Natural
-    , userKeyLRU :: MVar (LRU Text ())
+    { events     :: !(MVar [EventType])
+    , flush      :: !(MVar ())
+    , summary    :: !(MVar (HashMap Text (FlagSummaryContext (HashMap Text CounterContext))))
+    , startDate  :: !(MVar Natural)
+    , userKeyLRU :: !(MVar (LRU Text ()))
     } deriving (Generic)
 
 makeEventState :: ConfigI -> IO EventState
@@ -79,9 +79,9 @@ class EventKind a where
     eventKind :: a -> Text
 
 data SummaryEvent = SummaryEvent
-    { startDate :: Natural
-    , endDate   :: Natural
-    , features  :: HashMap Text (FlagSummaryContext [CounterContext])
+    { startDate :: !Natural
+    , endDate   :: !Natural
+    , features  :: !(HashMap Text (FlagSummaryContext [CounterContext]))
     } deriving (Generic, Show, ToJSON)
 
 instance EventKind SummaryEvent where
@@ -99,16 +99,16 @@ instance ToJSON a => ToJSON (FlagSummaryContext a) where
         ]
 
 data CounterContext = CounterContext
-    { count     :: Natural
-    , version   :: Maybe Natural
-    , variation :: Maybe Natural
-    , value     :: Value
-    , unknown   :: Bool
+    { count     :: !Natural
+    , version   :: !(Maybe Natural)
+    , variation :: !(Maybe Natural)
+    , value     :: !Value
+    , unknown   :: !Bool
     } deriving (Generic, Show, ToJSON)
 
 data IdentifyEvent = IdentifyEvent
-    { key  :: Maybe Text
-    , user :: Value
+    { key  :: !(Maybe Text)
+    , user :: !Value
     } deriving (Generic, ToJSON, Show)
 
 instance EventKind IdentifyEvent where
@@ -120,14 +120,14 @@ instance EventKind IndexEvent where
     eventKind _ = "index"
 
 data FeatureEvent = FeatureEvent
-    { key          :: Text
-    , user         :: Maybe Value
-    , userKey      :: Maybe Text
-    , value        :: Value
-    , defaultValue :: Maybe Value
-    , version      :: Maybe Natural
-    , variation    :: Maybe Natural
-    , reason       :: Maybe EvaluationReason
+    { key          :: !Text
+    , user         :: !(Maybe Value)
+    , userKey      :: !(Maybe Text)
+    , value        :: !Value
+    , defaultValue :: !(Maybe Value)
+    , version      :: !(Maybe Natural)
+    , variation    :: !(Maybe Natural)
+    , reason       :: !(Maybe EvaluationReason)
     } deriving (Generic, Show)
 
 instance ToJSON FeatureEvent where
@@ -172,11 +172,11 @@ makeFeatureEvent config user includeReason event = addUserToEvent config user $ 
     }
 
 data CustomEvent = CustomEvent
-    { key         :: Text
-    , user        :: Maybe Value
-    , userKey     :: Maybe Text
-    , metricValue :: Maybe Double
-    , value       :: Maybe Value
+    { key         :: !Text
+    , user        :: !(Maybe Value)
+    , userKey     :: !(Maybe Text)
+    , metricValue :: !(Maybe Double)
+    , value       :: !(Maybe Value)
     } deriving (Generic, Show)
 
 instance ToJSON CustomEvent where
@@ -206,12 +206,12 @@ instance (EventKind sub, ToJSON sub) => ToJSON (BaseEvent sub) where
         ]
 
 data EventType =
-      EventTypeIdentify (BaseEvent IdentifyEvent)
-    | EventTypeFeature  (BaseEvent FeatureEvent)
-    | EventTypeSummary  (BaseEvent SummaryEvent)
-    | EventTypeCustom   (BaseEvent CustomEvent)
-    | EventTypeIndex    (BaseEvent IndexEvent)
-    | EventTypeDebug    (BaseEvent DebugEvent)
+      EventTypeIdentify !(BaseEvent IdentifyEvent)
+    | EventTypeFeature  !(BaseEvent FeatureEvent)
+    | EventTypeSummary  !(BaseEvent SummaryEvent)
+    | EventTypeCustom   !(BaseEvent CustomEvent)
+    | EventTypeIndex    !(BaseEvent IndexEvent)
+    | EventTypeDebug    !(BaseEvent DebugEvent)
 
 instance ToJSON EventType where
     toJSON event = case event of

@@ -30,18 +30,18 @@ mapUser f (User c) = User $ f c
 newtype User = User { unwrapUser :: UserI }
 
 data UserI = UserI
-    { key                   :: Maybe Text
-    , secondary             :: Maybe Text
-    , ip                    :: Maybe Text
-    , country               :: Maybe Text
-    , email                 :: Maybe Text
-    , firstName             :: Maybe Text
-    , lastName              :: Maybe Text
-    , avatar                :: Maybe Text
-    , name                  :: Maybe Text
-    , anonymous             :: Bool
-    , custom                :: HashMap Text Value
-    , privateAttributeNames :: Set Text
+    { key                   :: !(Maybe Text)
+    , secondary             :: !(Maybe Text)
+    , ip                    :: !(Maybe Text)
+    , country               :: !(Maybe Text)
+    , email                 :: !(Maybe Text)
+    , firstName             :: !(Maybe Text)
+    , lastName              :: !(Maybe Text)
+    , avatar                :: !(Maybe Text)
+    , name                  :: !(Maybe Text)
+    , anonymous             :: !Bool
+    , custom                :: !(HashMap Text Value)
+    , privateAttributeNames :: !(Set Text)
     } deriving (Generic)
 
 falseToNothing :: Bool -> Maybe Bool

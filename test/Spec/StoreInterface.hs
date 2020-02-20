@@ -19,11 +19,11 @@ makeTestStore backend = makeStoreIO backend $ TimeSpec 10 0
 
 makeStoreInterface :: StoreInterface
 makeStoreInterface = StoreInterface
-    { storeInterfaceAllFeatures   = undefined
-    , storeInterfaceGetFeature    = undefined
-    , storeInterfaceUpsertFeature = undefined
-    , storeInterfaceIsInitialized = undefined
-    , storeInterfaceInitialize    = undefined
+    { storeInterfaceAllFeatures   = const $ assertFailure "allFeatures should not be called"
+    , storeInterfaceGetFeature    = const $ const $ assertFailure "getFeatures should not be called"
+    , storeInterfaceUpsertFeature = const $ const $ const $ assertFailure "upsertFeature should not be called"
+    , storeInterfaceIsInitialized = assertFailure "isInitialized should not be called"
+    , storeInterfaceInitialize    = const $ assertFailure "initialize should not be called"
     }
 
 testFailInit :: Test

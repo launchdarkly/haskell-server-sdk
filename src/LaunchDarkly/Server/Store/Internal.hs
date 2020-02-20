@@ -63,14 +63,14 @@ class LaunchDarklyStoreWrite store m where
     upsertFlagC      :: store -> Text -> Versioned (Maybe Flag) -> StoreResultM m ()
 
 data StoreHandle m = StoreHandle
-    { storeHandleGetFlag       :: Text -> StoreResultM m (Maybe Flag)
-    , storeHandleGetSegment    :: Text -> StoreResultM m (Maybe Segment)
-    , storeHandleAllFlags      :: StoreResultM m (HashMap Text Flag)
-    , storeHandleInitialized   :: StoreResultM m Bool
-    , storeHandleInitialize    :: HashMap Text (Versioned Flag) -> HashMap Text (Versioned Segment) -> StoreResultM m ()
-    , storeHandleUpsertSegment :: Text -> Versioned (Maybe Segment) -> StoreResultM m ()
-    , storeHandleUpsertFlag    :: Text -> Versioned (Maybe Flag) -> StoreResultM m ()
-    , storeHandleExpireAll     :: StoreResultM m ()
+    { storeHandleGetFlag       :: !(Text -> StoreResultM m (Maybe Flag))
+    , storeHandleGetSegment    :: !(Text -> StoreResultM m (Maybe Segment))
+    , storeHandleAllFlags      :: !(StoreResultM m (HashMap Text Flag))
+    , storeHandleInitialized   :: !(StoreResultM m Bool)
+    , storeHandleInitialize    :: !(HashMap Text (Versioned Flag) -> HashMap Text (Versioned Segment) -> StoreResultM m ())
+    , storeHandleUpsertSegment :: !(Text -> Versioned (Maybe Segment) -> StoreResultM m ())
+    , storeHandleUpsertFlag    :: !(Text -> Versioned (Maybe Flag) -> StoreResultM m ())
+    , storeHandleExpireAll     :: !(StoreResultM m ())
     } deriving (Generic)
 
 instance Monad m => LaunchDarklyStoreRead (StoreHandle m) m where
@@ -122,21 +122,21 @@ makeStoreIO backend ttl = do
         }
 
 data Expirable a = Expirable
-    { value       :: a
-    , forceExpire :: Bool
-    , updatedOn   :: TimeSpec
+    { value       :: !a
+    , forceExpire :: !Bool
+    , updatedOn   :: !TimeSpec
     } deriving (Generic)
 
 data Versioned a = Versioned
-    { value   :: a
-    , version :: Natural
+    { value   :: !a
+    , version :: !Natural
     } deriving (Generic)
 
 data State = State
-    { allFlags    :: Expirable (HashMap Text Flag)
-    , flags       :: HashMap Text (Expirable (Versioned (Maybe Flag)))
-    , segments    :: HashMap Text (Expirable (Versioned (Maybe Segment)))
-    , initialized :: Expirable Bool
+    { allFlags    :: !(Expirable (HashMap Text Flag))
+    , flags       :: !(HashMap Text (Expirable (Versioned (Maybe Flag))))
+    , segments    :: !(HashMap Text (Expirable (Versioned (Maybe Segment))))
+    , initialized :: !(Expirable Bool)
     } deriving (Generic)
 
 -- | Represents the key for a given feature.
@@ -146,35 +146,35 @@ type FeatureNamespace = Text
 
 -- | The interface implemented by external stores for use by the SDK.
 data StoreInterface = StoreInterface
-    { storeInterfaceAllFeatures   :: FeatureNamespace -> StoreResult (HashMap Text RawFeature)
+    { storeInterfaceAllFeatures   :: !(FeatureNamespace -> StoreResult (HashMap Text RawFeature))
       -- ^ A map of all features in a given namespace including deleted.
-    , storeInterfaceGetFeature    :: FeatureNamespace -> FeatureKey -> StoreResult RawFeature
+    , storeInterfaceGetFeature    :: !(FeatureNamespace -> FeatureKey -> StoreResult RawFeature)
       -- ^ Return the value of a key in a namespace.
-    , storeInterfaceUpsertFeature :: FeatureNamespace -> FeatureKey -> RawFeature -> StoreResult Bool
+    , storeInterfaceUpsertFeature :: !(FeatureNamespace -> FeatureKey -> RawFeature -> StoreResult Bool)
       -- ^ Upsert a given feature. Versions should be compared before upsert.
       -- The result should indicate if the feature was replaced or not.
-    , storeInterfaceIsInitialized :: StoreResult Bool
+    , storeInterfaceIsInitialized :: !(StoreResult Bool)
       -- ^ Checks if the external store has been initialized, which may
       -- have been done by another instance of the SDK.
-    , storeInterfaceInitialize    :: HashMap FeatureNamespace (HashMap FeatureKey RawFeature) -> StoreResult ()
+    , storeInterfaceInitialize    :: !(HashMap FeatureNamespace (HashMap FeatureKey RawFeature) -> StoreResult ())
       -- ^ A map of namespaces, and items in namespaces. The entire store state
       -- should be replaced with these values.
     }
 
 -- | An abstract representation of a store object.
 data RawFeature = RawFeature
-    { rawFeatureBuffer  :: Maybe ByteString
+    { rawFeatureBuffer  :: !(Maybe ByteString)
       -- ^ A serialized item. If the item is deleted or does not exist this
       -- should be `Nothing`.
-    , rawFeatureVersion :: Natural
+    , rawFeatureVersion :: !Natural
       -- ^ The version of a given item. If the item does not exist this should
       -- be zero.
     }
 
 data Store = Store
-    { state      :: IORef State
-    , backend    :: Maybe StoreInterface
-    , timeToLive :: TimeSpec
+    { state      :: !(IORef State)
+    , backend    :: !(Maybe StoreInterface)
+    , timeToLive :: !TimeSpec
     } deriving (Generic)
 
 expireAllItems :: Store -> IO ()
