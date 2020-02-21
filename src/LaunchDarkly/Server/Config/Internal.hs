@@ -24,23 +24,23 @@ shouldSendEvents config = (not $ getField @"offline" config) && (getField @"send
 newtype Config = Config ConfigI
 
 data ConfigI = ConfigI
-    { key                   :: Text
-    , baseURI               :: Text
-    , streamURI             :: Text
-    , eventsURI             :: Text
-    , storeBackend          :: Maybe StoreInterface
-    , storeTTLSeconds       :: Natural
-    , streaming             :: Bool
-    , allAttributesPrivate  :: Bool
-    , privateAttributeNames :: Set Text
-    , flushIntervalSeconds  :: Natural
-    , pollIntervalSeconds   :: Natural
-    , userKeyLRUCapacity    :: Natural
-    , inlineUsersInEvents   :: Bool
-    , eventsCapacity        :: Natural
-    , logger                :: LoggingT IO () -> IO ()
-    , sendEvents            :: Bool
-    , offline               :: Bool
-    , requestTimeoutSeconds :: Natural
-    , useLdd                :: Bool
+    { key                   :: !Text
+    , baseURI               :: !Text
+    , streamURI             :: !Text
+    , eventsURI             :: !Text
+    , storeBackend          :: !(Maybe StoreInterface)
+    , storeTTLSeconds       :: !Natural
+    , streaming             :: !Bool
+    , allAttributesPrivate  :: !Bool
+    , privateAttributeNames :: !(Set Text)
+    , flushIntervalSeconds  :: !Natural
+    , pollIntervalSeconds   :: !Natural
+    , userKeyLRUCapacity    :: !Natural
+    , inlineUsersInEvents   :: !Bool
+    , eventsCapacity        :: !Natural
+    , logger                :: !(LoggingT IO () -> IO ())
+    , sendEvents            :: !Bool
+    , offline               :: !Bool
+    , requestTimeoutSeconds :: !Natural
+    , useLdd                :: !Bool
     } deriving (Generic)

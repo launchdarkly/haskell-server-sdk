@@ -47,10 +47,10 @@ setStatus client status' = atomicModifyIORef' (getField @"status" client) $ \sta
         _             -> (if status == ShuttingDown  then ShuttingDown else status', ())
 
 data ClientI = ClientI
-    { config             :: ConfigI
-    , store              :: StoreHandle IO
-    , status             :: IORef Status
-    , events             :: EventState
-    , downloadThreadPair :: Maybe (ThreadId, MVar ())
-    , eventThreadPair    :: Maybe (ThreadId, MVar ())
+    { config             :: !(ConfigI)
+    , store              :: !(StoreHandle IO)
+    , status             :: !(IORef Status)
+    , events             :: !EventState
+    , downloadThreadPair :: !(Maybe (ThreadId, MVar ()))
+    , eventThreadPair    :: !(Maybe (ThreadId, MVar ()))
     } deriving (Generic)

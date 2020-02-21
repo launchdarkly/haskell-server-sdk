@@ -9,14 +9,14 @@ import           GHC.Generics           (Generic)
 -- | Combines the result of a flag evaluation with an explanation of how it was
 -- calculated.
 data EvaluationDetail value = EvaluationDetail
-    { value          :: value
+    { value          :: !value
       -- ^ The result of the flag evaluation. This will be either one of the
       -- flag's variations or the default value passed by the application.
-    , variationIndex :: Maybe Natural
+    , variationIndex :: !(Maybe Natural)
       -- ^ The index of the returned value within the flag's list of variations,
       -- e.g. 0 for the first variation - or nil if the default value was
       -- returned.
-    , reason         :: EvaluationReason
+    , reason         :: !EvaluationReason
       -- ^ Describes the main factor that influenced the flag evaluation value.
     } deriving (Generic, Eq, Show)
 
@@ -31,14 +31,14 @@ data EvaluationReason
     | EvaluationReasonTargetMatch
       -- ^ indicates that the user key was specifically targeted for this flag.
     | EvaluationReasonRuleMatch
-          { ruleIndex :: Natural
+          { ruleIndex :: !Natural
             -- ^ The index of the rule that was matched (0 being the first).
-          , ruleId    :: Text
+          , ruleId    :: !Text
             -- ^ The unique identifier of the rule that was matched.
           }
       -- ^ Indicates that the user matched one of the flag's rules.
     | EvaluationReasonPrerequisiteFailed
-          { prerequisiteKey :: Text
+          { prerequisiteKey :: !Text
             -- ^ The flag key of the prerequisite that failed.
           }
       -- ^ Indicates that the flag was considered off because it had at least
@@ -48,7 +48,7 @@ data EvaluationReason
       -- ^ Indicates that the flag was on but the user did not match any targets
       -- or rules.
     | EvaluationReasonError
-          { errorKind :: EvalErrorKind
+          { errorKind :: !EvalErrorKind
             -- ^ Describes the type of error.
           }
       -- ^ Indicates that the flag could not be evaluated, e.g. because it does
@@ -88,7 +88,7 @@ data EvalErrorKind
     | EvalErrorClientNotReady
       -- ^ Indicates that the caller tried to evaluate a flag before the client
       -- had successfully initialized.
-    | EvalErrorExternalStore Text
+    | EvalErrorExternalStore !Text
       -- ^ Indicates that some error was returned by the external feature store.
     deriving (Generic, Eq, Show)
 

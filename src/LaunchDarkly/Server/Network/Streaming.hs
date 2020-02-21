@@ -26,18 +26,18 @@ import           LaunchDarkly.Server.Features        (Flag, Segment)
 import           LaunchDarkly.Server.Network.Common  (tryAuthorized, checkAuthorization, prepareRequest, withResponseGeneric, tryHTTP)
 
 data PutBody = PutBody
-    { flags    :: HashMap Text Flag
-    , segments :: HashMap Text Segment
+    { flags    :: !(HashMap Text Flag)
+    , segments :: !(HashMap Text Segment)
     } deriving (Generic, Show, FromJSON)
 
 data PathData d = PathData
-    { path     :: Text
-    , pathData :: d
+    { path     :: !Text
+    , pathData :: !d
     } deriving (Generic, Show)
 
 data PathVersion = PathVersion
-    { path    :: Text
-    , version :: Natural
+    { path    :: !Text
+    , version :: !Natural
     } deriving (Generic, Show, FromJSON)
 
 instance FromJSON a => FromJSON (PathData a) where
@@ -47,10 +47,10 @@ instance FromJSON a => FromJSON (PathData a) where
         pure $ PathData { path = path, pathData = pathData }
 
 data SSE = SSE
-    { name        :: Text
-    , buffer      :: Text
-    , lastEventId :: Maybe Text
-    , retry       :: Maybe Text
+    { name        :: !Text
+    , buffer      :: !Text
+    , lastEventId :: !(Maybe Text)
+    , retry       :: !(Maybe Text)
     } deriving (Generic, Show, Eq)
 
 nameCharPredicate :: Char -> Bool

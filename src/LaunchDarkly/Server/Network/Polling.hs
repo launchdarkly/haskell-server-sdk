@@ -20,8 +20,8 @@ import           LaunchDarkly.Server.Features            (Flag, Segment)
 import           LaunchDarkly.Server.Store.Internal      (StoreHandle, initializeStore)
 
 data PollingResponse = PollingResponse
-    { flags    :: HashMap Text Flag
-    , segments :: HashMap Text Segment
+    { flags    :: !(HashMap Text Flag)
+    , segments :: !(HashMap Text Segment)
     } deriving (Generic, FromJSON, Show)
 
 processPoll :: (MonadIO m, MonadLogger m, MonadMask m, MonadThrow m) => ClientI -> Manager -> StoreHandle IO -> Request -> m ()
