@@ -7,7 +7,7 @@
 --   Please see the README on GitHub at
 --   <a>https://github.com/launchdarkly/haskell-server-sdk#readme</a>
 @package launchdarkly-server-sdk
-@version 0.2.0
+@version 0.2.1
 
 
 -- | This module contains details for external store implementations.
@@ -26,37 +26,37 @@ type FeatureNamespace = Text
 
 -- | The interface implemented by external stores for use by the SDK.
 data StoreInterface
-StoreInterface :: (FeatureNamespace -> StoreResult (HashMap Text RawFeature)) -> (FeatureNamespace -> FeatureKey -> StoreResult RawFeature) -> (FeatureNamespace -> FeatureKey -> RawFeature -> StoreResult Bool) -> StoreResult Bool -> (HashMap FeatureNamespace (HashMap FeatureKey RawFeature) -> StoreResult ()) -> StoreInterface
+StoreInterface :: !FeatureNamespace -> StoreResult (HashMap Text RawFeature) -> !FeatureNamespace -> FeatureKey -> StoreResult RawFeature -> !FeatureNamespace -> FeatureKey -> RawFeature -> StoreResult Bool -> !StoreResult Bool -> !HashMap FeatureNamespace (HashMap FeatureKey RawFeature) -> StoreResult () -> StoreInterface
 
 -- | A map of all features in a given namespace including deleted.
-[$sel:storeInterfaceAllFeatures:StoreInterface] :: StoreInterface -> FeatureNamespace -> StoreResult (HashMap Text RawFeature)
+[$sel:storeInterfaceAllFeatures:StoreInterface] :: StoreInterface -> !FeatureNamespace -> StoreResult (HashMap Text RawFeature)
 
 -- | Return the value of a key in a namespace.
-[$sel:storeInterfaceGetFeature:StoreInterface] :: StoreInterface -> FeatureNamespace -> FeatureKey -> StoreResult RawFeature
+[$sel:storeInterfaceGetFeature:StoreInterface] :: StoreInterface -> !FeatureNamespace -> FeatureKey -> StoreResult RawFeature
 
 -- | Upsert a given feature. Versions should be compared before upsert. The
 --   result should indicate if the feature was replaced or not.
-[$sel:storeInterfaceUpsertFeature:StoreInterface] :: StoreInterface -> FeatureNamespace -> FeatureKey -> RawFeature -> StoreResult Bool
+[$sel:storeInterfaceUpsertFeature:StoreInterface] :: StoreInterface -> !FeatureNamespace -> FeatureKey -> RawFeature -> StoreResult Bool
 
 -- | Checks if the external store has been initialized, which may have been
 --   done by another instance of the SDK.
-[$sel:storeInterfaceIsInitialized:StoreInterface] :: StoreInterface -> StoreResult Bool
+[$sel:storeInterfaceIsInitialized:StoreInterface] :: StoreInterface -> !StoreResult Bool
 
 -- | A map of namespaces, and items in namespaces. The entire store state
 --   should be replaced with these values.
-[$sel:storeInterfaceInitialize:StoreInterface] :: StoreInterface -> HashMap FeatureNamespace (HashMap FeatureKey RawFeature) -> StoreResult ()
+[$sel:storeInterfaceInitialize:StoreInterface] :: StoreInterface -> !HashMap FeatureNamespace (HashMap FeatureKey RawFeature) -> StoreResult ()
 
 -- | An abstract representation of a store object.
 data RawFeature
-RawFeature :: Maybe ByteString -> Natural -> RawFeature
+RawFeature :: !Maybe ByteString -> !Natural -> RawFeature
 
 -- | A serialized item. If the item is deleted or does not exist this
 --   should be <a>Nothing</a>.
-[$sel:rawFeatureBuffer:RawFeature] :: RawFeature -> Maybe ByteString
+[$sel:rawFeatureBuffer:RawFeature] :: RawFeature -> !Maybe ByteString
 
 -- | The version of a given item. If the item does not exist this should be
 --   zero.
-[$sel:rawFeatureVersion:RawFeature] :: RawFeature -> Natural
+[$sel:rawFeatureVersion:RawFeature] :: RawFeature -> !Natural
 
 
 -- | This module is for configuration of the SDK.
@@ -254,19 +254,19 @@ jsonVariationDetail :: Client -> Text -> User -> Value -> IO (EvaluationDetail V
 -- | Combines the result of a flag evaluation with an explanation of how it
 --   was calculated.
 data EvaluationDetail value
-EvaluationDetail :: value -> Maybe Natural -> EvaluationReason -> EvaluationDetail value
+EvaluationDetail :: !value -> !Maybe Natural -> !EvaluationReason -> EvaluationDetail value
 
 -- | The result of the flag evaluation. This will be either one of the
 --   flag's variations or the default value passed by the application.
-[$sel:value:EvaluationDetail] :: EvaluationDetail value -> value
+[$sel:value:EvaluationDetail] :: EvaluationDetail value -> !value
 
 -- | The index of the returned value within the flag's list of variations,
 --   e.g. 0 for the first variation - or nil if the default value was
 --   returned.
-[$sel:variationIndex:EvaluationDetail] :: EvaluationDetail value -> Maybe Natural
+[$sel:variationIndex:EvaluationDetail] :: EvaluationDetail value -> !Maybe Natural
 
 -- | Describes the main factor that influenced the flag evaluation value.
-[$sel:reason:EvaluationDetail] :: EvaluationDetail value -> EvaluationReason
+[$sel:reason:EvaluationDetail] :: EvaluationDetail value -> !EvaluationReason
 
 -- | Defines the possible values of the Kind property of EvaluationReason.
 data EvaluationReason
@@ -279,21 +279,21 @@ EvaluationReasonOff :: EvaluationReason
 EvaluationReasonTargetMatch :: EvaluationReason
 
 -- | Indicates that the user matched one of the flag's rules.
-EvaluationReasonRuleMatch :: Natural -> Text -> EvaluationReason
+EvaluationReasonRuleMatch :: !Natural -> !Text -> EvaluationReason
 
 -- | The index of the rule that was matched (0 being the first).
-[$sel:ruleIndex:EvaluationReasonOff] :: EvaluationReason -> Natural
+[$sel:ruleIndex:EvaluationReasonOff] :: EvaluationReason -> !Natural
 
 -- | The unique identifier of the rule that was matched.
-[$sel:ruleId:EvaluationReasonOff] :: EvaluationReason -> Text
+[$sel:ruleId:EvaluationReasonOff] :: EvaluationReason -> !Text
 
 -- | Indicates that the flag was considered off because it had at least one
 --   prerequisite flag that either was off or did not return the desired
 --   variation.
-EvaluationReasonPrerequisiteFailed :: Text -> EvaluationReason
+EvaluationReasonPrerequisiteFailed :: !Text -> EvaluationReason
 
 -- | The flag key of the prerequisite that failed.
-[$sel:prerequisiteKey:EvaluationReasonOff] :: EvaluationReason -> Text
+[$sel:prerequisiteKey:EvaluationReasonOff] :: EvaluationReason -> !Text
 
 -- | Indicates that the flag was on but the user did not match any targets
 --   or rules.
@@ -302,10 +302,10 @@ EvaluationReasonFallthrough :: EvaluationReason
 -- | Indicates that the flag could not be evaluated, e.g. because it does
 --   not exist or due to an unexpected error. In this case the result value
 --   will be the default value that the caller passed to the client.
-EvaluationReasonError :: EvalErrorKind -> EvaluationReason
+EvaluationReasonError :: !EvalErrorKind -> EvaluationReason
 
 -- | Describes the type of error.
-[$sel:errorKind:EvaluationReasonOff] :: EvaluationReason -> EvalErrorKind
+[$sel:errorKind:EvaluationReasonOff] :: EvaluationReason -> !EvalErrorKind
 
 -- | Defines the possible values of the errorKind property of
 --   EvaluationReason.
@@ -332,7 +332,7 @@ EvalErrorUserNotSpecified :: EvalErrorKind
 EvalErrorClientNotReady :: EvalErrorKind
 
 -- | Indicates that some error was returned by the external feature store.
-EvalErrorExternalStore :: Text -> EvalErrorKind
+EvalErrorExternalStore :: !Text -> EvalErrorKind
 
 -- | Returns a map from feature flag keys to values for a given user. If
 --   the result of the flag's evaluation would result in the default value,
@@ -565,19 +565,19 @@ jsonVariationDetail :: Client -> Text -> User -> Value -> IO (EvaluationDetail V
 -- | Combines the result of a flag evaluation with an explanation of how it
 --   was calculated.
 data EvaluationDetail value
-EvaluationDetail :: value -> Maybe Natural -> EvaluationReason -> EvaluationDetail value
+EvaluationDetail :: !value -> !Maybe Natural -> !EvaluationReason -> EvaluationDetail value
 
 -- | The result of the flag evaluation. This will be either one of the
 --   flag's variations or the default value passed by the application.
-[$sel:value:EvaluationDetail] :: EvaluationDetail value -> value
+[$sel:value:EvaluationDetail] :: EvaluationDetail value -> !value
 
 -- | The index of the returned value within the flag's list of variations,
 --   e.g. 0 for the first variation - or nil if the default value was
 --   returned.
-[$sel:variationIndex:EvaluationDetail] :: EvaluationDetail value -> Maybe Natural
+[$sel:variationIndex:EvaluationDetail] :: EvaluationDetail value -> !Maybe Natural
 
 -- | Describes the main factor that influenced the flag evaluation value.
-[$sel:reason:EvaluationDetail] :: EvaluationDetail value -> EvaluationReason
+[$sel:reason:EvaluationDetail] :: EvaluationDetail value -> !EvaluationReason
 
 -- | Defines the possible values of the Kind property of EvaluationReason.
 data EvaluationReason
@@ -590,21 +590,21 @@ EvaluationReasonOff :: EvaluationReason
 EvaluationReasonTargetMatch :: EvaluationReason
 
 -- | Indicates that the user matched one of the flag's rules.
-EvaluationReasonRuleMatch :: Natural -> Text -> EvaluationReason
+EvaluationReasonRuleMatch :: !Natural -> !Text -> EvaluationReason
 
 -- | The index of the rule that was matched (0 being the first).
-[$sel:ruleIndex:EvaluationReasonOff] :: EvaluationReason -> Natural
+[$sel:ruleIndex:EvaluationReasonOff] :: EvaluationReason -> !Natural
 
 -- | The unique identifier of the rule that was matched.
-[$sel:ruleId:EvaluationReasonOff] :: EvaluationReason -> Text
+[$sel:ruleId:EvaluationReasonOff] :: EvaluationReason -> !Text
 
 -- | Indicates that the flag was considered off because it had at least one
 --   prerequisite flag that either was off or did not return the desired
 --   variation.
-EvaluationReasonPrerequisiteFailed :: Text -> EvaluationReason
+EvaluationReasonPrerequisiteFailed :: !Text -> EvaluationReason
 
 -- | The flag key of the prerequisite that failed.
-[$sel:prerequisiteKey:EvaluationReasonOff] :: EvaluationReason -> Text
+[$sel:prerequisiteKey:EvaluationReasonOff] :: EvaluationReason -> !Text
 
 -- | Indicates that the flag was on but the user did not match any targets
 --   or rules.
@@ -613,10 +613,10 @@ EvaluationReasonFallthrough :: EvaluationReason
 -- | Indicates that the flag could not be evaluated, e.g. because it does
 --   not exist or due to an unexpected error. In this case the result value
 --   will be the default value that the caller passed to the client.
-EvaluationReasonError :: EvalErrorKind -> EvaluationReason
+EvaluationReasonError :: !EvalErrorKind -> EvaluationReason
 
 -- | Describes the type of error.
-[$sel:errorKind:EvaluationReasonOff] :: EvaluationReason -> EvalErrorKind
+[$sel:errorKind:EvaluationReasonOff] :: EvaluationReason -> !EvalErrorKind
 
 -- | Defines the possible values of the errorKind property of
 --   EvaluationReason.
@@ -643,7 +643,7 @@ EvalErrorUserNotSpecified :: EvalErrorKind
 EvalErrorClientNotReady :: EvalErrorKind
 
 -- | Indicates that some error was returned by the external feature store.
-EvalErrorExternalStore :: Text -> EvalErrorKind
+EvalErrorExternalStore :: !Text -> EvalErrorKind
 
 -- | Returns a map from feature flag keys to values for a given user. If
 --   the result of the flag's evaluation would result in the default value,
