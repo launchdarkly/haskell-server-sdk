@@ -2,6 +2,12 @@
 
 All notable changes to the LaunchDarkly Haskell Server-side SDK will be documented in this file. This project adheres to [Semantic Versioning](http://semver.org).
 
+## [0.2.1] - 2020-02-21
+### Fixed:
+- Added an event delivery retry mechanism. The SDK will now try to deliver events again after one second before dropping them.
+- Added a payload identity header for event delivery to prevent duplication in certain edge cases.
+- Made many fields strict for more deterministic memory usage.
+
 ## [0.2.0] - 2020-02-10
 ### Added:
 - Added support for utilizing external features stores. See `LaunchDarkly.Server.Store` for details on implementing a store. You can configure usage of a specific store with `configSetStoreBackend`.
