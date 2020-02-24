@@ -2,6 +2,12 @@
 
 All notable changes to the LaunchDarkly Haskell Server-side SDK will be documented in this file. This project adheres to [Semantic Versioning](http://semver.org).
 
+## [1.0.0] - 2020-02-24
+### Fixed:
+- Several haddock typos.
+- Added `configSetStoreTTL`, and `configSetUseLdd` to `LaunchDarkly.Server` export list.
+- Added `package.yaml` version constraints.
+
 ## [0.2.1] - 2020-02-21
 ### Fixed:
 - Added an event delivery retry mechanism. The SDK will now try to deliver events again after one second before dropping them.
