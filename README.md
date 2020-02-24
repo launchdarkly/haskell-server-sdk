@@ -4,8 +4,6 @@
 
 The LaunchDarkly Server-side SDK for Haskell is designed primarily for use in multi-user systems such as web servers and applications. It follows the server-side LaunchDarkly model for multi-user contexts. It is not intended for use in desktop and embedded systems applications.
 
-*This version of the SDK is a **beta** version and should not be considered ready for production use while this message is visible.*
-
 ## LaunchDarkly overview
 
 [LaunchDarkly](https://www.launchdarkly.com) is a feature management platform that serves over 100 billion feature flags daily to help teams build better software, faster. [Get started](https://docs.launchdarkly.com/docs/getting-started) using LaunchDarkly today!
