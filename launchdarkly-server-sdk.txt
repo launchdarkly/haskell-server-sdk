@@ -7,7 +7,7 @@
 --   Please see the README on GitHub at
 --   <a>https://github.com/launchdarkly/haskell-server-sdk#readme</a>
 @package launchdarkly-server-sdk
-@version 0.2.1
+@version 1.0.0
 
 
 -- | This module contains details for external store implementations.
@@ -157,10 +157,10 @@ module LaunchDarkly.Server.User
 
 -- | User contains specific attributes of a user of your application
 --   
---   The only mandatory property property is the Key, which must uniquely
---   identify each user. For authenticated users, this may be a username or
---   e-mail address. For anonymous users, this could be an IP address or
---   session ID.
+--   The only mandatory property is the Key, which must uniquely identify
+--   each user. For authenticated users, this may be a username or e-mail
+--   address. For anonymous users, this could be an IP address or session
+--   ID.
 data User
 
 -- | Creates a new user identified by the given key.
@@ -261,7 +261,7 @@ EvaluationDetail :: !value -> !Maybe Natural -> !EvaluationReason -> EvaluationD
 [$sel:value:EvaluationDetail] :: EvaluationDetail value -> !value
 
 -- | The index of the returned value within the flag's list of variations,
---   e.g. 0 for the first variation - or nil if the default value was
+--   e.g. 0 for the first variation - or Nothing if the default value was
 --   returned.
 [$sel:variationIndex:EvaluationDetail] :: EvaluationDetail value -> !Maybe Natural
 
@@ -336,7 +336,7 @@ EvalErrorExternalStore :: !Text -> EvalErrorKind
 
 -- | Returns a map from feature flag keys to values for a given user. If
 --   the result of the flag's evaluation would result in the default value,
---   <tt>nil</tt> will be returned. This method does not send analytics
+--   <a>Null</a> will be returned. This method does not send analytics
 --   events back to LaunchDarkly.
 allFlags :: Client -> User -> IO (HashMap Text Value)
 
@@ -459,6 +459,13 @@ configSetOffline :: Bool -> Config -> Config
 --   returned.
 configSetRequestTimeoutSeconds :: Natural -> Config -> Config
 
+-- | Configures a handle to an external store such as Redis.
+configSetStoreBackend :: Maybe StoreInterface -> Config -> Config
+
+-- | When a store backend is configured, control how long values should be
+--   cached in memory before going back to the backend.
+configSetStoreTTL :: Natural -> Config -> Config
+
 -- | Sets whether this client should use the LaunchDarkly relay in daemon
 --   mode. In this mode, the client does not subscribe to the streaming or
 --   polling API, but reads data only from the feature store. See:
@@ -467,10 +474,10 @@ configSetUseLdd :: Bool -> Config -> Config
 
 -- | User contains specific attributes of a user of your application
 --   
---   The only mandatory property property is the Key, which must uniquely
---   identify each user. For authenticated users, this may be a username or
---   e-mail address. For anonymous users, this could be an IP address or
---   session ID.
+--   The only mandatory property is the Key, which must uniquely identify
+--   each user. For authenticated users, this may be a username or e-mail
+--   address. For anonymous users, this could be an IP address or session
+--   ID.
 data User
 
 -- | Creates a new user identified by the given key.
@@ -526,11 +533,6 @@ makeClient :: Config -> IO Client
 -- | The version string for this library.
 clientVersion :: Text
 
--- | Close shuts down the LaunchDarkly client. After calling this, the
---   LaunchDarkly client should no longer be used. The method will block
---   until all pending analytics events have been sent.
-close :: Client -> IO ()
-
 -- | Evaluate a Boolean typed flag.
 boolVariation :: Client -> Text -> User -> Bool -> IO Bool
 
@@ -572,7 +574,7 @@ EvaluationDetail :: !value -> !Maybe Natural -> !EvaluationReason -> EvaluationD
 [$sel:value:EvaluationDetail] :: EvaluationDetail value -> !value
 
 -- | The index of the returned value within the flag's list of variations,
---   e.g. 0 for the first variation - or nil if the default value was
+--   e.g. 0 for the first variation - or Nothing if the default value was
 --   returned.
 [$sel:variationIndex:EvaluationDetail] :: EvaluationDetail value -> !Maybe Natural
 
@@ -647,9 +649,14 @@ EvalErrorExternalStore :: !Text -> EvalErrorKind
 
 -- | Returns a map from feature flag keys to values for a given user. If
 --   the result of the flag's evaluation would result in the default value,
---   <tt>nil</tt> will be returned. This method does not send analytics
+--   <a>Null</a> will be returned. This method does not send analytics
 --   events back to LaunchDarkly.
 allFlags :: Client -> User -> IO (HashMap Text Value)
+
+-- | Close shuts down the LaunchDarkly client. After calling this, the
+--   LaunchDarkly client should no longer be used. The method will block
+--   until all pending analytics events have been sent.
+close :: Client -> IO ()
 
 -- | Flush tells the client that all pending analytics events (if any)
 --   should be delivered as soon as possible. Flushing is asynchronous, so
@@ -667,9 +674,6 @@ identify :: Client -> User -> IO ()
 --   custom event for Data Export.
 track :: Client -> User -> Text -> Maybe Value -> Maybe Double -> IO ()
 
--- | Return the initialization status of the Client
-getStatus :: Client -> IO Status
-
 -- | The status of the client initialization.
 data Status
 
@@ -684,3 +688,6 @@ Initialized :: Status
 
 -- | The client is being terminated
 ShuttingDown :: Status
+
+-- | Return the initialization status of the Client
+getStatus :: Client -> IO Status
