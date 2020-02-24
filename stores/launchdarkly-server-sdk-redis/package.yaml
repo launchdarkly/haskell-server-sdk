@@ -13,16 +13,16 @@ category:            Web
 description:         Please see the README on GitHub at <https://github.com/launchdarkly/haskell-server-sdk#readme>
 
 dependencies:
-- base >= 4.7 && < 5
-- hedis
-- aeson
-- bytestring
-- bytestring-conversion
-- unordered-containers
-- text
-- launchdarkly-server-sdk
-- generic-lens
-- exceptions
+- aeson >=1.4.4.0 && <1.5
+- base >=4.7 && <5
+- bytestring >=0.10.8.2 && <0.11
+- bytestring-conversion >=0.3.1 && <0.4
+- exceptions >=0.10.2 && <0.11
+- generic-lens >=1.1.0.0 && <1.2
+- hedis >=0.12.7 && <0.13
+- launchdarkly-server-sdk >=0.2.1 && <0.3
+- text >=1.2.3.1 && <1.3
+- unordered-containers >=0.2.10.0 && <0.3
 
 default-extensions:
 - AllowAmbiguousTypes
