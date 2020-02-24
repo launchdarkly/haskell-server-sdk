@@ -14,7 +14,7 @@ data EvaluationDetail value = EvaluationDetail
       -- flag's variations or the default value passed by the application.
     , variationIndex :: !(Maybe Natural)
       -- ^ The index of the returned value within the flag's list of variations,
-      -- e.g. 0 for the first variation - or nil if the default value was
+      -- e.g. 0 for the first variation - or Nothing if the default value was
       -- returned.
     , reason         :: !EvaluationReason
       -- ^ Describes the main factor that influenced the flag evaluation value.

@@ -19,6 +19,8 @@ module LaunchDarkly.Server
     , configSetSendEvents
     , configSetOffline
     , configSetRequestTimeoutSeconds
+    , configSetStoreBackend
+    , configSetStoreTTL
     , configSetUseLdd
     , User
     , makeUser
@@ -37,7 +39,6 @@ module LaunchDarkly.Server
     , Client
     , makeClient
     , clientVersion
-    , close
     , boolVariation
     , boolVariationDetail
     , stringVariation
@@ -52,11 +53,12 @@ module LaunchDarkly.Server
     , EvaluationReason(..)
     , EvalErrorKind(..)
     , allFlags
+    , close
     , flushEvents
     , identify
     , track
-    , getStatus
     , Status(..)
+    , getStatus
     ) where
 
 import LaunchDarkly.Server.User

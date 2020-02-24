@@ -24,7 +24,7 @@ mapUser f (User c) = User $ f c
 
 -- | User contains specific attributes of a user of your application
 --
--- The only mandatory property property is the Key, which must uniquely identify
+-- The only mandatory property is the Key, which must uniquely identify
 -- each user. For authenticated users, this may be a username or e-mail address.
 -- For anonymous users, this could be an IP address or session ID.
 newtype User = User { unwrapUser :: UserI }
