@@ -91,8 +91,9 @@ getStatus :: Client -> IO Status
 getStatus (Client client) = readIORef $ getField @"status" client
 
 -- | Returns a map from feature flag keys to values for a given user. If the
--- result of the flag's evaluation would result in the default value, `nil` will
--- be returned. This method does not send analytics events back to LaunchDarkly.
+-- result of the flag's evaluation would result in the default value, `Null`
+-- will be returned. This method does not send analytics events back to
+-- LaunchDarkly.
 allFlags :: Client -> User -> IO (HashMap Text Value)
 allFlags (Client client) (User user) = if isNothing $ getField @"key" user then pure mempty else do
     status <- getAllFlagsC $ getField @"store" client
