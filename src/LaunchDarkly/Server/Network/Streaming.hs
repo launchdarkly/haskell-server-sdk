@@ -20,7 +20,7 @@ import           Control.Monad.Catch                 (MonadMask)
 import           Control.Retry                       (RetryPolicyM, RetryStatus, fullJitterBackoff, capDelay, retrying)
 import           Network.HTTP.Types.Status           (ok200)
 
-import           LaunchDarkly.Server.Client.Internal (ClientI, Status(Initialized), setStatus)
+import           LaunchDarkly.Server.Client.Internal (ClientI)
 import           LaunchDarkly.Server.Store.Internal  (StoreHandle, StoreResult, initializeStore, insertFlag, deleteFlag, deleteSegment, insertSegment)
 import           LaunchDarkly.Server.Features        (Flag, Segment)
 import           LaunchDarkly.Server.Network.Common  (tryAuthorized, checkAuthorization, prepareRequest, withResponseGeneric, tryHTTP)
@@ -89,13 +89,13 @@ parseEvent = do
     let event = foldr processField (SSE "" "" mzero mzero) fields
     if T.null (name event) || T.null (buffer event) then parseEvent else pure event
 
-processPut :: (MonadIO m, MonadLogger m) => ClientI -> StoreHandle IO -> L.ByteString -> m ()
-processPut client store value = case eitherDecode value of
+processPut :: (MonadIO m, MonadLogger m) => StoreHandle IO -> L.ByteString -> m ()
+processPut store value = case eitherDecode value of
     Right (PathData _ (PutBody flags segments)) -> do
         $(logInfo) "initializing store with put"
-        status <- liftIO $ initializeStore store flags segments
-        either (\err -> $(logError) $ T.append "store failed put: " err)
-               (\_   -> liftIO $ setStatus client Initialized) status
+        liftIO (initializeStore store flags segments) >>= \case
+            Left err -> $(logError) $ T.append "store failed put: " err
+            _        -> pure ()
     Left err -> $(logError) $ T.append "failed to parse put body" (T.pack err)
 
 processPatch :: forall m. (MonadIO m, MonadLogger m) => StoreHandle IO -> L.ByteString -> m ()
@@ -126,18 +126,18 @@ processDelete store value = case eitherDecode value :: Either String PathVersion
             status <- liftIO action
             either (\err -> $(logError) $ T.concat ["store failed ", name, " delete: ", err]) pure status
 
-processEvent :: (MonadIO m, MonadLogger m) => ClientI -> StoreHandle IO -> Text -> L.ByteString -> m ()
-processEvent client store name value = case name of
-    "put"    -> processPut client store value
+processEvent :: (MonadIO m, MonadLogger m) => StoreHandle IO -> Text -> L.ByteString -> m ()
+processEvent store name value = case name of
+    "put"    -> processPut store value
     "patch"  -> processPatch store value
     "delete" -> processDelete store value
     _        -> $(logWarn) "unknown event type"
 
-readStream :: (MonadIO m, MonadLogger m) => ClientI -> IO ByteString -> StoreHandle IO -> m ()
-readStream client body store = loop "" where
+readStream :: (MonadIO m, MonadLogger m) => IO ByteString -> StoreHandle IO -> m ()
+readStream body store = loop "" where
     loop initial = liftIO (parseWith (decodeUtf8 <$> brRead body) parseEvent initial) >>= \case
         Done remaining event -> do
-            processEvent client store (name event) (L.fromStrict $ encodeUtf8 $ buffer event)
+            processEvent store (name event) (L.fromStrict $ encodeUtf8 $ buffer event)
             loop remaining
         Fail _ context err ->
             $(logError) $ T.intercalate " " ["failed parsing SSE frame", T.pack $ show context, T.pack err]
@@ -147,11 +147,11 @@ readStream client body store = loop "" where
 retryPolicy :: MonadIO m => RetryPolicyM m
 retryPolicy = capDelay (3600 * 1000000) $ fullJitterBackoff (1 * 1000000)
 
-handleStream :: (MonadIO m, MonadLogger m, MonadMask m) => ClientI -> Manager -> Request -> StoreHandle IO -> RetryStatus -> m Bool
-handleStream client manager request store _ = do
+handleStream :: (MonadIO m, MonadLogger m, MonadMask m) => Manager -> Request -> StoreHandle IO -> RetryStatus -> m Bool
+handleStream manager request store _ = do
     status <- tryHTTP $ withResponseGeneric request manager $ \response -> checkAuthorization response >>
         if responseStatus response /= ok200 then throwErrorStatusCodes request response else
-            readStream client (responseBody response) store
+            readStream (responseBody response) store
     case status of
         (Left err) -> $(logError) (T.intercalate " " ["HTTP Exception", T.pack $ show err]) >> pure True
         (Right _)  -> pure False
@@ -160,4 +160,4 @@ streamingThread :: (MonadIO m, MonadLogger m, MonadMask m) => Manager -> ClientI
 streamingThread manager client = do
     let config = getField @"config" client; store = getField @"store" client;
     req <- prepareRequest config <$> liftIO (parseRequest $ T.unpack (getField @"streamURI" config) ++ "/all")
-    tryAuthorized client $ forever $ retrying retryPolicy (\_ status -> pure status) $ handleStream client manager req store
+    tryAuthorized client $ forever $ retrying retryPolicy (\_ status -> pure status) $ handleStream manager req store

@@ -18,9 +18,8 @@ import           Data.Text.Encoding                  (encodeUtf8)
 import           GHC.Natural                         (Natural, naturalToInt)
 import           Data.Word                           (Word8)
 import           Data.ByteString                     (ByteString)
-import           Data.IORef                          (readIORef)
 
-import           LaunchDarkly.Server.Client.Internal (ClientI, Status(Initialized))
+import           LaunchDarkly.Server.Client.Internal (ClientI, Status(Initialized), getStatusI)
 import           LaunchDarkly.Server.User.Internal   (UserI, valueOf)
 import           LaunchDarkly.Server.Features        (Flag, Segment, Prerequisite, SegmentRule, Clause, VariationOrRollout, Rule)
 import           LaunchDarkly.Server.Store.Internal  (LaunchDarklyStoreRead, getFlagC, getSegmentC)
@@ -39,7 +38,7 @@ isError :: EvaluationReason -> Bool
 isError reason = case reason of (EvaluationReasonError _) -> True; _ -> False
 
 evaluateTyped :: ClientI -> Text -> UserI -> a -> (a -> Value) -> Bool -> (Value -> Maybe a) -> IO (EvaluationDetail a)
-evaluateTyped client key user fallback wrap includeReason convert = readIORef (getField @"status" client) >>= \status -> if status /= Initialized
+evaluateTyped client key user fallback wrap includeReason convert = getStatusI client >>= \status -> if status /= Initialized
     then pure $ EvaluationDetail fallback Nothing $ EvaluationReasonError EvalErrorClientNotReady
     else evaluateInternalClient client key user (wrap fallback) includeReason >>= \r -> pure $ maybe
         (EvaluationDetail fallback Nothing $ if isError (getField @"reason" r)

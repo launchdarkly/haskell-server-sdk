@@ -23,9 +23,15 @@ import           LaunchDarkly.Server.Config
 
 import           Util.Features
 
+makeEmptyStore :: IO (StoreHandle IO)
+makeEmptyStore = do
+    handle <- makeStoreIO Nothing 0
+    initializeStore handle mempty mempty
+    pure handle
+
 testFlagReturnsOffVariationIfFlagIsOff :: Test
 testFlagReturnsOffVariationIfFlagIsOff = TestCase $ do
-    store <- makeStoreIO Nothing 0
+    store <- makeEmptyStore
     x <- evaluateDetail flag user store
     assertEqual "test" expected x
 
@@ -62,7 +68,7 @@ testFlagReturnsOffVariationIfFlagIsOff = TestCase $ do
 
 testFlagReturnsFallthroughIfFlagIsOnAndThereAreNoRules :: Test
 testFlagReturnsFallthroughIfFlagIsOnAndThereAreNoRules = TestCase $ do
-    store <- makeStoreIO Nothing 0
+    store <- makeEmptyStore
     x <- evaluateDetail flag user store
     assertEqual "test" expected x
 
@@ -367,7 +373,7 @@ testClauseCanMatchCustomAttribute = TestCase $ do
 makeTestClient :: IO Client
 makeTestClient = do
     (Client client) <- makeClient $ (makeConfig "") & configSetOffline True
-    setStatus client Initialized
+    initializeStore (getField @"store" client) mempty mempty
     pure (Client client)
 
 testEvaluatingUnknownFlagReturnsDefault :: Test

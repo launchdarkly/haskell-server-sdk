@@ -31,7 +31,7 @@ import           Control.Concurrent.MVar               (putMVar, takeMVar, newEm
 import           Control.Monad                         (void, forM_)
 import           Control.Monad.IO.Class                (liftIO)
 import           Control.Monad.Logger                  (LoggingT, logDebug)
-import           Data.IORef                            (newIORef, readIORef, writeIORef)
+import           Data.IORef                            (newIORef, writeIORef)
 import           Data.HashMap.Strict                   (HashMap)
 import qualified Data.HashMap.Strict as                HM
 import           Data.Text                             (Text)
@@ -88,7 +88,7 @@ clientRunLogger client = getField @"logger" $ getField @"config" client
 
 -- | Return the initialization status of the Client
 getStatus :: Client -> IO Status
-getStatus (Client client) = readIORef $ getField @"status" client
+getStatus (Client client) = getStatusI client
 
 -- | Returns a map from feature flag keys to values for a given user. If the
 -- result of the flag's evaluation would result in the default value, `Null`

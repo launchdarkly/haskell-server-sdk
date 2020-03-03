@@ -4,17 +4,18 @@ module LaunchDarkly.Server.Client.Internal
     , Status(..)
     , clientVersion
     , setStatus
+    , getStatusI
     ) where
 
 import Data.Text                           (Text)
-import Data.IORef                          (IORef, atomicModifyIORef')
+import Data.IORef                          (IORef, readIORef, atomicModifyIORef')
 import GHC.Generics                        (Generic)
 import Control.Concurrent                  (ThreadId)
 import Control.Concurrent.MVar             (MVar)
 import Data.Generics.Product               (getField)
 
 import LaunchDarkly.Server.Config.Internal (ConfigI)
-import LaunchDarkly.Server.Store.Internal  (StoreHandle)
+import LaunchDarkly.Server.Store.Internal  (StoreHandle, getInitializedC)
 import LaunchDarkly.Server.Events          (EventState)
 
 -- | Client is the LaunchDarkly client. Client instances are thread-safe.
@@ -45,6 +46,14 @@ setStatus client status' = atomicModifyIORef' (getField @"status" client) $ \sta
         Initialized   -> (if status == Uninitialized then Initialized  else status, ())
         -- Only allow setting status if not ShuttingDown
         _             -> (if status == ShuttingDown  then ShuttingDown else status', ())
+
+getStatusI :: ClientI -> IO Status
+getStatusI client = readIORef (getField @"status" client) >>= \case
+    Unauthorized -> pure Unauthorized
+    ShuttingDown -> pure ShuttingDown
+    _            -> getInitializedC (getField @"store" client) >>= \case
+        Right True -> pure Initialized
+        _          -> pure Uninitialized
 
 data ClientI = ClientI
     { config             :: !(ConfigI)
