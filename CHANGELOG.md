@@ -2,6 +2,10 @@
 
 All notable changes to the LaunchDarkly Haskell Server-side SDK will be documented in this file. This project adheres to [Semantic Versioning](http://semver.org).
 
+## [1.0.1] - 2020-03-02
+### Fixed:
+- Client initialization status is now correctly determined by checking the feature store instead of an always in memory value. This is particularly important for usage of daemon mode. In the current implementation daemon mode evaluation always returns the default fallback value because the client never becomes initialized.
+
 ## [1.0.0] - 2020-02-24
 ### Fixed:
 - Several haddock typos.
