@@ -2,9 +2,12 @@ module LaunchDarkly.Server.Network.Streaming (streamingThread) where
 
 import           Data.Text                           (Text)
 import qualified Data.Text as                        T
-import           Data.Attoparsec.Text as             P hiding (Result)
+import           Data.Attoparsec.Text as             P hiding (Result, try)
 import           Control.Monad                       (void, mzero, forever)
+import           Control.Monad.Catch                 (Exception, MonadCatch, try)
+import           Control.Exception                   (throwIO)
 import           Data.ByteString                     (ByteString)
+import qualified Data.ByteString as                  B
 import           Control.Applicative                 (many)
 import           Data.Text.Encoding                  (decodeUtf8, encodeUtf8)
 import           Data.HashMap.Strict                 (HashMap)
@@ -19,6 +22,7 @@ import           GHC.Generics                        (Generic)
 import           Control.Monad.Catch                 (MonadMask)
 import           Control.Retry                       (RetryPolicyM, RetryStatus, fullJitterBackoff, capDelay, retrying)
 import           Network.HTTP.Types.Status           (ok200)
+import           System.Timeout                      (timeout)
 
 import           LaunchDarkly.Server.Client.Internal (ClientI)
 import           LaunchDarkly.Server.Store.Internal  (StoreHandle, StoreResult, initializeStore, insertFlag, deleteFlag, deleteSegment, insertSegment)
@@ -133,15 +137,29 @@ processEvent store name value = case name of
     "delete" -> processDelete store value
     _        -> $(logWarn) "unknown event type"
 
-readStream :: (MonadIO m, MonadLogger m) => IO ByteString -> StoreHandle IO -> m ()
+data ReadE = ReadETimeout | ReadEClosed deriving (Show, Exception)
+
+tryReadE :: MonadCatch m => m a -> m (Either ReadE a)
+tryReadE = try
+
+-- heartbeat expected every 120 seconds
+readWithException :: IO ByteString -> IO Text
+readWithException body = timeout (1000000 * 300) (brRead body) >>= \case
+    Nothing    -> throwIO ReadETimeout
+    Just bytes -> if bytes == B.empty then throwIO ReadEClosed else pure (decodeUtf8 bytes)
+
+readStream :: (MonadIO m, MonadLogger m, MonadMask m) => IO ByteString -> StoreHandle IO -> m ()
 readStream body store = loop "" where
-    loop initial = liftIO (parseWith (decodeUtf8 <$> brRead body) parseEvent initial) >>= \case
-        Done remaining event -> do
-            processEvent store (name event) (L.fromStrict $ encodeUtf8 $ buffer event)
-            loop remaining
-        Fail _ context err ->
-            $(logError) $ T.intercalate " " ["failed parsing SSE frame", T.pack $ show context, T.pack err]
-        Partial _ -> $(logError) "failed parsing SSE frame unexpected partial"
+    loop initial = tryReadE (parseWith (liftIO $ readWithException body) parseEvent initial) >>= \case
+        (Left ReadETimeout) -> $(logError) "streaming connection unexpectedly closed"
+        (Left ReadEClosed)  -> $(logError) "timeout waiting for SSE event"
+        (Right parsed)      -> case parsed of
+            Done remaining event -> do
+                processEvent store (name event) (L.fromStrict $ encodeUtf8 $ buffer event)
+                loop remaining
+            Fail _ context err ->
+                $(logError) $ T.intercalate " " ["failed parsing SSE frame", T.pack $ show context, T.pack err]
+            Partial _ -> $(logError) "failed parsing SSE frame unexpected partial"
 
 -- https://aws.amazon.com/blogs/architecture/exponential-backoff-and-jitter/
 retryPolicy :: MonadIO m => RetryPolicyM m
