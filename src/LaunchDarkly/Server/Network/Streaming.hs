@@ -3,7 +3,8 @@ module LaunchDarkly.Server.Network.Streaming (streamingThread) where
 import           Data.Text                           (Text)
 import qualified Data.Text as                        T
 import           Data.Attoparsec.Text as             P hiding (Result, try)
-import           Control.Monad                       (void, mzero, forever)
+import           Data.Function                       (fix)
+import           Control.Monad                       (void, mzero)
 import           Control.Monad.Catch                 (Exception, MonadCatch, try)
 import           Control.Exception                   (throwIO)
 import           Data.ByteString                     (ByteString)
@@ -11,8 +12,8 @@ import qualified Data.ByteString as                  B
 import           Control.Applicative                 (many)
 import           Data.Text.Encoding                  (decodeUtf8, encodeUtf8)
 import           Data.HashMap.Strict                 (HashMap)
-import           Network.HTTP.Client                 (Manager, Response(..), Request, parseRequest, brRead, throwErrorStatusCodes)
-import           Control.Monad.Logger                (MonadLogger, logInfo, logWarn, logError)
+import           Network.HTTP.Client                 (Manager, Response(..), Request, HttpException(..), HttpExceptionContent(..), parseRequest, brRead, throwErrorStatusCodes)
+import           Control.Monad.Logger                (MonadLogger, logInfo, logWarn, logError, logDebug)
 import           Control.Monad.IO.Class              (MonadIO, liftIO)
 import           Data.Generics.Product               (getField)
 import           Data.Aeson                          (FromJSON, parseJSON, withObject, eitherDecode, (.:), fromJSON, Result(..))
@@ -21,8 +22,9 @@ import           GHC.Natural                         (Natural)
 import           GHC.Generics                        (Generic)
 import           Control.Monad.Catch                 (MonadMask)
 import           Control.Retry                       (RetryPolicyM, RetryStatus, fullJitterBackoff, capDelay, retrying)
-import           Network.HTTP.Types.Status           (ok200)
+import           Network.HTTP.Types.Status           (ok200, Status(statusCode))
 import           System.Timeout                      (timeout)
+import           System.Clock                        (getTime, Clock(Monotonic), TimeSpec(TimeSpec))
 
 import           LaunchDarkly.Server.Client.Internal (ClientI)
 import           LaunchDarkly.Server.Store.Internal  (StoreHandle, StoreResult, initializeStore, insertFlag, deleteFlag, deleteSegment, insertSegment)
@@ -163,19 +165,39 @@ readStream body store = loop "" where
 
 -- https://aws.amazon.com/blogs/architecture/exponential-backoff-and-jitter/
 retryPolicy :: MonadIO m => RetryPolicyM m
-retryPolicy = capDelay (3600 * 1000000) $ fullJitterBackoff (1 * 1000000)
+retryPolicy = capDelay (30 * 1000000) $ fullJitterBackoff (1 * 1000000)
 
-handleStream :: (MonadIO m, MonadLogger m, MonadMask m) => Manager -> Request -> StoreHandle IO -> RetryStatus -> m Bool
+data Failure = FailurePermanent | FailureTemporary | FailureReset deriving (Eq)
+
+handleStream :: (MonadIO m, MonadLogger m, MonadMask m) => Manager -> Request -> StoreHandle IO -> RetryStatus -> m Failure
 handleStream manager request store _ = do
+    $(logDebug) "starting new streaming connection"
+    startTime <- liftIO $ getTime Monotonic
     status <- tryHTTP $ withResponseGeneric request manager $ \response -> checkAuthorization response >>
         if responseStatus response /= ok200 then throwErrorStatusCodes request response else
             readStream (responseBody response) store
     case status of
-        (Left err) -> $(logError) (T.intercalate " " ["HTTP Exception", T.pack $ show err]) >> pure True
-        (Right _)  -> pure False
+        (Right ()) -> liftIO (getTime Monotonic) >>= \now -> if now >= startTime + (TimeSpec 60 0)
+            then do
+                $(logError) "streaming connection closed after 60 seconds, retrying instantly"
+                pure FailureReset
+            else do
+                $(logError) "streaming connection closed before 60 seconds, retrying after backoff"
+                pure FailureTemporary
+        (Left err) -> do
+            $(logError) (T.intercalate " " ["HTTP Exception", T.pack $ show err])
+            pure $ case err of
+                (InvalidUrlException _ _)                                 -> FailurePermanent
+                (HttpExceptionRequest _ (StatusCodeException response _)) ->
+                    let code = statusCode (responseStatus response) in if code >= 400 && code < 500
+                        then if elem code [400, 408, 429] then FailureTemporary else FailurePermanent
+                        else FailureTemporary
+                _                                                         -> FailureTemporary
 
 streamingThread :: (MonadIO m, MonadLogger m, MonadMask m) => Manager -> ClientI -> m ()
 streamingThread manager client = do
     let config = getField @"config" client; store = getField @"store" client;
     req <- prepareRequest config <$> liftIO (parseRequest $ T.unpack (getField @"streamURI" config) ++ "/all")
-    tryAuthorized client $ forever $ retrying retryPolicy (\_ status -> pure status) $ handleStream manager req store
+    tryAuthorized client $ fix $ \loop ->
+        retrying retryPolicy (\_ status -> pure $ status == FailureTemporary) (handleStream manager req store) >>=
+            \case FailureReset -> loop; _ -> pure ()
