@@ -2,6 +2,10 @@
 
 All notable changes to the LaunchDarkly Haskell Server-side SDK will be documented in this file. This project adheres to [Semantic Versioning](http://semver.org).
 
+## [1.0.4] - 2020-04-06
+### Fixed:
+- Widened time and lens dependency ranges. Thanks @nbouscal!
+
 ## [1.0.3] - 2020-03-31
 ### Fixed:
 - Standardize streaming retry behavior. Changed handling of status codes. Exponential back-off is now reset after 60 seconds of successful streaming.
