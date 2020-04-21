@@ -107,7 +107,7 @@ data CounterContext = CounterContext
     } deriving (Generic, Show, ToJSON)
 
 data IdentifyEvent = IdentifyEvent
-    { key  :: !(Maybe Text)
+    { key  :: !Text
     , user :: !Value
     } deriving (Generic, ToJSON, Show)
 
@@ -156,7 +156,7 @@ instance ToJSON DebugEvent where
 addUserToEvent :: (HasField' "user" r (Maybe Value), HasField' "userKey" r (Maybe Text)) => ConfigI -> UserI -> r -> r
 addUserToEvent config user event = if getField @"inlineUsersInEvents" config
     then setField @"user" (pure $ userSerializeRedacted config user) event
-    else setField @"userKey" (getField @"key" user) event
+    else setField @"userKey" (pure $ getField @"key" user) event
 
 makeFeatureEvent :: ConfigI -> UserI -> Bool -> EvalEvent -> FeatureEvent
 makeFeatureEvent config user includeReason event = addUserToEvent config user $ FeatureEvent
@@ -306,7 +306,7 @@ processEvalEvents config state user includeReason events unknown = unixMilliseco
 
 maybeIndexUser :: Natural -> ConfigI -> UserI -> EventState -> IO ()
 maybeIndexUser now config user state = modifyMVar_ (getField @"userKeyLRU" state) $ \cache ->
-    let key = fromMaybe "" $ getField @"key" user in case LRU.lookup key cache of
+    let key = getField @"key" user in case LRU.lookup key cache of
         (cache', Just _)  -> pure cache'
         (cache', Nothing) -> do
             queueEvent config state (EventTypeIndex $ BaseEvent now $ IndexEvent { user = userSerializeRedacted config user })

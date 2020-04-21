@@ -6,7 +6,7 @@ module LaunchDarkly.Server.User.Internal
     , userSerializeRedacted
     ) where
 
-import           Data.Aeson                          (FromJSON, ToJSON, Value(..), (.:?), withObject, object, parseJSON, toJSON)
+import           Data.Aeson                          (FromJSON, ToJSON, Value(..), (.:), (.:?), withObject, object, parseJSON, toJSON)
 import           Data.Foldable                       (fold, or)
 import           Data.Generics.Product               (getField)
 import qualified Data.HashMap.Strict as              HM
@@ -30,7 +30,7 @@ mapUser f (User c) = User $ f c
 newtype User = User { unwrapUser :: UserI }
 
 data UserI = UserI
-    { key                   :: !(Maybe Text)
+    { key                   :: !Text
     , secondary             :: !(Maybe Text)
     , ip                    :: !(Maybe Text)
     , country               :: !(Maybe Text)
@@ -52,7 +52,7 @@ emptyToNothing x = if x == mempty then mempty else pure x
 
 instance FromJSON UserI where
     parseJSON = withObject "User" $ \o -> UserI
-        <$> o .:? "key"
+        <$> o .:  "key"
         <*> o .:? "secondary"
         <*> o .:? "ip"
         <*> o .:? "country"
@@ -83,7 +83,7 @@ instance ToJSON UserI where
 
 valueOf :: UserI -> Text -> Maybe Value
 valueOf user attribute = case attribute of
-    "key"       -> String <$> getField @"key" user
+    "key"       -> pure $ String $ getField @"key" user
     "secondary" -> String <$> getField @"secondary" user
     "ip"        -> String <$> getField @"ip" user
     "country"   -> String <$> getField @"country" user

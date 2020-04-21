@@ -28,7 +28,7 @@ import LaunchDarkly.Server.User.Internal (User(..), mapUser, UserI(..))
 -- | Creates a new user identified by the given key.
 makeUser :: Text -> User
 makeUser key = User $ UserI
-    { key                   = pure key
+    { key                   = key
     , secondary             = mempty
     , ip                    = mempty
     , country               = mempty
@@ -43,7 +43,7 @@ makeUser key = User $ UserI
     }
 
 -- | Set the primary key for a user.
-userSetKey :: (Maybe Text) -> User -> User
+userSetKey :: Text -> User -> User
 userSetKey = mapUser . setField @"key"
 
 -- | Set the secondary key for a user.

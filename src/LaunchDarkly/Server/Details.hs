@@ -82,9 +82,6 @@ data EvalErrorKind
     | EvalErrorWrongType
       -- ^ Indicates that the result value was not of the requested type, e.g.
       -- you called boolVariationDetail but the value was an integer.
-    | EvalErrorUserNotSpecified
-      -- ^ Indicates that the caller passed a user without a key for the user
-      -- parameter.
     | EvalErrorClientNotReady
       -- ^ Indicates that the caller tried to evaluate a flag before the client
       -- had successfully initialized.
@@ -97,6 +94,5 @@ instance ToJSON EvalErrorKind where
         EvalErrorKindMalformedFlag -> "MALFORMED_FLAG"
         EvalErrorFlagNotFound      -> "FLAG_NOT_FOUND"
         EvalErrorWrongType         -> "WRONG_TYPE"
-        EvalErrorUserNotSpecified  -> "USER_NOT_SPECIFIED"
         EvalErrorClientNotReady    -> "CLIENT_NOT_READY"
         EvalErrorExternalStore _   -> "EXTERNAL_STORE_ERROR"

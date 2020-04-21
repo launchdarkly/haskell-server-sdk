@@ -55,9 +55,7 @@ evaluateInternalClient client key user fallback includeReason = do
             let event = newUnknownFlagEvent key fallback (EvaluationReasonError EvalErrorFlagNotFound)
             pure (errorDetail EvalErrorFlagNotFound, True, pure event)
         Right (Just flag) -> do
-            (reason, events) <- case getField @"key" user of
-                Nothing -> pure (errorDetail EvalErrorUserNotSpecified, [])
-                Just _  -> evaluateDetail flag user $ getField @"store" client
+            (reason, events) <- evaluateDetail flag user $ getField @"store" client
             let reason' = setFallback reason fallback
             pure (reason', False, flip (:) events $ newSuccessfulEvalEvent flag (getField @"variationIndex" reason')
                 (getField @"value" reason') (Just fallback) (getField @"reason" reason') Nothing)
@@ -111,7 +109,7 @@ checkPrerequisites flag user store = let p = getField @"prerequisites" flag in i
 
 evaluateInternal :: (Monad m, LaunchDarklyStoreRead store m) => Flag -> UserI -> store -> m (EvaluationDetail Value)
 evaluateInternal flag user store = result where
-    checkTarget target = if elem (getField @"key" user) (Just <$> getField @"values" target)
+    checkTarget target = if elem (getField @"key" user) (getField @"values" target)
         then Just $ getVariation flag (getField @"variation" target) EvaluationReasonTargetMatch else Nothing
     checkRule (ruleIndex, rule) = ifM (ruleMatchesUser rule user store)
         (pure $ Just $ getValueForVariationOrRollout flag (getField @"variationOrRollout" rule) user
@@ -214,9 +212,8 @@ segmentRuleMatchesUser rule user key salt = (&&)
 
 segmentContainsUser :: Segment -> UserI -> Bool
 segmentContainsUser segment user
-    | Nothing <- getField @"key" user = False
-    | elem (fromJust $ getField @"key" user) (getField @"included" segment) = True
-    | elem (fromJust $ getField @"key" user) (getField @"excluded" segment) = False
+    | elem (getField @"key" user) (getField @"included" segment) = True
+    | elem (getField @"key" user) (getField @"excluded" segment) = False
     | Just _ <- find
         (\r -> segmentRuleMatchesUser r user (getField @"key" segment) (getField @"salt" segment))
         (getField @"rules" segment) = True
