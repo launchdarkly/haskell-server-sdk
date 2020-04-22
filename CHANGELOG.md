@@ -2,6 +2,13 @@
 
 All notable changes to the LaunchDarkly Haskell Server-side SDK will be documented in this file. This project adheres to [Semantic Versioning](http://semver.org).
 
+## [2.0.0] - 2020-04-21
+### Changed:
+- The function `userSetKey` is now takes `Text` instead of `Maybe Text` for the key. This originally existed for compatibility with an internal test suite.
+
+### Removed:
+- The constructor `EvalErrorUserNotSpecified` has been removed from `EvalErrorKind`.
+
 ## [1.0.4] - 2020-04-06
 ### Fixed:
 - Widened time and lens dependency ranges. Thanks @nbouscal!
