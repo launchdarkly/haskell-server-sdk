@@ -7,7 +7,7 @@
 --   Please see the README on GitHub at
 --   <a>https://github.com/launchdarkly/haskell-server-sdk#readme</a>
 @package launchdarkly-server-sdk
-@version 1.0.4
+@version 2.0.0
 
 
 -- | This module contains details for external store implementations.
@@ -167,7 +167,7 @@ data User
 makeUser :: Text -> User
 
 -- | Set the primary key for a user.
-userSetKey :: Maybe Text -> User -> User
+userSetKey :: Text -> User -> User
 
 -- | Set the secondary key for a user.
 userSetSecondary :: Maybe Text -> User -> User
@@ -322,10 +322,6 @@ EvalErrorFlagNotFound :: EvalErrorKind
 -- | Indicates that the result value was not of the requested type, e.g.
 --   you called boolVariationDetail but the value was an integer.
 EvalErrorWrongType :: EvalErrorKind
-
--- | Indicates that the caller passed a user without a key for the user
---   parameter.
-EvalErrorUserNotSpecified :: EvalErrorKind
 
 -- | Indicates that the caller tried to evaluate a flag before the client
 --   had successfully initialized.
@@ -484,7 +480,7 @@ data User
 makeUser :: Text -> User
 
 -- | Set the primary key for a user.
-userSetKey :: Maybe Text -> User -> User
+userSetKey :: Text -> User -> User
 
 -- | Set the secondary key for a user.
 userSetSecondary :: Maybe Text -> User -> User
@@ -635,10 +631,6 @@ EvalErrorFlagNotFound :: EvalErrorKind
 -- | Indicates that the result value was not of the requested type, e.g.
 --   you called boolVariationDetail but the value was an integer.
 EvalErrorWrongType :: EvalErrorKind
-
--- | Indicates that the caller passed a user without a key for the user
---   parameter.
-EvalErrorUserNotSpecified :: EvalErrorKind
 
 -- | Indicates that the caller tried to evaluate a flag before the client
 --   had successfully initialized.
