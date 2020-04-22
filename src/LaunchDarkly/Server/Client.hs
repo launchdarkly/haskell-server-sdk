@@ -38,7 +38,6 @@ import           Data.Text                             (Text)
 import           Data.Aeson                            (Value(..))
 import           Data.Generics.Product                 (getField, setField)
 import           Data.Scientific                       (toRealFloat, fromFloatDigits)
-import           Data.Maybe                            (isNothing)
 import           Network.HTTP.Client                   (newManager)
 import           Network.HTTP.Client.TLS               (tlsManagerSettings)
 import           System.Clock                          (TimeSpec(..))
@@ -95,7 +94,7 @@ getStatus (Client client) = getStatusI client
 -- will be returned. This method does not send analytics events back to
 -- LaunchDarkly.
 allFlags :: Client -> User -> IO (HashMap Text Value)
-allFlags (Client client) (User user) = if isNothing $ getField @"key" user then pure mempty else do
+allFlags (Client client) (User user) = do
     status <- getAllFlagsC $ getField @"store" client
     case status of
         Left _      -> pure HM.empty
