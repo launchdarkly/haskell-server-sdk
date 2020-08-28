@@ -2,6 +2,11 @@
 
 All notable changes to the LaunchDarkly Haskell Server-side SDK will be documented in this file. This project adheres to [Semantic Versioning](http://semver.org).
 
+## [2.0.1] - 2020-08-28
+### Fixed:
+- Expanded dependency supported version range. Thanks @dbaynard!
+
+
 ## [2.0.0] - 2020-04-21
 ### Changed:
 - The function `userSetKey` is now takes `Text` instead of `Maybe Text` for the key. This originally existed for compatibility with an internal test suite.
