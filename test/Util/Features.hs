@@ -15,7 +15,6 @@ makeTestFlag key version = Flag
     , deleted                = False
     , prerequisites          = []
     , salt                   = ""
-    , sel                    = ""
     , targets                = []
     , rules                  = []
     , fallthrough            = VariationOrRollout
