@@ -71,7 +71,6 @@ data Flag = Flag
     , deleted                :: !Bool
     , prerequisites          :: ![Prerequisite]
     , salt                   :: !Text
-    , sel                    :: !Text
     , targets                :: ![Target]
     , rules                  :: ![Rule]
     , fallthrough            :: !VariationOrRollout
