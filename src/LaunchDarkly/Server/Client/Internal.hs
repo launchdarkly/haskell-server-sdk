@@ -25,7 +25,7 @@ newtype Client = Client ClientI
 
 -- | The version string for this library.
 clientVersion :: Text
-clientVersion = "2.0.1"
+clientVersion = "2.0.2"
 
 -- | The status of the client initialization.
 data Status

@@ -2,6 +2,10 @@
 
 All notable changes to the LaunchDarkly Haskell Server-side SDK will be documented in this file. This project adheres to [Semantic Versioning](http://semver.org).
 
+## [2.0.2] - 2020-10-13
+### Fixed:
+- Removed unused legacy &#34;sel&#34; field from flag model.
+
 ## [2.0.1] - 2020-08-28
 ### Fixed:
 - Expanded dependency supported version range. Thanks @dbaynard!
