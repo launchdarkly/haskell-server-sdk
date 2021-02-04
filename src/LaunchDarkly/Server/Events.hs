@@ -21,6 +21,18 @@ import           LaunchDarkly.Server.User.Internal   (UserI, userSerializeRedact
 import           LaunchDarkly.Server.Details         (EvaluationReason(..))
 import           LaunchDarkly.Server.Features        (Flag)
 
+data ContextKind = ContextKindUser | ContextKindAnonymousUser
+    deriving (Eq, Show)
+
+instance ToJSON ContextKind where
+  toJSON contextKind = String $ case contextKind of
+      ContextKindUser          -> "user" 
+      ContextKindAnonymousUser -> "anonymousUser"
+
+userGetContextKind :: UserI -> ContextKind
+userGetContextKind user = if (getField @"anonymous" user)
+    then ContextKindAnonymousUser else ContextKindUser
+
 data EvalEvent = EvalEvent
     { key                  :: !Text
     , variation            :: !(Maybe Natural)
@@ -128,18 +140,21 @@ data FeatureEvent = FeatureEvent
     , version      :: !(Maybe Natural)
     , variation    :: !(Maybe Natural)
     , reason       :: !(Maybe EvaluationReason)
+    , contextKind  :: !ContextKind
     } deriving (Generic, Show)
 
 instance ToJSON FeatureEvent where
     toJSON event = object $ filter ((/=) Null . snd)
-        [ ("key",       toJSON $ getField @"key"          event)
-        , ("user",      toJSON $ getField @"user"         event)
-        , ("userKey",   toJSON $ getField @"userKey"      event)
-        , ("value",     toJSON $ getField @"value"        event)
-        , ("default",   toJSON $ getField @"defaultValue" event)
-        , ("version",   toJSON $ getField @"version"      event)
-        , ("variation", toJSON $ getField @"variation"    event)
-        , ("reason",    toJSON $ getField @"reason"       event)
+        [ ("key",         toJSON $ getField @"key"          event)
+        , ("user",        toJSON $ getField @"user"         event)
+        , ("userKey",     toJSON $ getField @"userKey"      event)
+        , ("value",       toJSON $ getField @"value"        event)
+        , ("default",     toJSON $ getField @"defaultValue" event)
+        , ("version",     toJSON $ getField @"version"      event)
+        , ("variation",   toJSON $ getField @"variation"    event)
+        , ("reason",      toJSON $ getField @"reason"       event)
+        , ("contextKind", let c = (getField @"contextKind" event) in
+            if c == ContextKindUser then Null else toJSON c)
         ]
 
 instance EventKind FeatureEvent where
@@ -169,6 +184,7 @@ makeFeatureEvent config user includeReason event = addUserToEvent config user $ 
     , variation    = getField @"variation" event
     , reason       = if includeReason || getField @"forceIncludeReason" event
         then pure $ getField @"reason" event else Nothing
+    , contextKind  = userGetContextKind user
     }
 
 data CustomEvent = CustomEvent
@@ -177,6 +193,7 @@ data CustomEvent = CustomEvent
     , userKey     :: !(Maybe Text)
     , metricValue :: !(Maybe Double)
     , value       :: !(Maybe Value)
+    , contextKind :: !ContextKind
     } deriving (Generic, Show)
 
 instance ToJSON CustomEvent where
@@ -186,10 +203,31 @@ instance ToJSON CustomEvent where
         , ("userKey",     toJSON $ getField @"userKey"     ctx)
         , ("metricValue", toJSON $ getField @"metricValue" ctx)
         , ("data",        toJSON $ getField @"value"       ctx)
+        , ("contextKind", let c = (getField @"contextKind" ctx) in
+            if c == ContextKindUser then Null else toJSON c)
         ]
 
 instance EventKind CustomEvent where
     eventKind _ = "custom"
+
+data AliasEvent = AliasEvent
+    { key                 :: !Text
+    , contextKind         :: !ContextKind
+    , previousKey         :: !Text
+    , previousContextKind :: !ContextKind
+    }
+    deriving (Generic, Show)
+
+instance ToJSON AliasEvent where
+    toJSON ctx = object $ filter ((/=) Null . snd)
+        [ ("key",                 toJSON $ getField @"key"                 ctx)
+        , ("contextKind",         toJSON $ getField @"contextKind"         ctx)
+        , ("previousKey",         toJSON $ getField @"previousKey"         ctx)
+        , ("previousContextKind", toJSON $ getField @"previousContextKind" ctx)
+        ]
+
+instance EventKind AliasEvent where
+    eventKind _ = "alias"
 
 data BaseEvent event = BaseEvent
     { creationDate :: Natural
@@ -212,6 +250,7 @@ data EventType =
     | EventTypeCustom   !(BaseEvent CustomEvent)
     | EventTypeIndex    !(BaseEvent IndexEvent)
     | EventTypeDebug    !(BaseEvent DebugEvent)
+    | EventTypeAlias    !(BaseEvent AliasEvent)
 
 instance ToJSON EventType where
     toJSON event = case event of
@@ -221,6 +260,7 @@ instance ToJSON EventType where
         EventTypeCustom   x -> toJSON x
         EventTypeIndex    x -> toJSON x
         EventTypeDebug    x -> toJSON x
+        EventTypeAlias    x -> toJSON x
 
 newUnknownFlagEvent :: Text -> Value -> EvaluationReason -> EvalEvent
 newUnknownFlagEvent key defaultValue reason = EvalEvent
