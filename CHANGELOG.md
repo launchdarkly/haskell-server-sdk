@@ -2,6 +2,10 @@
 
 All notable changes to the LaunchDarkly Haskell Server-side SDK will be documented in this file. This project adheres to [Semantic Versioning](http://semver.org).
 
+## [2.1.0] - 2021-02-04
+### Added:
+- Added the `alias` function. This can be used to associate two user objects for analytics purposes by generating an alias event.
+
 ## [2.0.2] - 2020-10-13
 ### Fixed:
 - Removed unused legacy &#34;sel&#34; field from flag model.
