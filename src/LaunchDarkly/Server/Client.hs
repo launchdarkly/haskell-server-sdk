@@ -22,6 +22,7 @@ module LaunchDarkly.Server.Client
     , flushEvents
     , identify
     , track
+    , alias
     , Status(..)
     , getStatus
     ) where
@@ -46,7 +47,7 @@ import           LaunchDarkly.Server.Config.Internal   (Config(..), shouldSendEv
 import           LaunchDarkly.Server.Client.Internal
 import           LaunchDarkly.Server.User.Internal     (User(..), userSerializeRedacted)
 import           LaunchDarkly.Server.Details           (EvaluationDetail(..), EvaluationReason(..), EvalErrorKind(..))
-import           LaunchDarkly.Server.Events            (IdentifyEvent(..), CustomEvent(..), EventType(..), makeBaseEvent, queueEvent, makeEventState, addUserToEvent)
+import           LaunchDarkly.Server.Events            (IdentifyEvent(..), CustomEvent(..), AliasEvent(..), EventType(..), makeBaseEvent, queueEvent, makeEventState, addUserToEvent, userGetContextKind)
 import           LaunchDarkly.Server.Network.Eventing  (eventThread)
 import           LaunchDarkly.Server.Network.Streaming (streamingThread)
 import           LaunchDarkly.Server.Network.Polling   (pollingThread)
@@ -118,8 +119,28 @@ identify (Client client) (User user) = do
 track :: Client -> User -> Text -> Maybe Value -> Maybe Double -> IO ()
 track (Client client) (User user) key value metric = do
     x <- makeBaseEvent $ addUserToEvent (getField @"config" client) user CustomEvent
-        { key = key, user = Nothing, userKey = Nothing, metricValue = metric, value = value }
+        { key         = key
+        , user        = Nothing
+        , userKey     = Nothing
+        , metricValue = metric
+        , value       = value
+        , contextKind = userGetContextKind user
+        }
     queueEvent (getField @"config" client) (getField @"events" client) (EventTypeCustom x)
+
+-- | Alias associates two users for analytics purposes with an alias event.
+--
+-- The first parameter should be the new version of the user,
+-- the second parameter should be the old version.
+alias :: Client -> User -> User -> IO ()
+alias (Client client) (User currentUser) (User previousUser) = do
+    x <- makeBaseEvent $ AliasEvent
+        { key                 = getField @"key" currentUser
+        , contextKind         = userGetContextKind currentUser
+        , previousKey         = getField @"key" previousUser
+        , previousContextKind = userGetContextKind previousUser
+        }
+    queueEvent (getField @"config" client) (getField @"events" client) (EventTypeAlias x)
 
 -- | Flush tells the client that all pending analytics events (if any) should be
 -- delivered as soon as possible. Flushing is asynchronous, so this method will
