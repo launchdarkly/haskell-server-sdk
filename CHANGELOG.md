@@ -2,6 +2,10 @@
 
 All notable changes to the LaunchDarkly Haskell Server-side SDK will be documented in this file. This project adheres to [Semantic Versioning](http://semver.org).
 
+## [2.1.1] - 2021-03-05
+### Changed:
+- Updated dependency ranges. Thanks @dbaynard !
+
 ## [2.1.0] - 2021-02-04
 ### Added:
 - Added the `alias` function. This can be used to associate two user objects for analytics purposes by generating an alias event.
