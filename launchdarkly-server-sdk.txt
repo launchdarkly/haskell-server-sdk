@@ -7,7 +7,7 @@
 --   Please see the README on GitHub at
 --   <a>https://github.com/launchdarkly/haskell-server-sdk#readme</a>
 @package launchdarkly-server-sdk
-@version 2.1.1
+@version 2.2.0
 
 
 -- | This module contains details for external store implementations.
@@ -279,13 +279,18 @@ EvaluationReasonOff :: EvaluationReason
 EvaluationReasonTargetMatch :: EvaluationReason
 
 -- | Indicates that the user matched one of the flag's rules.
-EvaluationReasonRuleMatch :: !Natural -> !Text -> EvaluationReason
+EvaluationReasonRuleMatch :: !Natural -> !Text -> !Bool -> EvaluationReason
 
 -- | The index of the rule that was matched (0 being the first).
 [$sel:ruleIndex:EvaluationReasonOff] :: EvaluationReason -> !Natural
 
 -- | The unique identifier of the rule that was matched.
 [$sel:ruleId:EvaluationReasonOff] :: EvaluationReason -> !Text
+
+-- | Whether the evaluation was part of an experiment. Is true if the
+--   evaluation resulted in an experiment rollout *and* served one of the
+--   variations in the experiment. Otherwise false.
+[$sel:inExperiment:EvaluationReasonOff] :: EvaluationReason -> !Bool
 
 -- | Indicates that the flag was considered off because it had at least one
 --   prerequisite flag that either was off or did not return the desired
@@ -297,7 +302,12 @@ EvaluationReasonPrerequisiteFailed :: !Text -> EvaluationReason
 
 -- | Indicates that the flag was on but the user did not match any targets
 --   or rules.
-EvaluationReasonFallthrough :: EvaluationReason
+EvaluationReasonFallthrough :: !Bool -> EvaluationReason
+
+-- | Whether the evaluation was part of an experiment. Is true if the
+--   evaluation resulted in an experiment rollout *and* served one of the
+--   variations in the experiment. Otherwise false.
+[$sel:inExperiment:EvaluationReasonOff] :: EvaluationReason -> !Bool
 
 -- | Indicates that the flag could not be evaluated, e.g. because it does
 --   not exist or due to an unexpected error. In this case the result value
@@ -594,13 +604,18 @@ EvaluationReasonOff :: EvaluationReason
 EvaluationReasonTargetMatch :: EvaluationReason
 
 -- | Indicates that the user matched one of the flag's rules.
-EvaluationReasonRuleMatch :: !Natural -> !Text -> EvaluationReason
+EvaluationReasonRuleMatch :: !Natural -> !Text -> !Bool -> EvaluationReason
 
 -- | The index of the rule that was matched (0 being the first).
 [$sel:ruleIndex:EvaluationReasonOff] :: EvaluationReason -> !Natural
 
 -- | The unique identifier of the rule that was matched.
 [$sel:ruleId:EvaluationReasonOff] :: EvaluationReason -> !Text
+
+-- | Whether the evaluation was part of an experiment. Is true if the
+--   evaluation resulted in an experiment rollout *and* served one of the
+--   variations in the experiment. Otherwise false.
+[$sel:inExperiment:EvaluationReasonOff] :: EvaluationReason -> !Bool
 
 -- | Indicates that the flag was considered off because it had at least one
 --   prerequisite flag that either was off or did not return the desired
@@ -612,7 +627,12 @@ EvaluationReasonPrerequisiteFailed :: !Text -> EvaluationReason
 
 -- | Indicates that the flag was on but the user did not match any targets
 --   or rules.
-EvaluationReasonFallthrough :: EvaluationReason
+EvaluationReasonFallthrough :: !Bool -> EvaluationReason
+
+-- | Whether the evaluation was part of an experiment. Is true if the
+--   evaluation resulted in an experiment rollout *and* served one of the
+--   variations in the experiment. Otherwise false.
+[$sel:inExperiment:EvaluationReasonOff] :: EvaluationReason -> !Bool
 
 -- | Indicates that the flag could not be evaluated, e.g. because it does
 --   not exist or due to an unexpected error. In this case the result value
