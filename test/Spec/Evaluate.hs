@@ -77,6 +77,8 @@ testFlagReturnsFallthroughIfFlagIsOnAndThereAreNoRules = TestCase $ do
         { value          = String "fall"
         , variationIndex = pure 0
         , reason         = EvaluationReasonFallthrough
+            { inExperiment = False
+            }
         }, [])
 
     user = unwrapUser $ makeUser "x"
@@ -160,6 +162,8 @@ testFlagReturnsErrorIfFallthroughHasEmptyRolloutVariationList = TestCase $ do
                 { variation = Nothing
                 , rollout   = pure Rollout
                     { variations = []
+                    , seed       = Nothing
+                    , kind       = RolloutKindRollout
                     , bucketBy   = pure "key"
                     }
                 }
@@ -307,6 +311,8 @@ testFlagReturnsFallthroughVariationIfPrerequisiteIsMetAndThereAreNoRules = TestC
             { value          = "fall"
             , variationIndex = pure 0
             , reason         = EvaluationReasonFallthrough
+                { inExperiment = False
+                }
             }
 
 testClauseCanMatchCustomAttribute :: Test
@@ -321,8 +327,9 @@ testClauseCanMatchCustomAttribute = TestCase $ do
         { value          = Bool True
         , variationIndex = pure 1
         , reason         = EvaluationReasonRuleMatch
-            { ruleIndex = 0
-            , ruleId    = "clause"
+            { ruleIndex    = 0
+            , ruleId       = "clause"
+            , inExperiment = False
             }
         }, [])
 

@@ -295,9 +295,11 @@ newSuccessfulEvalEvent flag variation value defaultValue reason prereqOf = EvalE
     where
 
     shouldForceReason = case reason of
-        EvaluationReasonFallthrough       -> getField @"trackEventsFallthrough" flag
-        (EvaluationReasonRuleMatch idx _) -> getField @"trackEvents" (getField @"rules" flag !! fromIntegral idx)
-        _                                 -> False
+        (EvaluationReasonFallthrough inExperiment)     ->
+            inExperiment || getField @"trackEventsFallthrough" flag
+        (EvaluationReasonRuleMatch idx _ inExperiment) ->
+            inExperiment || getField @"trackEvents" (getField @"rules" flag !! fromIntegral idx)
+        _                                              -> False
 
 makeSummaryKey :: EvalEvent -> Text
 makeSummaryKey event = T.intercalate "-"

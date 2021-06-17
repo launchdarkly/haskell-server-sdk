@@ -31,10 +31,14 @@ data EvaluationReason
     | EvaluationReasonTargetMatch
       -- ^ indicates that the user key was specifically targeted for this flag.
     | EvaluationReasonRuleMatch
-          { ruleIndex :: !Natural
+          { ruleIndex    :: !Natural
             -- ^ The index of the rule that was matched (0 being the first).
-          , ruleId    :: !Text
+          , ruleId       :: !Text
             -- ^ The unique identifier of the rule that was matched.
+          , inExperiment :: !Bool
+            -- ^ Whether the evaluation was part of an experiment. Is true if
+            -- the evaluation resulted in an experiment rollout *and* served
+            -- one of the variations in the experiment. Otherwise false.
           }
       -- ^ Indicates that the user matched one of the flag's rules.
     | EvaluationReasonPrerequisiteFailed
@@ -45,6 +49,11 @@ data EvaluationReason
       -- one prerequisite flag that either was off or did not return the desired
       -- variation.
     | EvaluationReasonFallthrough
+          { inExperiment :: !Bool
+            -- ^ Whether the evaluation was part of an experiment. Is
+            -- true if the evaluation resulted in an experiment rollout *and*
+            -- served one of the variations in the experiment. Otherwise false.
+          }
       -- ^ Indicates that the flag was on but the user did not match any targets
       -- or rules.
     | EvaluationReasonError
@@ -58,17 +67,17 @@ data EvaluationReason
 
 instance ToJSON EvaluationReason where
     toJSON x = case x of
-        EvaluationReasonOff                                  ->
+        EvaluationReasonOff                                        ->
             Object $ HM.fromList [("kind", "OFF")]
-        EvaluationReasonTargetMatch                          ->
+        EvaluationReasonTargetMatch                                ->
             Object $ HM.fromList [("kind", "TARGET_MATCH")]
-        (EvaluationReasonRuleMatch ruleIndex ruleId)         ->
-            Object $ HM.fromList [("kind", "RULE_MATCH"), ("ruleIndex", toJSON ruleIndex), ("ruleId", toJSON ruleId)]
-        (EvaluationReasonPrerequisiteFailed prerequisiteKey) ->
+        (EvaluationReasonRuleMatch ruleIndex ruleId inExperiment)  ->
+            Object $ HM.fromList [("kind", "RULE_MATCH"), ("ruleIndex", toJSON ruleIndex), ("ruleId", toJSON ruleId), ("inExperiment", toJSON inExperiment)]
+        (EvaluationReasonPrerequisiteFailed prerequisiteKey)       ->
             Object $ HM.fromList [("kind", "PREREQUISITE_FAILED"), ("prerequisiteKey", toJSON prerequisiteKey)]
-        EvaluationReasonFallthrough                          ->
-            Object $ HM.fromList [("kind", "FALLTHROUGH")]
-        (EvaluationReasonError errorKind)                    ->
+        EvaluationReasonFallthrough inExperiment                   ->
+            Object $ HM.fromList [("kind", "FALLTHROUGH"), ("inExperiment", toJSON inExperiment)]
+        (EvaluationReasonError errorKind)                          ->
             Object $ HM.fromList [("kind", "ERROR"), ("errorKind", toJSON errorKind)]
 
 -- | Defines the possible values of the errorKind property of EvaluationReason.

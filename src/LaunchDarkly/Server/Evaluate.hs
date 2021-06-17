@@ -1,14 +1,16 @@
 module LaunchDarkly.Server.Evaluate where
 
+import           Control.Lens                        ((%~))
 import           Control.Monad                       (mzero, msum)
 import           Control.Monad.Extra                 (ifM, anyM, allM, firstJustM)
 import           Crypto.Hash.SHA1                    (hash)
 import           Data.Scientific                     (Scientific, floatingOrInteger)
 import           Data.Either                         (either, fromLeft)
+import           Data.Function                       ((&))
 import           Data.Aeson.Types                    (Value(..))
 import           Data.Maybe                          (maybe, fromJust, isJust, fromMaybe)
 import           Data.Text                           (Text)
-import           Data.Generics.Product               (getField)
+import           Data.Generics.Product               (getField, field)
 import           Data.List                           (genericIndex, null, find)
 import qualified Data.Vector as                      V
 import qualified Data.Text as                        T
@@ -21,7 +23,7 @@ import           Data.ByteString                     (ByteString)
 
 import           LaunchDarkly.Server.Client.Internal (ClientI, Status(Initialized), getStatusI)
 import           LaunchDarkly.Server.User.Internal   (UserI, valueOf)
-import           LaunchDarkly.Server.Features        (Flag, Segment, Prerequisite, SegmentRule, Clause, VariationOrRollout, Rule)
+import           LaunchDarkly.Server.Features        (Flag, Segment, Prerequisite, SegmentRule, Clause, VariationOrRollout, Rule, RolloutKind(RolloutKindExperiment))
 import           LaunchDarkly.Server.Store.Internal  (LaunchDarklyStoreRead, getFlagC, getSegmentC)
 import           LaunchDarkly.Server.Operators       (Op(OpSegmentMatch), getOperation)
 import           LaunchDarkly.Server.Events          (EvalEvent, newUnknownFlagEvent, newSuccessfulEvalEvent, processEvalEvents)
@@ -113,9 +115,9 @@ evaluateInternal flag user store = result where
         then Just $ getVariation flag (getField @"variation" target) EvaluationReasonTargetMatch else Nothing
     checkRule (ruleIndex, rule) = ifM (ruleMatchesUser rule user store)
         (pure $ Just $ getValueForVariationOrRollout flag (getField @"variationOrRollout" rule) user
-            EvaluationReasonRuleMatch { ruleIndex = ruleIndex, ruleId = getField @"id" rule })
+            EvaluationReasonRuleMatch { ruleIndex = ruleIndex, ruleId = getField @"id" rule, inExperiment = False })
         (pure Nothing)
-    fallthrough = getValueForVariationOrRollout flag (getField @"fallthrough" flag) user EvaluationReasonFallthrough
+    fallthrough = getValueForVariationOrRollout flag (getField @"fallthrough" flag) user (EvaluationReasonFallthrough False)
     result = let
         ruleMatch   = checkRule <$> zip [0..] (getField @"rules" flag)
         targetMatch = return . checkTarget <$> getField @"targets" flag
@@ -127,24 +129,32 @@ errorDetail kind = EvaluationDetail { value = Null, variationIndex = mzero, reas
 getValueForVariationOrRollout :: Flag -> VariationOrRollout -> UserI -> EvaluationReason -> EvaluationDetail Value
 getValueForVariationOrRollout flag vr user reason =
     case variationIndexForUser vr user (getField @"key" flag) (getField @"salt" flag) of
-        Nothing -> errorDetail EvalErrorKindMalformedFlag
-        Just x  -> getVariation flag x reason
+        (Nothing, _)           -> errorDetail EvalErrorKindMalformedFlag
+        (Just x, inExperiment) -> (getVariation flag x reason) & field @"reason" %~ setInExperiment inExperiment
+
+setInExperiment :: Bool -> EvaluationReason -> EvaluationReason
+setInExperiment inExperiment reason = case reason of
+    EvaluationReasonFallthrough _         -> EvaluationReasonFallthrough inExperiment
+    EvaluationReasonRuleMatch index idx _ -> EvaluationReasonRuleMatch index idx inExperiment
+    x                                     -> x
 
 ruleMatchesUser :: Monad m => LaunchDarklyStoreRead store m => Rule -> UserI -> store -> m Bool
 ruleMatchesUser rule user store =
     allM (\clause -> clauseMatchesUser store clause user) (getField @"clauses" rule)
 
-variationIndexForUser :: VariationOrRollout -> UserI -> Text -> Text -> Maybe Natural
+variationIndexForUser :: VariationOrRollout -> UserI -> Text -> Text -> (Maybe Natural, Bool)
 variationIndexForUser vor user key salt
-    | (Just variation) <- getField @"variation" vor = pure variation
+    | (Just variation) <- getField @"variation" vor = (pure variation, False)
     | (Just rollout) <- getField @"rollout" vor = let
+        isExperiment = (getField @"kind" rollout) == RolloutKindExperiment
         variations = getField @"variations" rollout
-        bucket = bucketUser user key (fromMaybe "key" $ getField @"bucketBy" rollout) salt
+        bucket = bucketUser user key (fromMaybe "key" $ getField @"bucketBy" rollout) salt (getField @"seed" rollout)
         c acc i = acc >>= \acc -> let t = acc + ((getField @"weight" i) / 100000.0) in
-            if bucket < t then Left (getField @"variation" i) else Right t
-        in if null variations then Nothing else pure $ fromLeft (getField @"variation" $ last variations) $
+            if bucket < t then Left (Just $ getField @"variation" i, (not $ getField @"untracked" i) && isExperiment) else Right t
+        in if null variations then (Nothing, False) else fromLeft
+            (Just $ getField @"variation" $ last variations, (not $ getField @"untracked" $ last variations) && isExperiment) $
             foldl c (Right (0.0 :: Float)) variations
-    | otherwise = Nothing
+    | otherwise = (Nothing, False)
 
 -- Bucketing -------------------------------------------------------------------
 
@@ -159,10 +169,13 @@ hexStringToNumber :: ByteString -> Maybe Natural
 hexStringToNumber bytes = B.foldl' step (Just 0) bytes where
     step acc x = acc >>= \acc' -> hexCharToNumber x >>= pure . (+) (acc' * 16)
 
-bucketUser :: UserI -> Text -> Text -> Text -> Float
-bucketUser user key attribute salt = fromMaybe 0 $ do
+bucketUser :: UserI -> Text -> Text -> Text -> Maybe Int -> Float
+bucketUser user key attribute salt seed = fromMaybe 0 $ do
+    let secondarySuffix = maybe "" (T.append ".") $ getField @"secondary" user
     i <- valueOf user attribute >>= bucketableStringValue >>= \x -> pure $ B.take 15 $ B16.encode $ hash $ encodeUtf8 $
-        T.concat [key, ".", salt, ".", x, maybe "" (T.append ".") $ getField @"secondary" user]
+        case seed of
+            Nothing    -> T.concat [key, ".", salt, ".", x, secondarySuffix]
+            Just seed' -> T.concat [T.pack $ show seed', ".", x, secondarySuffix]
     pure $ ((fromIntegral $ fromJust $ hexStringToNumber i) :: Float) / (0xFFFFFFFFFFFFFFF)
 
 floatingOrInteger' :: Scientific -> Either Double Integer
@@ -208,7 +221,7 @@ segmentRuleMatchesUser :: SegmentRule -> UserI -> Text -> Text -> Bool
 segmentRuleMatchesUser rule user key salt = (&&)
     (all (flip clauseMatchesUserNoSegments user) (getField @"clauses" rule))
     (flip (maybe True) (getField @"weight" rule) $ \weight ->
-        bucketUser user key (fromMaybe "key" $ getField @"bucketBy" rule) salt < weight / 100000.0)
+        bucketUser user key (fromMaybe "key" $ getField @"bucketBy" rule) salt Nothing < weight / 100000.0)
 
 segmentContainsUser :: Segment -> UserI -> Bool
 segmentContainsUser segment user

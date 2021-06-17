@@ -1,6 +1,7 @@
 module LaunchDarkly.Server.Features where
 
-import Data.Aeson                    (FromJSON(..), ToJSON(..), Value(..), withObject, (.:), (.:?), object, (.=))
+import Control.Monad                 (mzero)
+import Data.Aeson                    (FromJSON(..), ToJSON(..), Value(..), withObject, (.:), (.:?), object, (.=), (.!=))
 import Data.Text                     (Text)
 import Data.HashSet                  (HashSet)
 import Data.Generics.Product         (getField)
@@ -50,12 +51,44 @@ instance ToJSON Rule where
 data WeightedVariation = WeightedVariation
     { variation :: !Natural
     , weight    :: !Float
-    } deriving (Generic, FromJSON, ToJSON, Show, Eq)
+    , untracked :: !Bool
+    } deriving (Generic, ToJSON, Show, Eq)
+
+instance FromJSON WeightedVariation where
+    parseJSON = withObject "WeightedVariation" $ \o -> do
+        variation <- o .:  "variation"
+        weight    <- o .:  "weight"
+        untracked <- o .:? "untracked" .!= False
+        pure WeightedVariation { .. }
+
+data RolloutKind = RolloutKindExperiment | RolloutKindRollout
+    deriving (Eq, Show)
+
+instance ToJSON RolloutKind where
+    toJSON x = String $ case x of
+        RolloutKindExperiment -> "experiment" 
+        RolloutKindRollout    -> "rollout"
+
+instance FromJSON RolloutKind where
+    parseJSON x = case x of
+        (String "experiment") -> pure RolloutKindExperiment
+        (String "rollout")    -> pure RolloutKindRollout
+        _                     -> mzero
 
 data Rollout = Rollout
     { variations :: ![WeightedVariation]
     , bucketBy   :: !(Maybe Text)
-    } deriving (Generic, FromJSON, ToJSON, Show, Eq)
+    , kind       :: !RolloutKind
+    , seed       :: !(Maybe Int)
+    } deriving (Generic, ToJSON, Show, Eq)
+
+instance FromJSON Rollout where
+    parseJSON = withObject "rollout" $ \o -> do
+        variations <- o .:  "variations"
+        bucketBy   <- o .:? "bucketBy"
+        kind       <- o .:? "kind" .!= RolloutKindRollout
+        seed       <- o .:? "seed"
+        pure Rollout { .. }
 
 data VariationOrRollout = VariationOrRollout
     { variation :: !(Maybe Natural)
