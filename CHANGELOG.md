@@ -2,6 +2,12 @@
 
 All notable changes to the LaunchDarkly Haskell Server-side SDK will be documented in this file. This project adheres to [Semantic Versioning](http://semver.org).
 
+## [2.2.0] - 2021-06-17
+### Added:
+- The SDK now supports the ability to control the proportion of traffic allocation to an experiment. This works in conjunction with a new platform feature now available to early access customers.
+
+
+
 ## [2.1.1] - 2021-03-05
 ### Changed:
 - Updated dependency ranges. Thanks @dbaynard !
