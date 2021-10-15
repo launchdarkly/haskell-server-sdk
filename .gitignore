@@ -1,2 +1,4 @@
 launchdarkly-server-sdk.cabal
 .stack-work/*
+dist-newstyle/
+*.*.sw*

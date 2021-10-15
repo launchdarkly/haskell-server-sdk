@@ -86,6 +86,7 @@ library:
   - LaunchDarkly.Server.Config
   - LaunchDarkly.Server.User
   - LaunchDarkly.Server.Store
+  - LaunchDarkly.Server.Features
 
 tests:
   haskell-server-sdk-test:

@@ -1,7 +1,8 @@
 -- | This module contains the core functionality of the SDK.
 
 module LaunchDarkly.Server.Client
-    ( Client
+    ( Client(..)
+    , ClientI(..)
     , makeClient
     , clientVersion
     , boolVariation
