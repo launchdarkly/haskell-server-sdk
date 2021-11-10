@@ -63,7 +63,9 @@ makeClient (Config config) = do
 
     status  <- newIORef Uninitialized
     store   <- makeStoreIO (getField @"storeBackend" config) (TimeSpec (fromIntegral $ getField @"storeTTLSeconds" config) 0)
-    manager <- newManager tlsManagerSettings
+    manager <- case getField @"manager" config of
+      Just manager -> pure manager
+      Nothing      -> newManager tlsManagerSettings
     events  <- makeEventState config
 
     let client          = ClientI {..}

@@ -11,6 +11,7 @@ import Data.Text                          (Text)
 import Data.Set                           (Set)
 import GHC.Natural                        (Natural)
 import GHC.Generics                       (Generic)
+import Network.HTTP.Client                (Manager)
 
 import LaunchDarkly.Server.Store          (StoreInterface)
 
@@ -43,4 +44,5 @@ data ConfigI = ConfigI
     , offline               :: !Bool
     , requestTimeoutSeconds :: !Natural
     , useLdd                :: !Bool
+    , manager               :: !(Maybe Manager)
     } deriving (Generic)
