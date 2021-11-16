@@ -29,14 +29,16 @@ module LaunchDarkly.Server.Client
 
 import           Control.Concurrent                    (forkFinally, killThread)
 import           Control.Concurrent.MVar               (putMVar, takeMVar, newEmptyMVar)
+import           Control.Exception                     (throwIO, Exception)
 import           Control.Monad                         (void, forM_)
 import           Control.Monad.IO.Class                (liftIO)
 import           Control.Monad.Logger                  (LoggingT, logDebug)
 import           Data.IORef                            (newIORef, writeIORef)
 import           Data.HashMap.Strict                   (HashMap)
 import qualified Data.HashMap.Strict as                HM
+import           Data.Maybe                            (isJust)
 import           Data.Text                             (Text)
-import           Data.Aeson                            (Value(..))
+import           Data.Aeson                            (Value(..), eitherDecodeFileStrict')
 import           Data.Generics.Product                 (getField, setField)
 import           Data.Scientific                       (toRealFloat, fromFloatDigits)
 import           Network.HTTP.Client                   (newManager)
@@ -50,8 +52,8 @@ import           LaunchDarkly.Server.Details           (EvaluationDetail(..), Ev
 import           LaunchDarkly.Server.Events            (IdentifyEvent(..), CustomEvent(..), AliasEvent(..), EventType(..), makeBaseEvent, queueEvent, makeEventState, addUserToEvent, userGetContextKind)
 import           LaunchDarkly.Server.Network.Eventing  (eventThread)
 import           LaunchDarkly.Server.Network.Streaming (streamingThread)
-import           LaunchDarkly.Server.Network.Polling   (pollingThread)
-import           LaunchDarkly.Server.Store.Internal    (makeStoreIO, getAllFlagsC)
+import           LaunchDarkly.Server.Network.Polling   (pollingThread, PollingResponse)
+import           LaunchDarkly.Server.Store.Internal    (makeStoreIO, getAllFlagsC, initializeStore)
 import           LaunchDarkly.Server.Evaluate          (evaluateTyped, evaluateDetail)
 
 -- | Create a new instance of the LaunchDarkly client.
@@ -74,14 +76,30 @@ makeClient (Config config) = do
         thread <- forkFinally (runLogger $ eventThread manager client) (\_ -> putMVar sync ())
         pure $ pure (thread, sync)
 
-    downloadThreadPair' <- if (getField @"offline" config) || (getField @"useLdd" config) then pure Nothing else do
+    downloadThreadPair' <- if (isJust $ getField @"offline" config) || (getField @"useLdd" config) then pure Nothing else do
         sync   <- newEmptyMVar
         thread <- forkFinally (runLogger $ downloadThreadF manager client) (\_ -> putMVar sync ())
         pure $ pure (thread, sync)
 
-    pure $ Client
+    let
+      cli = Client
         $ setField @"downloadThreadPair" downloadThreadPair'
         $ setField @"eventThreadPair"    eventThreadPair' client
+
+    case getField @"offline" config of
+      Just filepath -> do 
+        allFlags :: PollingResponse <- eitherDecodeFileStrict' filepath
+          >>= either (throwIO . ClientFailedToDecodeFile filepath) pure
+        initializeStore store (getField @"flags" allFlags) (getField @"segments" allFlags)
+          >>= either (throwIO . ClientFailedToInitializeStore) pure
+      Nothing -> pure ()
+    
+    pure cli
+
+data MakeClientInOfflineModeFailure = ClientFailedToDecodeFile FilePath String | ClientFailedToInitializeStore Text
+  deriving Show
+
+instance Exception MakeClientInOfflineModeFailure
 
 clientRunLogger :: ClientI -> (LoggingT IO () -> IO ())
 clientRunLogger client = getField @"logger" $ getField @"config" client

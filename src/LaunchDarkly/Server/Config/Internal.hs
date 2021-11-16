@@ -11,6 +11,7 @@ import Data.Text                          (Text)
 import Data.Set                           (Set)
 import GHC.Natural                        (Natural)
 import GHC.Generics                       (Generic)
+import Data.Maybe                         (isJust)
 
 import LaunchDarkly.Server.Store          (StoreInterface)
 
@@ -18,7 +19,7 @@ mapConfig :: (ConfigI -> ConfigI) -> Config -> Config
 mapConfig f (Config c) = Config $ f c
 
 shouldSendEvents :: ConfigI -> Bool
-shouldSendEvents config = (not $ getField @"offline" config) && (getField @"sendEvents" config)
+shouldSendEvents config = (not . isJust $ getField @"offline" config) && (getField @"sendEvents" config)
 
 -- | Config allows advanced configuration of the LaunchDarkly client.
 newtype Config = Config ConfigI
@@ -40,7 +41,7 @@ data ConfigI = ConfigI
     , eventsCapacity        :: !Natural
     , logger                :: !(LoggingT IO () -> IO ())
     , sendEvents            :: !Bool
-    , offline               :: !Bool
+    , offline               :: !(Maybe FilePath)
     , requestTimeoutSeconds :: !Natural
     , useLdd                :: !Bool
     } deriving (Generic)

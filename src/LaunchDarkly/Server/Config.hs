@@ -53,7 +53,7 @@ makeConfig key = Config $ ConfigI
     , eventsCapacity        = 10000
     , logger                = runStdoutLoggingT
     , sendEvents            = True
-    , offline               = False
+    , offline               = Nothing
     , requestTimeoutSeconds = 30
     , useLdd                = False
     }
@@ -140,7 +140,7 @@ configSetSendEvents = mapConfig . setField @"sendEvents"
 -- | Sets whether this client is offline. An offline client will not make any
 -- network connections to LaunchDarkly, and will return default values for all
 -- feature flags.
-configSetOffline :: Bool -> Config -> Config
+configSetOffline :: Maybe FilePath -> Config -> Config
 configSetOffline = mapConfig . setField @"offline"
 
 -- | Sets how long an the HTTP client should wait before a response is returned.
