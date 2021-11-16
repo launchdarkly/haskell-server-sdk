@@ -1,4 +1,4 @@
-module LaunchDarkly.Server.Network.Polling (pollingThread) where
+module LaunchDarkly.Server.Network.Polling (pollingThread, PollingResponse) where
 
 import           GHC.Generics                            (Generic)
 import           Data.HashMap.Strict                     (HashMap)
