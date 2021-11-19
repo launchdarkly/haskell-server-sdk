@@ -150,6 +150,6 @@ configSetRequestTimeoutSeconds = mapConfig . setField @"requestTimeoutSeconds"
 -- | Sets whether this client should use the LaunchDarkly relay in daemon mode.
 -- In this mode, the client does not subscribe to the streaming or polling API,
 -- but reads data only from the feature store. See:
--- https://docs.launchdarkly.com/docs/the-relay-proxy
+-- https://docs.launchdarkly.com/home/relay-proxy
 configSetUseLdd :: Bool -> Config -> Config
 configSetUseLdd = mapConfig . setField @"useLdd"
