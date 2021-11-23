@@ -16,6 +16,7 @@ module LaunchDarkly.Server.Config
     , configSetInlineUsersInEvents
     , configSetEventsCapacity
     , configSetLogger
+    , configSetManager
     , configSetSendEvents
     , configSetOffline
     , configSetRequestTimeoutSeconds
@@ -30,6 +31,7 @@ import Data.Set                            (Set)
 import Data.Text                           (Text)
 import Data.Monoid                         (mempty)
 import GHC.Natural                         (Natural)
+import Network.HTTP.Client                 (Manager)
 
 import LaunchDarkly.Server.Config.Internal (Config(..), mapConfig, ConfigI(..))
 import LaunchDarkly.Server.Store           (StoreInterface)
@@ -56,6 +58,7 @@ makeConfig key = Config $ ConfigI
     , offline               = False
     , requestTimeoutSeconds = 30
     , useLdd                = False
+    , manager               = Nothing
     }
 
 -- | Set the SDK key used to authenticate with LaunchDarkly.
@@ -153,3 +156,8 @@ configSetRequestTimeoutSeconds = mapConfig . setField @"requestTimeoutSeconds"
 -- https://docs.launchdarkly.com/docs/the-relay-proxy
 configSetUseLdd :: Bool -> Config -> Config
 configSetUseLdd = mapConfig . setField @"useLdd"
+
+-- | Sets the 'Manager' to use with the client. If not set explicitly a new
+-- 'Manager' will be created when creating the client.
+configSetManager :: Manager -> Config -> Config
+configSetManager = mapConfig . setField @"manager" . Just
