@@ -3,22 +3,21 @@ module LaunchDarkly.Server.Operators
     , getOperation
     ) where
 
-import Data.Maybe            (fromMaybe, isJust)
-import Data.Either           (fromRight)
-import Data.Text as          T
-import Data.Text             (Text, isPrefixOf, isInfixOf, isSuffixOf, unpack)
-import Data.Char             (isDigit)
-import Data.Text.Encoding    (encodeUtf8)
-import Data.Scientific       (Scientific, toRealFloat)
-import Data.Aeson.Types      (Value(..), FromJSON, ToJSON(..), withText, parseJSON)
-import Data.Time.ISO8601     (parseISO8601)
-import Data.Time.Clock       (UTCTime)
-import Data.Time.Clock.POSIX (POSIXTime, posixSecondsToUTCTime)
-import Data.SemVer           (Version, fromText, toText, metadata)
-import Control.Monad         (liftM2)
-import Control.Lens          ((.~))
-import GHC.Generics          (Generic)
-import Text.Regex.PCRE.Light (compileM, match)
+import Data.Maybe                (fromMaybe, isJust)
+import Data.Either               (fromRight)
+import Data.Text as              T
+import Data.Char                 (isDigit)
+import Data.Text.Encoding        (encodeUtf8)
+import Data.Scientific           (Scientific, toRealFloat)
+import Data.Aeson.Types          (Value(..), FromJSON, ToJSON(..), withText, parseJSON)
+import Data.Time.ISO8601         (parseISO8601)
+import Data.Time.Clock           (UTCTime)
+import Data.Time.Clock.POSIX     (POSIXTime, posixSecondsToUTCTime)
+import Data.SemVer               (Version, fromText, toText, metadata)
+import Control.Monad             (liftM2)
+import Data.Generics.Internal.VL ((.~))
+import GHC.Generics              (Generic)
+import Text.Regex.PCRE.Light     (compileM, match)
 
 data Op =
       OpIn

@@ -1,17 +1,17 @@
 module LaunchDarkly.Server.Evaluate where
 
-import           Control.Lens                        ((%~))
+import           Data.Generics.Internal.VL           (over)
 import           Control.Monad                       (mzero, msum)
 import           Control.Monad.Extra                 (ifM, anyM, allM, firstJustM)
 import           Crypto.Hash.SHA1                    (hash)
 import           Data.Scientific                     (Scientific, floatingOrInteger)
-import           Data.Either                         (either, fromLeft)
+import           Data.Either                         (fromLeft)
 import           Data.Function                       ((&))
 import           Data.Aeson.Types                    (Value(..))
-import           Data.Maybe                          (maybe, fromJust, isJust, fromMaybe)
+import           Data.Maybe                          (fromJust, isJust, fromMaybe)
 import           Data.Text                           (Text)
 import           Data.Generics.Product               (getField, field)
-import           Data.List                           (genericIndex, null, find)
+import           Data.List                           (genericIndex, find)
 import qualified Data.Vector as                      V
 import qualified Data.Text as                        T
 import qualified Data.ByteString as                  B
@@ -130,7 +130,7 @@ getValueForVariationOrRollout :: Flag -> VariationOrRollout -> UserI -> Evaluati
 getValueForVariationOrRollout flag vr user reason =
     case variationIndexForUser vr user (getField @"key" flag) (getField @"salt" flag) of
         (Nothing, _)           -> errorDetail EvalErrorKindMalformedFlag
-        (Just x, inExperiment) -> (getVariation flag x reason) & field @"reason" %~ setInExperiment inExperiment
+        (Just x, inExperiment) -> (getVariation flag x reason) & field @"reason" `over` setInExperiment inExperiment
 
 setInExperiment :: Bool -> EvaluationReason -> EvaluationReason
 setInExperiment inExperiment reason = case reason of

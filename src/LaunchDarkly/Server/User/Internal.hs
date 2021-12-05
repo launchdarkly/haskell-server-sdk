@@ -7,7 +7,7 @@ module LaunchDarkly.Server.User.Internal
     ) where
 
 import           Data.Aeson                          (FromJSON, ToJSON, Value(..), (.:), (.:?), withObject, object, parseJSON, toJSON)
-import           Data.Foldable                       (fold, or)
+import           Data.Foldable                       (fold)
 import           Data.Generics.Product               (getField)
 import qualified Data.HashMap.Strict as              HM
 import           Data.HashMap.Strict                 (HashMap)

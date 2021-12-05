@@ -26,7 +26,7 @@ module LaunchDarkly.Server.Store.Internal
     ) where
 
 import           Control.Monad                (void)
-import           Control.Lens                 (Lens', (%~), (^.))
+import           Data.Generics.Internal.VL    (Lens', (^.), over)
 import           Data.Aeson                   (ToJSON, FromJSON, encode, decode)
 import           Data.IORef                   (IORef, readIORef, atomicModifyIORef', newIORef)
 import           Data.ByteString              (ByteString)
@@ -179,10 +179,10 @@ data Store = Store
 
 expireAllItems :: Store -> IO ()
 expireAllItems store = atomicModifyIORef' (getField @"state" store) $ \state -> (, ()) $ state
-    & field @"allFlags"    %~ expire
-    & field @"initialized" %~ expire
-    & field @"flags"       %~ HM.map expire
-    & field @"segments"    %~ HM.map expire
+    & field @"allFlags"    `over` expire
+    & field @"initialized" `over` expire
+    & field @"flags"       `over` HM.map expire
+    & field @"segments"    `over` HM.map expire
     where expire = setField @"forceExpire" True
 
 isExpired :: Store -> TimeSpec -> Expirable a -> Bool
@@ -208,7 +208,7 @@ initialize store flags segments = case getField @"backend" store of
         raw = HM.empty
             & HM.insert "flags"    (HM.map versionedToRaw $ c flags)
             & HM.insert "segments" (HM.map versionedToRaw $ c segments)
-        c x = HM.map (\f -> f & field @"value" %~ Just) x
+        c x = HM.map (\f -> f & field @"value" `over` Just) x
 
 rawToVersioned :: (FromJSON a) => RawFeature -> Maybe (Versioned (Maybe a))
 rawToVersioned raw = case rawFeatureBuffer raw of
@@ -250,7 +250,7 @@ getGeneric store namespace key lens = do
         updateFromBackend backend now = tryGetBackend backend namespace key >>= \case
             Left err -> pure $ Left err
             Right v  -> do
-                atomicModifyIORef' (getField @"state" store) $ \stateRef -> (, ()) $ stateRef & lens %~
+                atomicModifyIORef' (getField @"state" store) $ \stateRef -> (, ()) $ stateRef & lens `over`
                     (HM.insert key (Expirable v False now))
                 pure $ Right $ getField @"value" v
 
@@ -276,7 +276,7 @@ upsertGeneric store namespace key versioned lens action = do
                 Right updated -> if not updated then pure (Right ()) else do
                     now <- getMonotonicTime
                     void $ atomicModifyIORef' (getField @"state" store) $ \stateRef -> (, ()) $ stateRef
-                        & lens %~ (HM.insert key (Expirable versioned False now))
+                        & lens `over` (HM.insert key (Expirable versioned False now))
                         & action True
                     pure $ Right ()
     where
@@ -285,14 +285,14 @@ upsertGeneric store namespace key versioned lens action = do
             Just existing -> if (getField @"version" $ getField @"value" existing) < getField @"version" versioned
                 then updateMemory state else state
         updateMemory state = state
-            & lens %~ (HM.insert key (Expirable versioned False 0))
+            & lens `over` (HM.insert key (Expirable versioned False 0))
             & action False
 
 upsertFlag :: Store -> Text -> Versioned (Maybe Flag) -> StoreResult ()
 upsertFlag store key versioned = upsertGeneric store "flags" key versioned (field @"flags") postAction where
     postAction external state = if external
-        then state & field @"allFlags" %~ (setField @"forceExpire" True)
-        else state & (field @"allFlags" . field @"value") %~ updateAllFlags
+        then state & field @"allFlags" `over` (setField @"forceExpire" True)
+        else state & (field @"allFlags" . field @"value") `over` updateAllFlags
     updateAllFlags allFlags = case getField @"value" versioned of
         Nothing   -> HM.delete key allFlags
         Just flag -> HM.insert key flag allFlags

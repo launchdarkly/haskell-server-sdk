@@ -29,7 +29,6 @@ import Control.Monad.Logger                (LoggingT, runStdoutLoggingT)
 import Data.Generics.Product               (setField)
 import Data.Set                            (Set)
 import Data.Text                           (Text)
-import Data.Monoid                         (mempty)
 import GHC.Natural                         (Natural)
 import Network.HTTP.Client                 (Manager)
 

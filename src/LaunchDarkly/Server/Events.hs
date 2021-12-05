@@ -10,7 +10,8 @@ import           Control.Concurrent.MVar             (MVar, putMVar, swapMVar, n
 import qualified Data.HashMap.Strict as              HM
 import           Data.HashMap.Strict                 (HashMap)
 import           Data.Time.Clock.POSIX               (getPOSIXTime)
-import           Control.Lens                        ((&), (%~))
+import           Data.Generics.Internal.VL           (over)
+import           Data.Function                       ((&))
 import           Data.Maybe                          (fromMaybe)
 import           Data.Cache.LRU                      (LRU, newLRU)
 import           Control.Monad                       (when)
@@ -66,7 +67,7 @@ makeEventState config = do
 
 convertFeatures :: HashMap Text (FlagSummaryContext (HashMap Text CounterContext))
     -> HashMap Text (FlagSummaryContext [CounterContext])
-convertFeatures summary = (flip HM.map) summary $ \context -> context & field @"counters" %~ HM.elems
+convertFeatures summary = (flip HM.map) summary $ \context -> context & field @"counters" `over` HM.elems
 
 queueEvent :: ConfigI -> EventState -> EventType -> IO ()
 queueEvent config state event = if not (shouldSendEvents config) then pure () else
@@ -314,7 +315,7 @@ summarizeEvent context event unknown = result where
     root = case HM.lookup (getField @"key" event) context of
         (Just x) -> x; Nothing  -> FlagSummaryContext (getField @"defaultValue" event) mempty
     leaf = case HM.lookup key (getField @"counters" root) of
-        (Just x) -> x & field @"count" %~ (1 +)
+        (Just x) -> x & field @"count" `over` (1 +)
         Nothing  -> CounterContext
             { count     = 1
             , version   = getField @"version" event
@@ -323,7 +324,7 @@ summarizeEvent context event unknown = result where
             , unknown   = unknown
             }
     result = flip (HM.insert $ getField @"key" event) context $
-        root & field @"counters" %~ HM.insert key leaf
+        root & field @"counters" `over` HM.insert key leaf
 
 putIfEmptyMVar :: MVar a -> a -> IO ()
 putIfEmptyMVar mvar value = tryTakeMVar mvar >>= \case Just x -> putMVar mvar x; Nothing -> putMVar mvar value;
