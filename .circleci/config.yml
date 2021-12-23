@@ -28,7 +28,7 @@ jobs:
 
   build-test-osx:
     macos:
-      xcode: "11.2.1"
+      xcode: "12.5.1"
     steps:
       - checkout
       - run:
