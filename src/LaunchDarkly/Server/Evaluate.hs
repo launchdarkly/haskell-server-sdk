@@ -17,7 +17,7 @@ import qualified Data.Text as                        T
 import qualified Data.ByteString as                  B
 import qualified Data.ByteString.Base16 as           B16
 import           Data.Text.Encoding                  (encodeUtf8)
-import           GHC.Natural                         (Natural, naturalToInt)
+import           GHC.Natural                         (Natural)
 import           Data.Word                           (Word8)
 import           Data.ByteString                     (ByteString)
 
@@ -71,7 +71,7 @@ getOffValue flag reason = case getField @"offVariation" flag of
 
 getVariation :: Flag -> Natural -> EvaluationReason -> EvaluationDetail Value
 getVariation flag index reason = let variations = getField @"variations" flag in
-    if naturalToInt index >= length variations
+    if fromIntegral index >= length variations
         then EvaluationDetail { value = Null, variationIndex = mzero, reason = EvaluationReasonError EvalErrorKindMalformedFlag }
         else EvaluationDetail { value = genericIndex variations index, variationIndex = pure index, reason = reason }
 
