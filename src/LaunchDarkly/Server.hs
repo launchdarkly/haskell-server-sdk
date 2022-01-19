@@ -16,6 +16,7 @@ module LaunchDarkly.Server
     , configSetInlineUsersInEvents
     , configSetEventsCapacity
     , configSetLogger
+    , configSetManager
     , configSetSendEvents
     , configSetOffline
     , configSetRequestTimeoutSeconds
