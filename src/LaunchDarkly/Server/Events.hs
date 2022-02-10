@@ -13,7 +13,7 @@ import           Data.Time.Clock.POSIX               (getPOSIXTime)
 import           Control.Lens                        ((&), (%~))
 import           Data.Maybe                          (fromMaybe)
 import           Data.Cache.LRU                      (LRU, newLRU)
-import           Control.Monad                       (when)
+import           Control.Monad                       (when, unless)
 import qualified Data.Cache.LRU as                   LRU
 
 import           LaunchDarkly.Server.Config.Internal (ConfigI, shouldSendEvents)
@@ -26,7 +26,7 @@ data ContextKind = ContextKindUser | ContextKindAnonymousUser
 
 instance ToJSON ContextKind where
   toJSON contextKind = String $ case contextKind of
-      ContextKindUser          -> "user" 
+      ContextKindUser          -> "user"
       ContextKindAnonymousUser -> "anonymousUser"
 
 userGetContextKind :: UserI -> ContextKind
@@ -335,12 +335,15 @@ runSummary now state event unknown = putIfEmptyMVar (getField @"startDate" state
 processEvalEvent :: Natural -> ConfigI -> EventState -> UserI -> Bool -> Bool -> EvalEvent -> IO ()
 processEvalEvent now config state user includeReason unknown event = do
     let featureEvent = makeFeatureEvent config user includeReason event
-    when (getField @"trackEvents" event) $
+        trackEvents = (getField @"trackEvents" event)
+        inlineUsers = (getField @"inlineUsersInEvents" config)
+    when trackEvents $
         queueEvent config state $ EventTypeFeature $ BaseEvent now $ featureEvent
     when (now < fromMaybe 0 (getField @"debugEventsUntilDate" event)) $
         queueEvent config state $ EventTypeDebug $ BaseEvent now $ DebugEvent featureEvent
     runSummary now state event unknown
-    maybeIndexUser now config user state
+    unless (trackEvents && inlineUsers) $
+        maybeIndexUser now config user state
 
 processEvalEvents :: ConfigI -> EventState -> UserI -> Bool -> [EvalEvent] -> Bool -> IO ()
 processEvalEvents config state user includeReason events unknown = unixMilliseconds >>= \now ->
