@@ -28,7 +28,7 @@ module LaunchDarkly.Server.Config
 import Control.Monad.Logger                (LoggingT, runStdoutLoggingT)
 import Data.Generics.Product               (setField)
 import Data.Set                            (Set)
-import Data.Text                           (Text)
+import Data.Text                           (Text, dropWhileEnd)
 import Data.Monoid                         (mempty)
 import GHC.Natural                         (Natural)
 import Network.HTTP.Client                 (Manager)
@@ -68,17 +68,17 @@ configSetKey = mapConfig . setField @"key"
 -- | The base URI of the main LaunchDarkly service. This should not normally be
 -- changed except for testing.
 configSetBaseURI :: Text -> Config -> Config
-configSetBaseURI = mapConfig . setField @"baseURI"
+configSetBaseURI = mapConfig . setField @"baseURI" . dropWhileEnd ((==) '/')
 
 -- | The base URI of the LaunchDarkly streaming service. This should not
 -- normally be changed except for testing.
 configSetStreamURI :: Text -> Config -> Config
-configSetStreamURI = mapConfig . setField @"streamURI"
+configSetStreamURI = mapConfig . setField @"streamURI" . dropWhileEnd ((==) '/')
 
 -- | The base URI of the LaunchDarkly service that accepts analytics events.
 -- This should not normally be changed except for testing.
 configSetEventsURI :: Text -> Config -> Config
-configSetEventsURI = mapConfig . setField @"eventsURI"
+configSetEventsURI = mapConfig . setField @"eventsURI" . dropWhileEnd ((==) '/')
 
 -- | Configures a handle to an external store such as Redis.
 configSetStoreBackend :: Maybe StoreInterface -> Config -> Config
