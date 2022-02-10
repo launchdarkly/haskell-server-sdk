@@ -16,7 +16,7 @@ import           Network.HTTP.Client                 (Manager, Response(..), Req
 import           Control.Monad.Logger                (MonadLogger, logInfo, logWarn, logError, logDebug)
 import           Control.Monad.IO.Class              (MonadIO, liftIO)
 import           Data.Generics.Product               (getField)
-import           Data.Aeson                          (FromJSON, parseJSON, withObject, eitherDecode, (.:), fromJSON, Result(..))
+import           Data.Aeson                          (FromJSON, parseJSON, withObject, eitherDecode, (.:), (.:?), (.!=), fromJSON, Result(..))
 import qualified Data.ByteString.Lazy as             L
 import           GHC.Natural                         (Natural)
 import           GHC.Generics                        (Generic)
@@ -49,7 +49,7 @@ data PathVersion = PathVersion
 instance FromJSON a => FromJSON (PathData a) where
     parseJSON = withObject "Put" $ \o -> do
         pathData <- o .: "data"
-        path     <- o .: "path"
+        path     <- o .:? "path" .!= "/"
         pure $ PathData { path = path, pathData = pathData }
 
 data SSE = SSE
