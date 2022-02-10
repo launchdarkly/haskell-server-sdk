@@ -31,11 +31,12 @@ import           Control.Concurrent                    (forkFinally, killThread)
 import           Control.Concurrent.MVar               (putMVar, takeMVar, newEmptyMVar)
 import           Control.Monad                         (void, forM_, unless)
 import           Control.Monad.IO.Class                (liftIO)
-import           Control.Monad.Logger                  (LoggingT, logDebug)
+import           Control.Monad.Logger                  (LoggingT, logDebug, logWarn)
 import           Data.IORef                            (newIORef, writeIORef)
 import           Data.HashMap.Strict                   (HashMap)
 import qualified Data.HashMap.Strict as                HM
 import           Data.Text                             (Text)
+import qualified Data.Text as                          T
 import           Data.Aeson                            (Value(..))
 import           Data.Generics.Product                 (getField, setField)
 import           Data.Scientific                       (toRealFloat, fromFloatDigits)
@@ -47,7 +48,7 @@ import           LaunchDarkly.Server.Config.Internal   (Config(..), shouldSendEv
 import           LaunchDarkly.Server.Client.Internal
 import           LaunchDarkly.Server.User.Internal     (User(..), userSerializeRedacted)
 import           LaunchDarkly.Server.Details           (EvaluationDetail(..), EvaluationReason(..), EvalErrorKind(..))
-import           LaunchDarkly.Server.Events            (IdentifyEvent(..), CustomEvent(..), AliasEvent(..), EventType(..), makeBaseEvent, queueEvent, makeEventState, addUserToEvent, userGetContextKind, unixMilliseconds, maybeIndexUser)
+import           LaunchDarkly.Server.Events            (IdentifyEvent(..), CustomEvent(..), AliasEvent(..), EventType(..), makeBaseEvent, queueEvent, makeEventState, addUserToEvent, userGetContextKind, unixMilliseconds, maybeIndexUser, noticeUser)
 import           LaunchDarkly.Server.Network.Eventing  (eventThread)
 import           LaunchDarkly.Server.Network.Streaming (streamingThread)
 import           LaunchDarkly.Server.Network.Polling   (pollingThread)
@@ -105,12 +106,15 @@ allFlags (Client client) (User user) = do
             evals <- mapM (\flag -> evaluateDetail flag user $ getField @"store" client) flags
             pure $ HM.map (getField @"value" . fst) evals
 
--- | Identify reports details about a a user.
+-- | Identify reports details about a user.
 identify :: Client -> User -> IO ()
-identify (Client client) (User user) = do
-    let user' = userSerializeRedacted (getField @"config" client) user
-    x <- makeBaseEvent $ IdentifyEvent { key = getField @"key" user, user = user' }
-    queueEvent (getField @"config" client) (getField @"events" client) (EventTypeIdentify x)
+identify (Client client) (User user)
+    | T.null (getField @"key" user) = clientRunLogger client $ $(logWarn) "identify called with empty user key!"
+    | otherwise = do
+        let user' = userSerializeRedacted (getField @"config" client) user
+        x <- makeBaseEvent $ IdentifyEvent { key = getField @"key" user, user = user' }
+        _ <- noticeUser (getField @"events" client) user
+        queueEvent (getField @"config" client) (getField @"events" client) (EventTypeIdentify x)
 
 -- | Track reports that a user has performed an event. Custom data can be
 -- attached to the event, and / or a numeric value.
@@ -200,7 +204,7 @@ jsonConverter = (,) id pure
 boolVariation :: Client -> Text -> User -> Bool -> IO Bool
 boolVariation = dropReason . reorderStuff boolConverter False
 
--- | Evaluate a Boolean typed flag, and return an explation.
+-- | Evaluate a Boolean typed flag, and return an explanation.
 boolVariationDetail :: Client -> Text -> User -> Bool -> IO (EvaluationDetail Bool)
 boolVariationDetail = reorderStuff boolConverter True
 

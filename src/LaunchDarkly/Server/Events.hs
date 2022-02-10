@@ -6,7 +6,7 @@ import           GHC.Natural                         (Natural)
 import           GHC.Generics                        (Generic)
 import           Data.Generics.Product               (HasField', getField, field, setField)
 import qualified Data.Text as                        T
-import           Control.Concurrent.MVar             (MVar, putMVar, swapMVar, newEmptyMVar, newMVar, tryTakeMVar, modifyMVar_)
+import           Control.Concurrent.MVar             (MVar, putMVar, swapMVar, newEmptyMVar, newMVar, tryTakeMVar, modifyMVar_, modifyMVar)
 import qualified Data.HashMap.Strict as              HM
 import           Data.HashMap.Strict                 (HashMap)
 import           Data.Time.Clock.POSIX               (getPOSIXTime)
@@ -353,9 +353,14 @@ processEvalEvents config state user includeReason events unknown = unixMilliseco
     mapM_ (processEvalEvent now config state user includeReason unknown) events
 
 maybeIndexUser :: Natural -> ConfigI -> UserI -> EventState -> IO ()
-maybeIndexUser now config user state = modifyMVar_ (getField @"userKeyLRU" state) $ \cache ->
-    let key = getField @"key" user in case LRU.lookup key cache of
-        (cache', Just _)  -> pure cache'
-        (cache', Nothing) -> do
-            queueEvent config state (EventTypeIndex $ BaseEvent now $ IndexEvent { user = userSerializeRedacted config user })
-            pure $ LRU.insert key () cache'
+maybeIndexUser now config user state = do
+    noticedUser <- noticeUser state user
+    when noticedUser $
+        queueEvent config state (EventTypeIndex $ BaseEvent now $ IndexEvent { user = userSerializeRedacted config user })
+
+noticeUser :: EventState -> UserI -> IO Bool
+noticeUser state user = modifyMVar (getField @"userKeyLRU" state) $ \cache -> do
+    let key = getField @"key" user
+    case LRU.lookup key cache of
+        (cache', Just _)  -> pure (cache', False)
+        (cache', Nothing) -> pure (LRU.insert key () cache', True)
