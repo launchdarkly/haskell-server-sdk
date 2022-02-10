@@ -71,7 +71,10 @@ convertFeatures summary = (flip HM.map) summary $ \context -> context & field @"
 queueEvent :: ConfigI -> EventState -> EventType -> IO ()
 queueEvent config state event = if not (shouldSendEvents config) then pure () else
     modifyMVar_ (getField @"events" state) $ \events ->
-    if length events < fromIntegral (getField @"eventsCapacity" config) then pure (event : events) else pure events
+        pure $ case event of
+          EventTypeSummary _ -> (event : events)
+          _ | length events < fromIntegral (getField @"eventsCapacity" config) -> (event : events)
+          _ -> events
 
 unixMilliseconds :: IO Natural
 unixMilliseconds = (round . (* 1000)) <$> getPOSIXTime
