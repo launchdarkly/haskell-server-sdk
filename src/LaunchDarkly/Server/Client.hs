@@ -29,7 +29,7 @@ module LaunchDarkly.Server.Client
 
 import           Control.Concurrent                    (forkFinally, killThread)
 import           Control.Concurrent.MVar               (putMVar, takeMVar, newEmptyMVar)
-import           Control.Monad                         (void, forM_)
+import           Control.Monad                         (void, forM_, unless)
 import           Control.Monad.IO.Class                (liftIO)
 import           Control.Monad.Logger                  (LoggingT, logDebug)
 import           Data.IORef                            (newIORef, writeIORef)
@@ -47,7 +47,7 @@ import           LaunchDarkly.Server.Config.Internal   (Config(..), shouldSendEv
 import           LaunchDarkly.Server.Client.Internal
 import           LaunchDarkly.Server.User.Internal     (User(..), userSerializeRedacted)
 import           LaunchDarkly.Server.Details           (EvaluationDetail(..), EvaluationReason(..), EvalErrorKind(..))
-import           LaunchDarkly.Server.Events            (IdentifyEvent(..), CustomEvent(..), AliasEvent(..), EventType(..), makeBaseEvent, queueEvent, makeEventState, addUserToEvent, userGetContextKind)
+import           LaunchDarkly.Server.Events            (IdentifyEvent(..), CustomEvent(..), AliasEvent(..), EventType(..), makeBaseEvent, queueEvent, makeEventState, addUserToEvent, userGetContextKind, unixMilliseconds, maybeIndexUser)
 import           LaunchDarkly.Server.Network.Eventing  (eventThread)
 import           LaunchDarkly.Server.Network.Streaming (streamingThread)
 import           LaunchDarkly.Server.Network.Polling   (pollingThread)
@@ -128,7 +128,11 @@ track (Client client) (User user) key value metric = do
         , value       = value
         , contextKind = userGetContextKind user
         }
-    queueEvent (getField @"config" client) (getField @"events" client) (EventTypeCustom x)
+    let config = (getField @"config" client)
+        events = (getField @"events" client)
+    queueEvent config events (EventTypeCustom x)
+    unless (getField @"inlineUsersInEvents" config) $
+        unixMilliseconds >>= \now -> maybeIndexUser now config user events
 
 -- | Alias associates two users for analytics purposes with an alias event.
 --
