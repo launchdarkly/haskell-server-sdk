@@ -1,23 +1,23 @@
+{-# LANGUAGE QuasiQuotes #-}
 module Spec.Evaluate (allTests) where
 
 import           Test.HUnit
-import           Data.Aeson
+import           Data.Aeson                        (encodeFile)
 import           Data.Aeson.Types                  (Value(..))
+import           Data.Aeson.QQ                     (aesonQQ)
 import qualified Data.HashMap.Strict as            HM
-import           Data.HashMap.Strict               (HashMap)
 import           Data.Function                     ((&))
 import           Data.Generics.Product             (getField)
+import qualified System.IO
+import qualified System.IO.Temp
 
 import           LaunchDarkly.Server.Store
 import           LaunchDarkly.Server.Store.Internal
 import           LaunchDarkly.Server.Client
-import           LaunchDarkly.Server.Client.Internal
 import           LaunchDarkly.Server.User
 import           LaunchDarkly.Server.User.Internal
 import           LaunchDarkly.Server.Features
 import           LaunchDarkly.Server.Operators
-import           LaunchDarkly.Server.Details
-import           LaunchDarkly.Server.Store.Internal
 import           LaunchDarkly.Server.Evaluate
 import           LaunchDarkly.Server.Config
 
@@ -26,7 +26,7 @@ import           Util.Features
 makeEmptyStore :: IO (StoreHandle IO)
 makeEmptyStore = do
     handle <- makeStoreIO Nothing 0
-    initializeStore handle mempty mempty
+    _ <- initializeStore handle mempty mempty
     pure handle
 
 testFlagReturnsOffVariationIfFlagIsOff :: Test
@@ -105,9 +105,9 @@ testFlagReturnsFallthroughIfFlagIsOnAndThereAreNoRules = TestCase $ do
 
 testFlagReturnsErrorIfFallthroughHasTooHighVariation :: Test
 testFlagReturnsErrorIfFallthroughHasTooHighVariation = TestCase $ do
-    client@(Client clientI) <- makeTestClient
-    insertFlag (getField @"store" clientI) flag >>= (pure () @=?)
-    stringVariationDetail client "a" (makeUser "b") "default" >>= (expected @=?)
+    withTestClient $ \client@(Client clientI) -> do
+        insertFlag (getField @"store" clientI) flag >>= (pure () @=?)
+        stringVariationDetail client "a" (makeUser "b") "default" >>= (expected @=?)
     where
         flag = (makeTestFlag "a" 52)
             { on           = True
@@ -130,9 +130,9 @@ testFlagReturnsErrorIfFallthroughHasTooHighVariation = TestCase $ do
 
 testFlagReturnsErrorIfFallthroughHasNeitherVariationNorRollout :: Test
 testFlagReturnsErrorIfFallthroughHasNeitherVariationNorRollout = TestCase $ do
-    client@(Client clientI) <- makeTestClient
-    insertFlag (getField @"store" clientI) flag >>= (pure () @=?)
-    stringVariationDetail client "a" (makeUser "b") "default" >>= (expected @=?)
+    withTestClient $ \client@(Client clientI) -> do
+        insertFlag (getField @"store" clientI) flag >>= (pure () @=?)
+        stringVariationDetail client "a" (makeUser "b") "default" >>= (expected @=?)
     where
         flag = (makeTestFlag "a" 52)
             { on           = True
@@ -151,9 +151,9 @@ testFlagReturnsErrorIfFallthroughHasNeitherVariationNorRollout = TestCase $ do
 
 testFlagReturnsErrorIfFallthroughHasEmptyRolloutVariationList :: Test
 testFlagReturnsErrorIfFallthroughHasEmptyRolloutVariationList = TestCase $ do
-    client@(Client clientI) <- makeTestClient
-    insertFlag (getField @"store" clientI) flag >>= (pure () @=?)
-    stringVariationDetail client "a" (makeUser "b") "default" >>= (expected @=?)
+    withTestClient $ \client@(Client clientI) -> do
+        insertFlag (getField @"store" clientI) flag >>= (pure () @=?)
+        stringVariationDetail client "a" (makeUser "b") "default" >>= (expected @=?)
     where
         flag = (makeTestFlag "a" 52)
             { on           = True
@@ -177,9 +177,9 @@ testFlagReturnsErrorIfFallthroughHasEmptyRolloutVariationList = TestCase $ do
 
 testFlagReturnsOffVariationIfPrerequisiteIsNotFound :: Test
 testFlagReturnsOffVariationIfPrerequisiteIsNotFound = TestCase $ do
-    client@(Client clientI) <- makeTestClient
-    insertFlag (getField @"store" clientI) flag >>= (pure () @=?)
-    stringVariationDetail client "a" (makeUser "b") "default" >>= (expected @=?)
+    withTestClient $ \client@(Client clientI) -> do
+        insertFlag (getField @"store" clientI) flag >>= (pure () @=?)
+        stringVariationDetail client "a" (makeUser "b") "default" >>= (expected @=?)
     where
         flag = (makeTestFlag "a" 52)
             { on            = True
@@ -204,10 +204,10 @@ testFlagReturnsOffVariationIfPrerequisiteIsNotFound = TestCase $ do
 
 testFlagReturnsOffVariationIfPrerequisiteIsOff :: Test
 testFlagReturnsOffVariationIfPrerequisiteIsOff = TestCase $ do
-    client@(Client clientI) <- makeTestClient
-    insertFlag (getField @"store" clientI) flag0                     >>= (pure () @=?)
-    insertFlag (getField @"store" clientI) flag1                     >>= (pure () @=?)
-    stringVariationDetail client "feature0" (makeUser "b") "default" >>= (expected @=?)
+    withTestClient $ \client@(Client clientI) -> do
+        insertFlag (getField @"store" clientI) flag0                     >>= (pure () @=?)
+        insertFlag (getField @"store" clientI) flag1                     >>= (pure () @=?)
+        stringVariationDetail client "feature0" (makeUser "b") "default" >>= (expected @=?)
     where
         flag0 = (makeTestFlag "feature0" 52)
             { on            = True
@@ -241,10 +241,10 @@ testFlagReturnsOffVariationIfPrerequisiteIsOff = TestCase $ do
 
 testFlagReturnsOffVariationIfPrerequisiteIsNotMet :: Test
 testFlagReturnsOffVariationIfPrerequisiteIsNotMet = TestCase $ do
-    client@(Client clientI) <- makeTestClient
-    insertFlag (getField @"store" clientI) flag0                     >>= (pure () @=?)
-    insertFlag (getField @"store" clientI) flag1                     >>= (pure () @=?)
-    stringVariationDetail client "feature0" (makeUser "b") "default" >>= (expected @=?)
+    withTestClient $ \client@(Client clientI) -> do
+        insertFlag (getField @"store" clientI) flag0                     >>= (pure () @=?)
+        insertFlag (getField @"store" clientI) flag1                     >>= (pure () @=?)
+        stringVariationDetail client "feature0" (makeUser "b") "default" >>= (expected @=?)
     where
         flag0 = (makeTestFlag "feature0" 52)
             { on            = True
@@ -278,10 +278,10 @@ testFlagReturnsOffVariationIfPrerequisiteIsNotMet = TestCase $ do
 
 testFlagReturnsFallthroughVariationIfPrerequisiteIsMetAndThereAreNoRules :: Test
 testFlagReturnsFallthroughVariationIfPrerequisiteIsMetAndThereAreNoRules = TestCase $ do
-    client@(Client clientI) <- makeTestClient
-    insertFlag (getField @"store" clientI) flag0                     >>= (pure () @=?)
-    insertFlag (getField @"store" clientI) flag1                     >>= (pure () @=?)
-    stringVariationDetail client "feature0" (makeUser "b") "default" >>= (expected @=?)
+    withTestClient $ \client@(Client clientI) -> do
+        insertFlag (getField @"store" clientI) flag0                     >>= (pure () @=?)
+        insertFlag (getField @"store" clientI) flag1                     >>= (pure () @=?)
+        stringVariationDetail client "feature0" (makeUser "b") "default" >>= (expected @=?)
     where
         flag0 = (makeTestFlag "feature0" 52)
             { on            = True
@@ -374,21 +374,29 @@ testClauseCanMatchCustomAttribute = TestCase $ do
         , debugEventsUntilDate   = Nothing
         }
 
-makeTestClient :: IO Client
-makeTestClient = do
-    (Client client) <- makeClient $ (makeConfig "") & configSetOffline True
-    initializeStore (getField @"store" client) mempty mempty
-    pure (Client client)
+withTestClient :: (Client -> IO ()) -> IO ()
+withTestClient action = do
+  System.IO.Temp.withSystemTempFile "flags" $ \filePath handle -> do
+    System.IO.hClose handle
+    encodeFile filePath [aesonQQ|
+      {
+        "flags": {},
+        "segments": {}
+      }
+    |]
+    (Client client) <- makeClient $ (makeConfig "") & configSetOffline (Just filePath)
+    _ <- initializeStore (getField @"store" client) mempty mempty
+    action (Client client)
 
 testEvaluatingUnknownFlagReturnsDefault :: Test
 testEvaluatingUnknownFlagReturnsDefault = TestCase $ do
-    client <- makeTestClient
-    boolVariation client "a" (makeUser "b") False >>= (False @=?)
+    withTestClient $ \client -> do
+        boolVariation client "a" (makeUser "b") False >>= (False @=?)
 
 testEvaluatingUnknownFlagReturnsDefaultWithDetail :: Test
 testEvaluatingUnknownFlagReturnsDefaultWithDetail = TestCase $ do
-    client <- makeTestClient
-    boolVariationDetail client "a" (makeUser "b") False >>= (expected @=?)
+    withTestClient $ \client -> do
+        boolVariationDetail client "a" (makeUser "b") False >>= (expected @=?)
     where
         expected = EvaluationDetail
             { value          = False
@@ -398,9 +406,9 @@ testEvaluatingUnknownFlagReturnsDefaultWithDetail = TestCase $ do
 
 testDefaultIsReturnedIfFlagEvaluatesToNil :: Test
 testDefaultIsReturnedIfFlagEvaluatesToNil = TestCase $ do
-    client@(Client clientI) <- makeTestClient
-    insertFlag (getField @"store" clientI) flag >>= (pure () @=?)
-    boolVariation client "a" (makeUser "b") False >>= (False @=?)
+    withTestClient $ \client@(Client clientI) -> do
+        insertFlag (getField @"store" clientI) flag >>= (pure () @=?)
+        boolVariation client "a" (makeUser "b") False >>= (False @=?)
     where
         flag = (makeTestFlag "a" 52)
             { on           = False
@@ -409,9 +417,9 @@ testDefaultIsReturnedIfFlagEvaluatesToNil = TestCase $ do
 
 testDefaultIsReturnedIfFlagEvaluatesToNilWithDetail :: Test
 testDefaultIsReturnedIfFlagEvaluatesToNilWithDetail = TestCase $ do
-    client@(Client clientI) <- makeTestClient
-    insertFlag (getField @"store" clientI) flag >>= (pure () @=?)
-    boolVariationDetail client "a" (makeUser "b") False >>= (expected @=?)
+    withTestClient $ \client@(Client clientI) -> do
+        insertFlag (getField @"store" clientI) flag >>= (pure () @=?)
+        boolVariationDetail client "a" (makeUser "b") False >>= (expected @=?)
     where
         flag = (makeTestFlag "a" 52)
             { on           = False
