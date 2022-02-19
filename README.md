@@ -1,6 +1,7 @@
 # LaunchDarkly Server-side SDK for Haskell
 
-[![CircleCI](https://circleci.com/gh/launchdarkly/haskell-server-sdk.svg?style=svg)](https://circleci.com/gh/launchdarkly/haskell-server-sdk)
+[![CircleCI](https://circleci.com/gh/launchdarkly/haskell-server-sdk.svg?style=svg)](https://circleci.com/gh/launchdarkly/haskell-server-sdk)[![Build status](https://github.com/launchdarkly/haskell-server-sdk/actions/workflows/ci.yml/badge.svg)](https://github.com/launchdarkly/haskell-server-sdk/actions/workflows/ci.yml)
+
 
 The LaunchDarkly Server-side SDK for Haskell is designed primarily for use in multi-user systems such as web servers and applications. It follows the server-side LaunchDarkly model for multi-user contexts. It is not intended for use in desktop and embedded systems applications.
 
