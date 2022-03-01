@@ -90,13 +90,13 @@ makeClient (Config config) = do
         $ setField @"eventThreadPair"    eventThreadPair' client
 
     case getField @"offline" config of
-      Just filepath -> do 
-        allFlags :: PollingResponse <- eitherDecodeFileStrict' filepath
+      Just filepath -> do
+        pollingResponse :: PollingResponse <- eitherDecodeFileStrict' filepath
           >>= either (throwIO . ClientFailedToDecodeFile filepath) pure
-        initializeStore store (getField @"flags" allFlags) (getField @"segments" allFlags)
+        initializeStore store (getField @"flags" pollingResponse) (getField @"segments" pollingResponse)
           >>= either (throwIO . ClientFailedToInitializeStore) pure
       Nothing -> pure ()
-    
+
     pure cli
 
 data MakeClientInOfflineModeFailure = ClientFailedToDecodeFile FilePath String | ClientFailedToInitializeStore Text

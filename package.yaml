@@ -86,7 +86,6 @@ library:
   - LaunchDarkly.Server.Config
   - LaunchDarkly.Server.User
   - LaunchDarkly.Server.Store
-  - LaunchDarkly.Server.Features
 
 tests:
   haskell-server-sdk-test:
@@ -102,5 +101,4 @@ tests:
     - -Wno-name-shadowing
     dependencies:
     - HUnit
-    - aeson-qq
     - temporary

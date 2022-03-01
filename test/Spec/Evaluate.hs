@@ -4,7 +4,6 @@ module Spec.Evaluate (allTests) where
 import           Test.HUnit
 import           Data.Aeson                        (encodeFile)
 import           Data.Aeson.Types                  (Value(..))
-import           Data.Aeson.QQ                     (aesonQQ)
 import qualified Data.HashMap.Strict as            HM
 import           Data.Function                     ((&))
 import           Data.Generics.Product             (getField)
@@ -20,6 +19,7 @@ import           LaunchDarkly.Server.Features
 import           LaunchDarkly.Server.Operators
 import           LaunchDarkly.Server.Evaluate
 import           LaunchDarkly.Server.Config
+import           LaunchDarkly.Server.Network.Polling
 
 import           Util.Features
 
@@ -378,12 +378,7 @@ withTestClient :: (Client -> IO ()) -> IO ()
 withTestClient action = do
   System.IO.Temp.withSystemTempFile "flags" $ \filePath handle -> do
     System.IO.hClose handle
-    encodeFile filePath [aesonQQ|
-      {
-        "flags": {},
-        "segments": {}
-      }
-    |]
+    encodeFile filePath PollingResponse { flags = mempty, segments = mempty }
     (Client client) <- makeClient $ (makeConfig "") & configSetOffline (Just filePath)
     _ <- initializeStore (getField @"store" client) mempty mempty
     action (Client client)

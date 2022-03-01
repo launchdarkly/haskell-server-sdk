@@ -1,4 +1,4 @@
-module LaunchDarkly.Server.Network.Polling (pollingThread, PollingResponse) where
+module LaunchDarkly.Server.Network.Polling (pollingThread, PollingResponse(..)) where
 
 import           GHC.Generics                            (Generic)
 import           Data.HashMap.Strict                     (HashMap)
@@ -8,7 +8,7 @@ import           Network.HTTP.Client                     (Manager, Request(..), 
 import           Data.Generics.Product                   (getField)
 import           Control.Monad                           (forever)
 import           Control.Concurrent                      (threadDelay)
-import           Data.Aeson                              (eitherDecode, FromJSON(..))
+import           Data.Aeson                              (eitherDecode, FromJSON(..), ToJSON)
 import           Control.Monad.Logger                    (MonadLogger, logInfo, logError)
 import           Control.Monad.IO.Class                  (MonadIO, liftIO)
 import           Control.Monad.Catch                     (MonadMask, MonadThrow)
@@ -22,7 +22,7 @@ import           LaunchDarkly.Server.Store.Internal      (StoreHandle, initializ
 data PollingResponse = PollingResponse
     { flags    :: !(HashMap Text Flag)
     , segments :: !(HashMap Text Segment)
-    } deriving (Generic, FromJSON, Show)
+    } deriving (Generic, FromJSON, ToJSON, Show)
 
 processPoll :: (MonadIO m, MonadLogger m, MonadMask m, MonadThrow m) => Manager -> StoreHandle IO -> Request -> m ()
 processPoll manager store request = liftIO (tryHTTP $ httpLbs request manager) >>= \case
