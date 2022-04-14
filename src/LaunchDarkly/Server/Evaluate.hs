@@ -55,7 +55,7 @@ evaluateInternalClient client key user fallback includeReason = do
             pure (errorDetail $ EvalErrorExternalStore err, True, pure event)
         Right Nothing     -> do
             let event = newUnknownFlagEvent key fallback (EvaluationReasonError EvalErrorFlagNotFound)
-            pure (errorDetail EvalErrorFlagNotFound, True, pure event)
+            pure (errorDefault EvalErrorFlagNotFound fallback, True, pure event)
         Right (Just flag) -> do
             (reason, events) <- evaluateDetail flag user $ getField @"store" client
             let reason' = setFallback reason fallback
@@ -123,8 +123,11 @@ evaluateInternal flag user store = result where
         targetMatch = return . checkTarget <$> getField @"targets" flag
         in fromMaybe fallthrough <$> firstJustM Prelude.id (ruleMatch ++ targetMatch)
 
+errorDefault :: EvalErrorKind -> Value -> EvaluationDetail Value
+errorDefault kind v = EvaluationDetail { value = v, variationIndex = mzero, reason = EvaluationReasonError kind }
+
 errorDetail :: EvalErrorKind -> EvaluationDetail Value
-errorDetail kind = EvaluationDetail { value = Null, variationIndex = mzero, reason = EvaluationReasonError kind }
+errorDetail kind = errorDefault kind Null
 
 getValueForVariationOrRollout :: Flag -> VariationOrRollout -> UserI -> EvaluationReason -> EvaluationDetail Value
 getValueForVariationOrRollout flag vr user reason =
