@@ -1,8 +1,9 @@
+{-# LANGUAGE OverloadedLists #-}
 module LaunchDarkly.Server.Details where
 
 import           Data.Aeson.Types       (Value(..), ToJSON, toJSON)
-import qualified Data.HashMap.Strict as HM
 import           Data.Text              (Text)
+import           GHC.Exts               (fromList)
 import           GHC.Natural            (Natural)
 import           GHC.Generics           (Generic)
 
@@ -68,17 +69,17 @@ data EvaluationReason
 instance ToJSON EvaluationReason where
     toJSON x = case x of
         EvaluationReasonOff                                        ->
-            Object $ HM.fromList [("kind", "OFF")]
+            Object $ fromList [("kind", "OFF")]
         EvaluationReasonTargetMatch                                ->
-            Object $ HM.fromList [("kind", "TARGET_MATCH")]
+            Object $ fromList [("kind", "TARGET_MATCH")]
         (EvaluationReasonRuleMatch ruleIndex ruleId inExperiment)  ->
-            Object $ HM.fromList [("kind", "RULE_MATCH"), ("ruleIndex", toJSON ruleIndex), ("ruleId", toJSON ruleId), ("inExperiment", toJSON inExperiment)]
+            Object $ fromList [("kind", "RULE_MATCH"), ("ruleIndex", toJSON ruleIndex), ("ruleId", toJSON ruleId), ("inExperiment", toJSON inExperiment)]
         (EvaluationReasonPrerequisiteFailed prerequisiteKey)       ->
-            Object $ HM.fromList [("kind", "PREREQUISITE_FAILED"), ("prerequisiteKey", toJSON prerequisiteKey)]
+            Object $ fromList [("kind", "PREREQUISITE_FAILED"), ("prerequisiteKey", toJSON prerequisiteKey)]
         EvaluationReasonFallthrough inExperiment                   ->
-            Object $ HM.fromList [("kind", "FALLTHROUGH"), ("inExperiment", toJSON inExperiment)]
+            Object $ fromList [("kind", "FALLTHROUGH"), ("inExperiment", toJSON inExperiment)]
         (EvaluationReasonError errorKind)                          ->
-            Object $ HM.fromList [("kind", "ERROR"), ("errorKind", toJSON errorKind)]
+            Object $ fromList [("kind", "ERROR"), ("errorKind", toJSON errorKind)]
 
 -- | Defines the possible values of the errorKind property of EvaluationReason.
 data EvalErrorKind
