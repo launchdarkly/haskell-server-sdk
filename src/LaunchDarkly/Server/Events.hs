@@ -1,6 +1,6 @@
 module LaunchDarkly.Server.Events where
 
-import           Data.Aeson                          (ToJSON, Value(..), toJSON, object)
+import           Data.Aeson                          (ToJSON, Value(..), toJSON, object, (.=))
 import           Data.Text                           (Text)
 import           GHC.Exts                            (fromList)
 import           GHC.Natural                         (Natural)
@@ -90,7 +90,7 @@ processSummary config state = tryTakeMVar (getField @"startDate" state) >>= \cas
     (Just startDate) -> do
         endDate  <- unixMilliseconds
         features <- convertFeatures <$> swapMVar (getField @"summary" state) mempty
-        makeBaseEvent SummaryEvent {..} >>= queueEvent config state . EventTypeSummary
+        queueEvent config state $ EventTypeSummary $ SummaryEvent {..}
 
 class EventKind a where
     eventKind :: a -> Text
@@ -121,7 +121,17 @@ data CounterContext = CounterContext
     , variation :: !(Maybe Natural)
     , value     :: !Value
     , unknown   :: !Bool
-    } deriving (Generic, Show, ToJSON)
+    } deriving (Generic, Show)
+
+instance ToJSON CounterContext where
+    toJSON context = object $
+        [ "count" .= getField @"count" context
+        , "value" .= getField @"value" context
+        ] <> filter ((/=) Null . snd)
+        [ "version" .= getField @"version" context
+        , "variation" .= getField @"variation" context
+        , "unknown" .= if (getField @"unknown" context) then Just True else Nothing
+        ]
 
 data IdentifyEvent = IdentifyEvent
     { key  :: !Text
@@ -251,7 +261,7 @@ instance (EventKind sub, ToJSON sub) => ToJSON (BaseEvent sub) where
 data EventType =
       EventTypeIdentify !(BaseEvent IdentifyEvent)
     | EventTypeFeature  !(BaseEvent FeatureEvent)
-    | EventTypeSummary  !(BaseEvent SummaryEvent)
+    | EventTypeSummary  !(SummaryEvent)
     | EventTypeCustom   !(BaseEvent CustomEvent)
     | EventTypeIndex    !(BaseEvent IndexEvent)
     | EventTypeDebug    !(BaseEvent DebugEvent)
@@ -261,8 +271,8 @@ instance ToJSON EventType where
     toJSON event = case event of
         EventTypeIdentify x -> toJSON x
         EventTypeFeature  x -> toJSON x
-        EventTypeSummary  x -> toJSON x
-        EventTypeCustom   x -> toJSON x
+        EventTypeSummary  x -> Object $ HM.insert "kind" (String "summary") (fromObject $ toJSON x)
+        EventTypeCustom   x -> toJSON $ x
         EventTypeIndex    x -> toJSON x
         EventTypeDebug    x -> toJSON x
         EventTypeAlias    x -> toJSON x

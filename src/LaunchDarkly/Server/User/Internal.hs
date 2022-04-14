@@ -108,7 +108,9 @@ keysToSet :: KeyMap v -> Set Text
 keysToSet = S.fromList . objectKeys
 
 setPrivateAttrs :: Set Text -> KeyMap Value -> Value
-setPrivateAttrs private redacted = Object $ insertKey "privateAttrs" (Array $ V.fromList $ map String $ S.toList private) redacted
+setPrivateAttrs private redacted
+  | S.null private = Object $ redacted
+  | otherwise = Object $ insertKey "privateAttrs" (toJSON private) redacted
 
 redact :: Set Text -> KeyMap Value -> KeyMap Value
 redact private = filterKeys (\k -> S.notMember (keyToText k) private)
