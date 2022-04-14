@@ -2,6 +2,7 @@ module LaunchDarkly.Server.Events where
 
 import           Data.Aeson                          (ToJSON, Value(..), toJSON, object)
 import           Data.Text                           (Text)
+import           GHC.Exts                            (fromList)
 import           GHC.Natural                         (Natural)
 import           GHC.Generics                        (Generic)
 import           Data.Generics.Product               (HasField', getField, field, setField)
@@ -16,6 +17,7 @@ import           Data.Cache.LRU                      (LRU, newLRU)
 import           Control.Monad                       (when)
 import qualified Data.Cache.LRU as                   LRU
 
+import           LaunchDarkly.AesonCompat            (KeyMap, keyMapUnion)
 import           LaunchDarkly.Server.Config.Internal (ConfigI, shouldSendEvents)
 import           LaunchDarkly.Server.User.Internal   (UserI, userSerializeRedacted)
 import           LaunchDarkly.Server.Details         (EvaluationReason(..))
@@ -234,11 +236,11 @@ data BaseEvent event = BaseEvent
     , event        :: event
     } deriving (Generic, Show)
 
-fromObject :: Value -> HashMap Text Value
+fromObject :: Value -> KeyMap Value
 fromObject x = case x of (Object o) -> o; _ -> error "expected object"
 
 instance (EventKind sub, ToJSON sub) => ToJSON (BaseEvent sub) where
-    toJSON event = Object $ HM.union (fromObject $ toJSON $ getField @"event" event) $ HM.fromList
+    toJSON event = Object $ keyMapUnion (fromObject $ toJSON $ getField @"event" event) $ fromList
         [ ("creationDate", toJSON $ getField @"creationDate" event)
         , ("kind",         String $ eventKind $ getField @"event" event)
         ]
