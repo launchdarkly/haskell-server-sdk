@@ -65,7 +65,7 @@ All notable changes to the LaunchDarkly Haskell Server-side SDK will be document
 ### Added:
 - Added support for utilizing external features stores. See `LaunchDarkly.Server.Store` for details on implementing a store. You can configure usage of a specific store with `configSetStoreBackend`.
 - Added support for Redis as an external feature store. See the `launchdarkly-server-sdk-redis` package for details.
-- Added support for LaunchDarkly daemon mode configurable with `configSetUseLdd`.
+- Added support for LaunchDarkly daemon mode configurable with `configSetUseLdd`. To learn more, read [Using daemon mode](https://docs.launchdarkly.com/home/relay-proxy/using#using-daemon-mode).
 ### Fixed:
 - Incorrect ToJSON instances for flag rules and operators.
 - Updated bucketing logic to fallback to last variation instead of producing an error.
