@@ -14,7 +14,7 @@ import           Data.HashMap.Strict                 (HashMap)
 import qualified Data.Set as                         S
 import           Data.Set                            (Set)
 import           Data.Text                           (Text)
-import qualified Data.Vector as                      V
+import           Data.Vector                         ()
 import           GHC.Generics                        (Generic)
 
 import           LaunchDarkly.AesonCompat            (KeyMap, adjustKey, keyToText, deleteKey, filterKeys, insertKey, objectKeys)

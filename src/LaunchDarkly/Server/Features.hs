@@ -66,7 +66,7 @@ data RolloutKind = RolloutKindExperiment | RolloutKindRollout
 
 instance ToJSON RolloutKind where
     toJSON x = String $ case x of
-        RolloutKindExperiment -> "experiment" 
+        RolloutKindExperiment -> "experiment"
         RolloutKindRollout    -> "rollout"
 
 instance FromJSON RolloutKind where
@@ -95,6 +95,22 @@ data VariationOrRollout = VariationOrRollout
     , rollout   :: !(Maybe Rollout)
     } deriving (Generic, FromJSON, ToJSON, Show, Eq)
 
+data ClientSideAvailability = ClientSideAvailability
+    { usingEnvironmentId     :: !Bool
+    , usingMobileKey         :: !Bool
+    , explicit               :: !Bool
+    } deriving (Generic, Show, Eq)
+
+instance FromJSON ClientSideAvailability where
+    parseJSON = withObject "ClientSideAvailability" $ \obj -> ClientSideAvailability
+        <$> obj .: "usingEnvironmentId"
+        <*> obj .: "usingMobileKey"
+        <*> pure True
+
+instance ToJSON ClientSideAvailability where
+    toJSON (ClientSideAvailability env mob _) =
+        object [ "usingEnvironmentId" .= env, "usingMobileKey" .= mob ]
+
 data Flag = Flag
     { key                    :: !Text
     , version                :: !Natural
@@ -110,7 +126,49 @@ data Flag = Flag
     , offVariation           :: !(Maybe Natural)
     , variations             :: ![Value]
     , debugEventsUntilDate   :: !(Maybe Natural)
-    } deriving (Generic, ToJSON, FromJSON, Show, Eq)
+    , clientSideAvailability :: !ClientSideAvailability
+    } deriving (Generic, Show, Eq)
+
+instance ToJSON Flag where
+    toJSON flag = object $
+        [ "key" .= getField @"key" flag
+        , "version" .= getField @"version" flag
+        , "on" .= getField @"on" flag
+        , "trackEvents" .= getField @"trackEvents" flag
+        , "trackEventsFallthrough" .= getField @"trackEventsFallthrough" flag
+        , "deleted" .= getField @"deleted" flag
+        , "prerequisites" .= getField @"prerequisites" flag
+        , "salt" .= getField @"salt" flag
+        , "targets" .= getField @"targets" flag
+        , "rules" .= getField @"rules" flag
+        , "fallthrough" .= getField @"fallthrough" flag
+        , "offVariation" .= getField @"offVariation" flag
+        , "variations" .= getField @"variations" flag
+        , "debugEventsUntilDate" .= getField @"debugEventsUntilDate" flag
+        , "clientSide" .= (getField @"usingEnvironmentId" $ getField @"clientSideAvailability" flag)
+        ] <> case getField @"explicit" $ getField @"clientSideAvailability" flag of
+               True -> [ "clientSideAvailability" .= getField @"clientSideAvailability" flag ]
+               False -> [ ]
+
+instance FromJSON Flag where
+    parseJSON = withObject "Flag" $ \obj -> do
+        key <- obj .: "key"
+        version <- obj .: "version"
+        on <- obj .: "on"
+        trackEvents <- obj .: "trackEvents"
+        trackEventsFallthrough <- obj .: "trackEventsFallthrough"
+        deleted <- obj .: "deleted"
+        prerequisites <- obj .: "prerequisites"
+        salt <- obj .: "salt"
+        targets <- obj .: "targets"
+        rules <- obj .: "rules"
+        fallthrough <- obj .: "fallthrough"
+        offVariation <- obj .:? "offVariation"
+        variations <- obj .: "variations"
+        debugEventsUntilDate <- obj .:? "debugEventsUntilDate"
+        clientSide <- obj .:? "clientSide" .!= False
+        clientSideAvailability <- obj .:? "clientSideAvailability" .!= ClientSideAvailability clientSide True False
+        pure Flag { .. }
 
 data Prerequisite = Prerequisite
     { key       :: !Text

@@ -63,6 +63,7 @@ testFlagReturnsOffVariationIfFlagIsOff = TestCase $ do
         , offVariation           = Just 1
         , variations             = [String "fall", String "off", String "on"]
         , debugEventsUntilDate   = Nothing
+        , clientSideAvailability  = ClientSideAvailability { usingEnvironmentId = True, usingMobileKey = False,  explicit = True }
         }
 
 testFlagReturnsFallthroughIfFlagIsOnAndThereAreNoRules :: Test
@@ -101,6 +102,7 @@ testFlagReturnsFallthroughIfFlagIsOnAndThereAreNoRules = TestCase $ do
         , offVariation           = Just 1
         , variations             = [String "fall", String "off", String "on"]
         , debugEventsUntilDate   = Nothing
+        , clientSideAvailability  = ClientSideAvailability { usingEnvironmentId = True, usingMobileKey = False, explicit = True }
         }
 
 testFlagReturnsErrorIfFallthroughHasTooHighVariation :: Test
@@ -372,6 +374,7 @@ testClauseCanMatchCustomAttribute = TestCase $ do
         , offVariation           = Just 0
         , variations             = [Bool False, Bool True]
         , debugEventsUntilDate   = Nothing
+        , clientSideAvailability  = ClientSideAvailability { usingEnvironmentId = True, usingMobileKey = False, explicit = True }
         }
 
 makeTestClient :: IO Client

@@ -24,6 +24,7 @@ makeTestFlag key version = Flag
     , offVariation           = Nothing
     , variations             = []
     , debugEventsUntilDate   = Nothing
+    , clientSideAvailability  = ClientSideAvailability { usingEnvironmentId = True, usingMobileKey = False, explicit = True }
     }
 
 makeTestSegment :: Text -> Natural -> Segment
