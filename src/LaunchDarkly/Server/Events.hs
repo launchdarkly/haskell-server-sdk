@@ -3,11 +3,11 @@ module LaunchDarkly.Server.Events where
 import           Data.Aeson                          (ToJSON, Value(..), toJSON, object, (.=))
 import           Data.Text                           (Text)
 import           GHC.Exts                            (fromList)
-import           GHC.Natural                         (Natural)
+import           GHC.Natural                         (Natural, intToNatural)
 import           GHC.Generics                        (Generic)
 import           Data.Generics.Product               (HasField', getField, field, setField)
 import qualified Data.Text as                        T
-import           Control.Concurrent.MVar             (MVar, putMVar, swapMVar, newEmptyMVar, newMVar, tryTakeMVar, modifyMVar_, modifyMVar)
+import           Control.Concurrent.MVar             (MVar, putMVar, swapMVar, newEmptyMVar, newMVar, tryTakeMVar, modifyMVar_, modifyMVar, readMVar)
 import qualified Data.HashMap.Strict as              HM
 import           Data.HashMap.Strict                 (HashMap)
 import           Data.Time.Clock.POSIX               (getPOSIXTime)
@@ -50,20 +50,22 @@ data EvalEvent = EvalEvent
     } deriving (Generic, Eq, Show)
 
 data EventState = EventState
-    { events     :: !(MVar [EventType])
-    , flush      :: !(MVar ())
-    , summary    :: !(MVar (HashMap Text (FlagSummaryContext (HashMap Text CounterContext))))
-    , startDate  :: !(MVar Natural)
-    , userKeyLRU :: !(MVar (LRU Text ()))
+    { events              :: !(MVar [EventType])
+    , lastKnownServerTime :: !(MVar Int)
+    , flush               :: !(MVar ())
+    , summary             :: !(MVar (HashMap Text (FlagSummaryContext (HashMap Text CounterContext))))
+    , startDate           :: !(MVar Natural)
+    , userKeyLRU          :: !(MVar (LRU Text ()))
     } deriving (Generic)
 
 makeEventState :: ConfigI -> IO EventState
 makeEventState config = do
-    events     <- newMVar []
-    flush      <- newEmptyMVar
-    summary    <- newMVar mempty
-    startDate  <- newEmptyMVar
-    userKeyLRU <- newMVar $ newLRU $ pure $ fromIntegral $ getField @"userKeyLRUCapacity" config
+    events              <- newMVar []
+    lastKnownServerTime <- newMVar 0
+    flush               <- newEmptyMVar
+    summary             <- newMVar mempty
+    startDate           <- newEmptyMVar
+    userKeyLRU          <- newMVar $ newLRU $ pure $ fromIntegral $ getField @"userKeyLRUCapacity" config
     pure EventState{..}
 
 convertFeatures :: HashMap Text (FlagSummaryContext (HashMap Text CounterContext))
@@ -187,6 +189,9 @@ addUserToEvent :: (HasField' "user" r (Maybe Value), HasField' "userKey" r (Mayb
 addUserToEvent config user event = if getField @"inlineUsersInEvents" config
     then setField @"user" (pure $ userSerializeRedacted config user) event
     else setField @"userKey" (pure $ getField @"key" user) event
+
+forceUserInlineInEvent :: ConfigI -> UserI -> FeatureEvent -> FeatureEvent
+forceUserInlineInEvent config user event = setField @"userKey" Nothing $ setField @"user" (pure $ userSerializeRedacted config user) event
 
 makeFeatureEvent :: ConfigI -> UserI -> Bool -> EvalEvent -> FeatureEvent
 makeFeatureEvent config user includeReason event = addUserToEvent config user $ FeatureEvent
@@ -352,10 +357,12 @@ processEvalEvent now config state user includeReason unknown event = do
     let featureEvent = makeFeatureEvent config user includeReason event
         trackEvents = (getField @"trackEvents" event)
         inlineUsers = (getField @"inlineUsersInEvents" config)
+        debugEventsUntilDate = fromMaybe 0 (getField @"debugEventsUntilDate" event)
+    lastKnownServerTime <- intToNatural <$> (* 1000) <$> readMVar (getField @"lastKnownServerTime" state)
     when trackEvents $
         queueEvent config state $ EventTypeFeature $ BaseEvent now $ featureEvent
-    when (now < fromMaybe 0 (getField @"debugEventsUntilDate" event)) $
-        queueEvent config state $ EventTypeDebug $ BaseEvent now $ DebugEvent featureEvent
+    when (now < debugEventsUntilDate && lastKnownServerTime < debugEventsUntilDate) $
+        queueEvent config state $ EventTypeDebug $ BaseEvent now $ DebugEvent $ forceUserInlineInEvent config user featureEvent
     runSummary now state event unknown
     unless (trackEvents && inlineUsers) $
         maybeIndexUser now config user state
