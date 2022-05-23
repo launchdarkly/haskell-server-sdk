@@ -66,10 +66,12 @@ evaluateInternalClient client key user fallback includeReason = do
 
 getOffValue :: Flag -> EvaluationReason -> EvaluationDetail Value
 getOffValue flag reason = case getField @"offVariation" flag of
-    Just offVariation -> getVariation flag offVariation reason
-    Nothing           -> EvaluationDetail { value = Null, variationIndex = mzero, reason = reason }
+    Just offVariation
+        | offVariation < 0 -> EvaluationDetail { value = Null, variationIndex = mzero, reason = reason }
+        | otherwise -> getVariation flag offVariation reason
+    Nothing -> EvaluationDetail { value = Null, variationIndex = mzero, reason = reason }
 
-getVariation :: Flag -> Natural -> EvaluationReason -> EvaluationDetail Value
+getVariation :: Flag -> Integer -> EvaluationReason -> EvaluationDetail Value
 getVariation flag index reason = let variations = getField @"variations" flag in
     if fromIntegral index >= length variations
         then EvaluationDetail { value = Null, variationIndex = mzero, reason = EvaluationReasonError EvalErrorKindMalformedFlag }
@@ -145,7 +147,7 @@ ruleMatchesUser :: Monad m => LaunchDarklyStoreRead store m => Rule -> UserI -> 
 ruleMatchesUser rule user store =
     allM (\clause -> clauseMatchesUser store clause user) (getField @"clauses" rule)
 
-variationIndexForUser :: VariationOrRollout -> UserI -> Text -> Text -> (Maybe Natural, Bool)
+variationIndexForUser :: VariationOrRollout -> UserI -> Text -> Text -> (Maybe Integer, Bool)
 variationIndexForUser vor user key salt
     | (Just variation) <- getField @"variation" vor = (pure variation, False)
     | (Just rollout) <- getField @"rollout" vor = let

@@ -18,6 +18,8 @@ module LaunchDarkly.Server.Client
     , EvaluationReason(..)
     , EvalErrorKind(..)
     , allFlags
+    , allFlagsState
+    , AllFlagsState
     , close
     , flushEvents
     , identify
@@ -35,11 +37,14 @@ import           Control.Monad.Logger                  (LoggingT, logDebug, logW
 import           Data.IORef                            (newIORef, writeIORef)
 import           Data.HashMap.Strict                   (HashMap)
 import qualified Data.HashMap.Strict as                HM
+import           Data.Maybe                            (fromMaybe)
 import           Data.Text                             (Text)
 import qualified Data.Text as                          T
-import           Data.Aeson                            (Value(..))
+import           Data.Aeson                            (Value(..), toJSON, ToJSON, (.=), object)
 import           Data.Generics.Product                 (getField, setField)
 import           Data.Scientific                       (toRealFloat, fromFloatDigits)
+import           GHC.Generics                          (Generic)
+import           GHC.Natural                           (Natural)
 import           Network.HTTP.Client                   (newManager)
 import           Network.HTTP.Client.TLS               (tlsManagerSettings)
 import           System.Clock                          (TimeSpec(..))
@@ -48,6 +53,7 @@ import           LaunchDarkly.Server.Config.Internal   (Config(..), shouldSendEv
 import           LaunchDarkly.Server.Client.Internal
 import           LaunchDarkly.Server.User.Internal     (User(..), userSerializeRedacted)
 import           LaunchDarkly.Server.Details           (EvaluationDetail(..), EvaluationReason(..), EvalErrorKind(..))
+import           LaunchDarkly.Server.Features          (isClientSideOnlyFlag, isInExperiment)
 import           LaunchDarkly.Server.Events            (IdentifyEvent(..), CustomEvent(..), AliasEvent(..), EventType(..), makeBaseEvent, queueEvent, makeEventState, addUserToEvent, userGetContextKind, unixMilliseconds, maybeIndexUser, noticeUser)
 import           LaunchDarkly.Server.Network.Eventing  (eventThread)
 import           LaunchDarkly.Server.Network.Streaming (streamingThread)
@@ -92,6 +98,89 @@ clientRunLogger client = getField @"logger" $ getField @"config" client
 -- | Return the initialization status of the Client
 getStatus :: Client -> IO Status
 getStatus (Client client) = getStatusI client
+
+-- TODO(mmk) This method exists in multiple places. Should we move this into a util file?
+fromObject :: Value -> HashMap Text Value
+fromObject x = case x of (Object o) -> o; _ -> error "expected object"
+
+-- | AllFlagsState captures the state of all feature flag keys as evaluated for
+-- a specific user. This includes their values, as well as other metadata.
+data AllFlagsState = AllFlagsState
+    { evaluations :: !(HashMap Text Value)
+    , state :: !(HashMap Text FlagState)
+    , valid :: !Bool
+    } deriving (Show, Generic)
+
+instance ToJSON AllFlagsState where
+    toJSON state = Object $
+        HM.insert "$flagsState" (toJSON $ getField @"state" state) $
+        HM.insert "$valid" (toJSON $ getField @"valid" state)
+        (fromObject $ toJSON $ getField @"evaluations" state)
+
+data FlagState = FlagState
+    { version :: !(Maybe Natural)
+    , variation :: !(Maybe Integer)
+    , reason :: !(Maybe EvaluationReason)
+    , trackEvents :: !Bool
+    , trackReason :: !Bool
+    , debugEventsUntilDate :: !(Maybe Natural)
+    } deriving (Show, Generic)
+
+instance ToJSON FlagState where
+    toJSON state = object $
+        filter ((/=) Null . snd)
+        [ "version" .= getField @"version" state
+        , "variation" .= getField @"variation" state
+        , "trackEvents" .= if getField @"trackEvents" state then Just True else Nothing
+        , "trackReason" .= if getField @"trackReason" state then Just True else Nothing
+        , "reason" .= getField @"reason" state
+        , "debugEventsUntilDate" .= getField @"debugEventsUntilDate" state
+        ]
+
+-- | Returns an object that encapsulates the state of all feature flags for a
+-- given user. This includes the flag values, and also metadata that can be
+-- used on the front end.
+--
+-- The most common use case for this method is to bootstrap a set of
+-- client-side feature flags from a back-end service.
+--
+-- The first parameter will limit to only flags that are marked for use with
+-- the client-side SDK (by default, all flags are included).
+--
+-- The second parameter will include evaluation reasons in the state.
+--
+-- The third parameter will omit any metadata that is normally only used for
+-- event generation, such as flag versions and evaluation reasons, unless the
+-- flag has event tracking or debugging turned on
+--
+-- For more information, see the Reference Guide:
+-- https://docs.launchdarkly.com/sdk/features/all-flags#haskell
+allFlagsState :: Client -> User -> Bool -> Bool -> Bool -> IO (AllFlagsState)
+allFlagsState (Client client) (User user) client_side_only with_reasons details_only_for_tracked_flags  = do
+    status <- getAllFlagsC $ getField @"store" client
+    case status of
+        Left _      -> pure AllFlagsState { evaluations = HM.empty, state = HM.empty, valid = False }
+        Right flags -> do
+            filtered <- pure $ (HM.filter (\flag -> (not client_side_only) || isClientSideOnlyFlag flag) flags)
+            details <- mapM (\flag -> (\detail -> (flag, fst detail)) <$> (evaluateDetail flag user $ getField @"store" client)) filtered
+            evaluations <- pure $ HM.map (getField @"value" . snd) details
+            now <- unixMilliseconds
+            state <- pure $ HM.map (\(flag, detail) -> do
+                let reason' = getField @"reason" detail
+                    inExperiment = isInExperiment flag reason'
+                    isDebugging = now < fromMaybe 0 (getField @"debugEventsUntilDate" flag)
+                    trackReason' = inExperiment
+                    trackEvents' = getField @"trackEvents" flag
+                    omitDetails = details_only_for_tracked_flags && (not (trackEvents' || trackReason' || isDebugging))
+                FlagState
+                    { version = if omitDetails then Nothing else Just $ getField @"version" flag
+                    , variation = getField @"variationIndex" detail
+                    , reason = if omitDetails || ((not with_reasons) && (not trackReason')) then Nothing else Just reason'
+                    , trackEvents = trackEvents' || inExperiment
+                    , trackReason = trackReason'
+                    , debugEventsUntilDate = getField @"debugEventsUntilDate" flag
+                    }) details
+            pure $ AllFlagsState { evaluations = evaluations, state = state, valid = True }
 
 -- | Returns a map from feature flag keys to values for a given user. If the
 -- result of the flag's evaluation would result in the default value, `Null`

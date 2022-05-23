@@ -13,7 +13,7 @@ data EvaluationDetail value = EvaluationDetail
     { value          :: !value
       -- ^ The result of the flag evaluation. This will be either one of the
       -- flag's variations or the default value passed by the application.
-    , variationIndex :: !(Maybe Natural)
+    , variationIndex :: !(Maybe Integer)
       -- ^ The index of the returned value within the flag's list of variations,
       -- e.g. 0 for the first variation - or Nothing if the default value was
       -- returned.
@@ -72,14 +72,24 @@ instance ToJSON EvaluationReason where
             Object $ fromList [("kind", "OFF")]
         EvaluationReasonTargetMatch                                ->
             Object $ fromList [("kind", "TARGET_MATCH")]
-        (EvaluationReasonRuleMatch ruleIndex ruleId inExperiment)  ->
-            Object $ fromList [("kind", "RULE_MATCH"), ("ruleIndex", toJSON ruleIndex), ("ruleId", toJSON ruleId), ("inExperiment", toJSON inExperiment)]
+        (EvaluationReasonRuleMatch ruleIndex ruleId True)  ->
+            Object $ fromList [("kind", "RULE_MATCH"), ("ruleIndex", toJSON ruleIndex), ("ruleId", toJSON ruleId), ("inExperiment", toJSON True)]
+        (EvaluationReasonRuleMatch ruleIndex ruleId False)  ->
+            Object $ fromList [("kind", "RULE_MATCH"), ("ruleIndex", toJSON ruleIndex), ("ruleId", toJSON ruleId)]
         (EvaluationReasonPrerequisiteFailed prerequisiteKey)       ->
             Object $ fromList [("kind", "PREREQUISITE_FAILED"), ("prerequisiteKey", toJSON prerequisiteKey)]
-        EvaluationReasonFallthrough inExperiment                   ->
-            Object $ fromList [("kind", "FALLTHROUGH"), ("inExperiment", toJSON inExperiment)]
+        EvaluationReasonFallthrough True                   ->
+            Object $ fromList [("kind", "FALLTHROUGH"), ("inExperiment", toJSON True)]
+        EvaluationReasonFallthrough False                   ->
+            Object $ fromList [("kind", "FALLTHROUGH")]
         (EvaluationReasonError errorKind)                          ->
             Object $ fromList [("kind", "ERROR"), ("errorKind", toJSON errorKind)]
+
+isInExperiment :: EvaluationReason -> Bool
+isInExperiment reason = case reason of
+    EvaluationReasonRuleMatch _ _ inExperiment -> inExperiment
+    EvaluationReasonFallthrough inExperiment -> inExperiment
+    _ -> False
 
 -- | Defines the possible values of the errorKind property of EvaluationReason.
 data EvalErrorKind

@@ -37,7 +37,7 @@ userGetContextKind user = if (getField @"anonymous" user)
 
 data EvalEvent = EvalEvent
     { key                  :: !Text
-    , variation            :: !(Maybe Natural)
+    , variation            :: !(Maybe Integer)
     , value                :: !Value
     , defaultValue         :: !(Maybe Value)
     , version              :: !(Maybe Natural)
@@ -118,7 +118,7 @@ instance ToJSON a => ToJSON (FlagSummaryContext a) where
 data CounterContext = CounterContext
     { count     :: !Natural
     , version   :: !(Maybe Natural)
-    , variation :: !(Maybe Natural)
+    , variation :: !(Maybe Integer)
     , value     :: !Value
     , unknown   :: !Bool
     } deriving (Generic, Show)
@@ -153,7 +153,7 @@ data FeatureEvent = FeatureEvent
     , value        :: !Value
     , defaultValue :: !(Maybe Value)
     , version      :: !(Maybe Natural)
-    , variation    :: !(Maybe Natural)
+    , variation    :: !(Maybe Integer)
     , reason       :: !(Maybe EvaluationReason)
     , contextKind  :: !ContextKind
     } deriving (Generic, Show)
@@ -292,7 +292,7 @@ newUnknownFlagEvent key defaultValue reason = EvalEvent
     , debugEventsUntilDate = Nothing
     }
 
-newSuccessfulEvalEvent :: Flag -> Maybe Natural -> Value -> Maybe Value -> EvaluationReason -> Maybe Text -> EvalEvent
+newSuccessfulEvalEvent :: Flag -> Maybe Integer -> Value -> Maybe Value -> EvaluationReason -> Maybe Text -> EvalEvent
 newSuccessfulEvalEvent flag variation value defaultValue reason prereqOf = EvalEvent
     { key                  = getField @"key" flag
     , variation            = variation

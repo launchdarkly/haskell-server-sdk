@@ -54,6 +54,8 @@ module LaunchDarkly.Server
     , EvaluationReason(..)
     , EvalErrorKind(..)
     , allFlags
+    , allFlagsState
+    , AllFlagsState
     , close
     , flushEvents
     , identify
