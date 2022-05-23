@@ -202,6 +202,7 @@ matchAny op value = any (op value)
 clauseMatchesUserNoSegments :: Clause -> UserI -> Bool
 clauseMatchesUserNoSegments clause user = case valueOf user $ getField @"attribute" clause of
     Nothing        -> False
+    Just (Null)    -> False
     Just (Array a) -> maybeNegate clause $ V.any (\x -> matchAny f x v) a
     Just x         -> maybeNegate clause $ matchAny f x v
     where
