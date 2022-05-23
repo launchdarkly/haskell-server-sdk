@@ -1,8 +1,3 @@
-evaluation/parameterized/evaluation failures (bool)
-evaluation/parameterized/evaluation failures (int)
-evaluation/parameterized/evaluation failures (double)
-evaluation/parameterized/evaluation failures (string)
-evaluation/parameterized/evaluation failures (any)
 evaluation/all flags state/error in flag
 evaluation/all flags state/client not ready
 events/feature events

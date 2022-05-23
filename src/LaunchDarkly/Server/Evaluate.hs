@@ -66,16 +66,16 @@ evaluateInternalClient client key user fallback includeReason = do
 
 getOffValue :: Flag -> EvaluationReason -> EvaluationDetail Value
 getOffValue flag reason = case getField @"offVariation" flag of
-    Just offVariation
-        | offVariation < 0 -> EvaluationDetail { value = Null, variationIndex = mzero, reason = reason }
-        | otherwise -> getVariation flag offVariation reason
+    Just offVariation -> getVariation flag offVariation reason
     Nothing -> EvaluationDetail { value = Null, variationIndex = mzero, reason = reason }
 
 getVariation :: Flag -> Integer -> EvaluationReason -> EvaluationDetail Value
-getVariation flag index reason = let variations = getField @"variations" flag in
-    if fromIntegral index >= length variations
-        then EvaluationDetail { value = Null, variationIndex = mzero, reason = EvaluationReasonError EvalErrorKindMalformedFlag }
-        else EvaluationDetail { value = genericIndex variations index, variationIndex = pure index, reason = reason }
+getVariation flag index reason
+    | idx < 0 = EvaluationDetail { value = Null, variationIndex = mzero, reason = EvaluationReasonError EvalErrorKindMalformedFlag }
+    | idx >= length variations = EvaluationDetail { value = Null, variationIndex = mzero, reason = EvaluationReasonError EvalErrorKindMalformedFlag }
+    | otherwise = EvaluationDetail { value = genericIndex variations index, variationIndex = pure index, reason = reason }
+  where idx = fromIntegral index
+        variations = getField @"variations" flag
 
 evaluateDetail :: (Monad m, LaunchDarklyStoreRead store m) => Flag -> UserI -> store
     -> m (EvaluationDetail Value, [EvalEvent])
