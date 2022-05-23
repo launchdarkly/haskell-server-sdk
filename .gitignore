@@ -1,2 +1,3 @@
+contract-tests/contract-tests.cabal
 launchdarkly-server-sdk.cabal
-.stack-work/*
+**/.stack-work/*
