@@ -1,0 +1,4 @@
+resolver: ghc-9.0.2 
+
+packages:
+- .

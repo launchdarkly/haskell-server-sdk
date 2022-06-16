@@ -23,6 +23,7 @@ module LaunchDarkly.Server
     , configSetStoreBackend
     , configSetStoreTTL
     , configSetUseLdd
+    , configSetDataSourceFactory
     , User
     , makeUser
     , userSetKey

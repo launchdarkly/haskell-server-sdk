@@ -6,8 +6,6 @@ All notable changes to the LaunchDarkly Haskell Server-side SDK will be document
 ### Added:
 - The SDK now supports the ability to control the proportion of traffic allocation to an experiment. This works in conjunction with a new platform feature now available to early access customers.
 
-
-
 ## [2.1.1] - 2021-03-05
 ### Changed:
 - Updated dependency ranges. Thanks @dbaynard !

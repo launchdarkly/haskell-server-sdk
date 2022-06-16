@@ -1,4 +1,1 @@
-resolver: lts-14.1
-
-packages:
-- .
+stack-14.1.yaml

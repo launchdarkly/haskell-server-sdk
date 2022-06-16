@@ -6,6 +6,7 @@ module LaunchDarkly.Server.Network.Common
     , getServerTime
     , tryHTTP
     , addToAL
+    , handleUnauthorized 
     ) where
 
 import Data.ByteString                     (append)
@@ -20,12 +21,13 @@ import Data.Time.Clock.POSIX               (utcTimeToPOSIXSeconds)
 import Data.Function                       ((&))
 import Data.Maybe                          (fromMaybe)
 import Control.Monad                       (when)
-import Control.Monad.Catch                 (Exception, MonadCatch, MonadMask, MonadThrow, try, bracket, throwM)
+import Control.Monad.Catch                 (Exception, MonadCatch, MonadMask, MonadThrow, try, bracket, throwM, handle)
 import Control.Monad.Logger                (MonadLogger, logError)
 import Control.Monad.IO.Class              (MonadIO, liftIO)
 
-import LaunchDarkly.Server.Client.Internal (ClientI, Status(Unauthorized), clientVersion, setStatus)
-import LaunchDarkly.Server.Config.Internal (ConfigI)
+import LaunchDarkly.Server.Client.Internal     (ClientI, Status(Unauthorized), clientVersion, setStatus)
+import LaunchDarkly.Server.Config.Internal     (ConfigI)
+import LaunchDarkly.Server.DataSource.Internal (DataSourceUpdates(..))
 
 tryHTTP :: MonadCatch m => m a -> m (Either HttpException a)
 tryHTTP = try
@@ -45,6 +47,11 @@ withResponseGeneric :: (MonadIO m, MonadMask m) => Request -> Manager -> (Respon
 withResponseGeneric req man f = bracket (liftIO $ responseOpen req man) (liftIO . responseClose) f
 
 data UnauthorizedE = UnauthorizedE deriving (Show, Exception)
+
+handleUnauthorized :: (MonadIO m, MonadLogger m, MonadCatch m) => DataSourceUpdates -> m () -> m ()
+handleUnauthorized dataSourceUpdates = handle $ \UnauthorizedE -> do
+    $(logError) "SDK key is unauthorized"
+    liftIO $ dataSourceUpdatesSetStatus dataSourceUpdates Unauthorized
 
 tryAuthorized :: (MonadIO m, MonadLogger m, MonadCatch m) => ClientI -> m a -> m ()
 tryAuthorized client operation = try operation >>= \case

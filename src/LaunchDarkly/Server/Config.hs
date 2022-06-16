@@ -23,6 +23,7 @@ module LaunchDarkly.Server.Config
     , configSetStoreBackend
     , configSetStoreTTL
     , configSetUseLdd
+    , configSetDataSourceFactory
     ) where
 
 import Control.Monad.Logger                (LoggingT, runStdoutLoggingT)
@@ -35,10 +36,12 @@ import Network.HTTP.Client                 (Manager)
 
 import LaunchDarkly.Server.Config.Internal (Config(..), mapConfig, ConfigI(..))
 import LaunchDarkly.Server.Store           (StoreInterface)
+import LaunchDarkly.Server.DataSource.Internal (DataSourceFactory)
 
 -- | Create a default configuration from a given SDK key.
 makeConfig :: Text -> Config
-makeConfig key = Config $ ConfigI
+makeConfig key = 
+    Config $ ConfigI
     { key                   = key
     , baseURI               = "https://app.launchdarkly.com"
     , streamURI             = "https://stream.launchdarkly.com"
@@ -58,6 +61,7 @@ makeConfig key = Config $ ConfigI
     , offline               = False
     , requestTimeoutSeconds = 30
     , useLdd                = False
+    , dataSourceFactory     = Nothing 
     , manager               = Nothing
     }
 
@@ -156,6 +160,11 @@ configSetRequestTimeoutSeconds = mapConfig . setField @"requestTimeoutSeconds"
 -- https://docs.launchdarkly.com/home/relay-proxy
 configSetUseLdd :: Bool -> Config -> Config
 configSetUseLdd = mapConfig . setField @"useLdd"
+
+-- | Sets a data source to use instead of the default network based data source 
+-- see "LaunchDarkly.Server.Integrations.FileData"
+configSetDataSourceFactory :: Maybe DataSourceFactory -> Config -> Config
+configSetDataSourceFactory = mapConfig . setField @"dataSourceFactory"
 
 -- | Sets the 'Manager' to use with the client. If not set explicitly a new
 -- 'Manager' will be created when creating the client.

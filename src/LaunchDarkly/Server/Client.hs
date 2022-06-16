@@ -34,40 +34,78 @@ import           Control.Concurrent.MVar               (putMVar, takeMVar, newEm
 import           Control.Monad                         (void, forM_, unless)
 import           Control.Monad.IO.Class                (liftIO)
 import           Control.Monad.Logger                  (LoggingT, logDebug, logWarn)
-import           Data.IORef                            (newIORef, writeIORef)
+import           Control.Monad.Fix                     (mfix)
+import           Data.IORef                            (newIORef, writeIORef, readIORef)
 import           Data.HashMap.Strict                   (HashMap)
 import qualified Data.HashMap.Strict as                HM
 import           Data.Maybe                            (fromMaybe)
 import           Data.Text                             (Text)
 import qualified Data.Text as                          T
+import           Data.Text.Encoding                    (encodeUtf8)
 import           Data.Aeson                            (Value(..), toJSON, ToJSON, (.=), object)
-import           Data.Generics.Product                 (getField, setField)
+import           Data.Generics.Product                 (getField)
 import           Data.Scientific                       (toRealFloat, fromFloatDigits)
+import qualified Network.HTTP.Client as                Http
 import           GHC.Generics                          (Generic)
 import           GHC.Natural                           (Natural)
 import           Network.HTTP.Client                   (newManager)
 import           Network.HTTP.Client.TLS               (tlsManagerSettings)
 import           System.Clock                          (TimeSpec(..))
 
-import           LaunchDarkly.Server.Config.Internal   (Config(..), shouldSendEvents)
-import           LaunchDarkly.Server.Client.Internal
-import           LaunchDarkly.Server.User.Internal     (User(..), userSerializeRedacted)
-import           LaunchDarkly.Server.Details           (EvaluationDetail(..), EvaluationReason(..), EvalErrorKind(..))
-import           LaunchDarkly.Server.Features          (isClientSideOnlyFlag, isInExperiment)
-import           LaunchDarkly.Server.Events            (IdentifyEvent(..), CustomEvent(..), AliasEvent(..), EventType(..), makeBaseEvent, queueEvent, makeEventState, addUserToEvent, userGetContextKind, unixMilliseconds, maybeIndexUser, noticeUser)
-import           LaunchDarkly.Server.Network.Eventing  (eventThread)
-import           LaunchDarkly.Server.Network.Streaming (streamingThread)
-import           LaunchDarkly.Server.Network.Polling   (pollingThread)
-import           LaunchDarkly.Server.Store.Internal    (makeStoreIO, getAllFlagsC)
-import           LaunchDarkly.Server.Evaluate          (evaluateTyped, evaluateDetail)
+import           LaunchDarkly.Server.Client.Internal          (Client(..), ClientI(..), getStatusI, clientVersion)
+import           LaunchDarkly.Server.Client.Status            (Status(..))
+import           LaunchDarkly.Server.Config.ClientContext     (ClientContext(..))
+import           LaunchDarkly.Server.Config.HttpConfiguration (HttpConfiguration(..))
+import           LaunchDarkly.Server.Config.Internal          (ConfigI, Config(..), shouldSendEvents)
+import           LaunchDarkly.Server.DataSource.Internal      (DataSource(..), DataSourceFactory, DataSourceUpdates(..), defaultDataSourceUpdates, nullDataSourceFactory)
+import           LaunchDarkly.Server.Details                  (EvaluationDetail(..), EvaluationReason(..), EvalErrorKind(..))
+import           LaunchDarkly.Server.Evaluate                 (evaluateTyped, evaluateDetail)
+import           LaunchDarkly.Server.Events                   (IdentifyEvent(..), CustomEvent(..), AliasEvent(..), EventType(..), makeBaseEvent, queueEvent, makeEventState, addUserToEvent, userGetContextKind, maybeIndexUser, unixMilliseconds, noticeUser)
+import           LaunchDarkly.Server.Features                 (isClientSideOnlyFlag, isInExperiment)
+import           LaunchDarkly.Server.Network.Eventing         (eventThread)
+import           LaunchDarkly.Server.Network.Polling          (pollingThread)
+import           LaunchDarkly.Server.Network.Streaming        (streamingThread)
+import           LaunchDarkly.Server.Store.Internal           (makeStoreIO, getAllFlagsC)
+import           LaunchDarkly.Server.User.Internal            (User(..), userSerializeRedacted)
+
+networkDataSourceFactory :: (ClientContext -> DataSourceUpdates -> LoggingT IO ()) -> DataSourceFactory
+networkDataSourceFactory threadF clientContext dataSourceUpdates = do
+    initialized <- liftIO $ newIORef False
+    thread <- liftIO newEmptyMVar
+    sync <- liftIO newEmptyMVar
+
+    let dataSourceIsInitialized = readIORef initialized
+
+        dataSourceStart = do
+            putMVar thread =<< forkFinally (runLogger clientContext $ threadF clientContext dataSourceUpdates) (\_ -> putMVar sync ())
+            writeIORef initialized True
+
+        dataSourceStop = runLogger clientContext $ do
+            $(logDebug) "Killing download thread"
+            liftIO $ killThread =<< takeMVar thread
+            $(logDebug) "Waiting on download thread to die"
+            liftIO $ void $ takeMVar sync
+
+    pure $ DataSource{..}
+
+makeHttpConfiguration :: ConfigI -> IO HttpConfiguration
+makeHttpConfiguration config = do
+    tlsManager <- newManager tlsManagerSettings
+    let defaultRequestHeaders = [ ("Authorization", encodeUtf8 $ getField @"key" config)
+                                , ("User-Agent" , "HaskellServerClient/" <> encodeUtf8 clientVersion)
+                                ]
+        defaultRequestTimeout = Http.responseTimeoutMicro $ fromIntegral $ getField @"requestTimeoutSeconds" config * 1000000
+    pure $ HttpConfiguration{..}
+
+makeClientContext :: ConfigI -> IO ClientContext
+makeClientContext config = do
+    let runLogger = getField @"logger" config
+    httpConfiguration <- makeHttpConfiguration config
+    pure $ ClientContext{..}
 
 -- | Create a new instance of the LaunchDarkly client.
 makeClient :: Config -> IO Client
-makeClient (Config config) = do
-    let runLogger          = getField @"logger" config
-        eventThreadPair    = Nothing
-        downloadThreadPair = Nothing
-
+makeClient (Config config) = mfix $ \(Client client) -> do
     status  <- newIORef Uninitialized
     store   <- makeStoreIO (getField @"storeBackend" config) (TimeSpec (fromIntegral $ getField @"storeTTLSeconds" config) 0)
     manager <- case getField @"manager" config of
@@ -75,22 +113,35 @@ makeClient (Config config) = do
       Nothing      -> newManager tlsManagerSettings
     events  <- makeEventState config
 
-    let client          = ClientI {..}
-        downloadThreadF = if getField @"streaming" config then streamingThread else pollingThread
+    clientContext <- makeClientContext config
 
-    eventThreadPair'    <- if not (shouldSendEvents config) then pure Nothing else do
+    let dataSourceUpdates = defaultDataSourceUpdates status store
+    dataSource <- dataSourceFactory config clientContext dataSourceUpdates
+    eventThreadPair    <- if not (shouldSendEvents config) then pure Nothing else do
         sync   <- newEmptyMVar
-        thread <- forkFinally (runLogger $ eventThread manager client) (\_ -> putMVar sync ())
+        thread <- forkFinally (runLogger clientContext $ eventThread manager client) (\_ -> putMVar sync ())
         pure $ pure (thread, sync)
 
-    downloadThreadPair' <- if (getField @"offline" config) || (getField @"useLdd" config) then pure Nothing else do
-        sync   <- newEmptyMVar
-        thread <- forkFinally (runLogger $ downloadThreadF manager client) (\_ -> putMVar sync ())
-        pure $ pure (thread, sync)
+    dataSourceStart dataSource
 
-    pure $ Client
-        $ setField @"downloadThreadPair" downloadThreadPair'
-        $ setField @"eventThreadPair"    eventThreadPair' client
+    pure $ Client $ ClientI{..}
+
+
+dataSourceFactory :: ConfigI -> DataSourceFactory
+dataSourceFactory config =
+    if getField @"offline" config || getField @"useLdd" config then
+        nullDataSourceFactory
+    else
+        case getField @"dataSourceFactory" config of
+            Just factory ->
+                factory
+            Nothing ->
+                let dataSourceThread =
+                        if getField @"streaming" config then
+                            streamingThread (getField @"streamURI" config)
+                        else
+                            pollingThread (getField @"baseURI" config) (getField @"pollIntervalSeconds" config)
+                in networkDataSourceFactory dataSourceThread
 
 clientRunLogger :: ClientI -> (LoggingT IO () -> IO ())
 clientRunLogger client = getField @"logger" $ getField @"config" client
@@ -254,11 +305,7 @@ close :: Client -> IO ()
 close outer@(Client client) = clientRunLogger client $ do
     $(logDebug) "Setting client status to ShuttingDown"
     liftIO $ writeIORef (getField @"status" client) ShuttingDown
-    forM_ (getField @"downloadThreadPair" client) $ \(thread, sync) -> do
-        $(logDebug) "Killing download thread"
-        liftIO $ killThread thread
-        $(logDebug) "Waiting on download thread to die"
-        liftIO $ void $ takeMVar sync
+    liftIO $ dataSourceStop $ getField @"dataSource" client
     forM_ (getField @"eventThreadPair" client) $ \(_, sync) -> do
         $(logDebug) "Triggering event flush"
         liftIO $ flushEvents outer
