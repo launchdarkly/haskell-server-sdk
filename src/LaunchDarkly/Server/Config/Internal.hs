@@ -13,7 +13,8 @@ import GHC.Natural                        (Natural)
 import GHC.Generics                       (Generic)
 import Network.HTTP.Client                (Manager)
 
-import LaunchDarkly.Server.Store          (StoreInterface)
+import LaunchDarkly.Server.Store               (StoreInterface)
+import LaunchDarkly.Server.DataSource.Internal (DataSourceFactory)
 
 mapConfig :: (ConfigI -> ConfigI) -> Config -> Config
 mapConfig f (Config c) = Config $ f c
@@ -44,5 +45,6 @@ data ConfigI = ConfigI
     , offline               :: !Bool
     , requestTimeoutSeconds :: !Natural
     , useLdd                :: !Bool
+    , dataSourceFactory     :: !(Maybe DataSourceFactory)
     , manager               :: !(Maybe Manager)
     } deriving (Generic)

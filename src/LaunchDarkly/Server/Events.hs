@@ -1,21 +1,23 @@
 module LaunchDarkly.Server.Events where
 
-import           Data.Aeson                          (ToJSON, Value(..), toJSON, object)
+import           Data.Aeson                          (ToJSON, Value(..), toJSON, object, (.=))
 import           Data.Text                           (Text)
-import           GHC.Natural                         (Natural)
+import           GHC.Exts                            (fromList)
+import           GHC.Natural                         (Natural, intToNatural)
 import           GHC.Generics                        (Generic)
 import           Data.Generics.Product               (HasField', getField, field, setField)
 import qualified Data.Text as                        T
-import           Control.Concurrent.MVar             (MVar, putMVar, swapMVar, newEmptyMVar, newMVar, tryTakeMVar, modifyMVar_)
+import           Control.Concurrent.MVar             (MVar, putMVar, swapMVar, newEmptyMVar, newMVar, tryTakeMVar, modifyMVar_, modifyMVar, readMVar)
 import qualified Data.HashMap.Strict as              HM
 import           Data.HashMap.Strict                 (HashMap)
 import           Data.Time.Clock.POSIX               (getPOSIXTime)
 import           Control.Lens                        ((&), (%~))
 import           Data.Maybe                          (fromMaybe)
 import           Data.Cache.LRU                      (LRU, newLRU)
-import           Control.Monad                       (when)
+import           Control.Monad                       (when, unless)
 import qualified Data.Cache.LRU as                   LRU
 
+import           LaunchDarkly.AesonCompat            (KeyMap, keyMapUnion)
 import           LaunchDarkly.Server.Config.Internal (ConfigI, shouldSendEvents)
 import           LaunchDarkly.Server.User.Internal   (UserI, userSerializeRedacted)
 import           LaunchDarkly.Server.Details         (EvaluationReason(..))
@@ -26,7 +28,7 @@ data ContextKind = ContextKindUser | ContextKindAnonymousUser
 
 instance ToJSON ContextKind where
   toJSON contextKind = String $ case contextKind of
-      ContextKindUser          -> "user" 
+      ContextKindUser          -> "user"
       ContextKindAnonymousUser -> "anonymousUser"
 
 userGetContextKind :: UserI -> ContextKind
@@ -35,7 +37,7 @@ userGetContextKind user = if (getField @"anonymous" user)
 
 data EvalEvent = EvalEvent
     { key                  :: !Text
-    , variation            :: !(Maybe Natural)
+    , variation            :: !(Maybe Integer)
     , value                :: !Value
     , defaultValue         :: !(Maybe Value)
     , version              :: !(Maybe Natural)
@@ -48,20 +50,22 @@ data EvalEvent = EvalEvent
     } deriving (Generic, Eq, Show)
 
 data EventState = EventState
-    { events     :: !(MVar [EventType])
-    , flush      :: !(MVar ())
-    , summary    :: !(MVar (HashMap Text (FlagSummaryContext (HashMap Text CounterContext))))
-    , startDate  :: !(MVar Natural)
-    , userKeyLRU :: !(MVar (LRU Text ()))
+    { events              :: !(MVar [EventType])
+    , lastKnownServerTime :: !(MVar Int)
+    , flush               :: !(MVar ())
+    , summary             :: !(MVar (HashMap Text (FlagSummaryContext (HashMap Text CounterContext))))
+    , startDate           :: !(MVar Natural)
+    , userKeyLRU          :: !(MVar (LRU Text ()))
     } deriving (Generic)
 
 makeEventState :: ConfigI -> IO EventState
 makeEventState config = do
-    events     <- newMVar []
-    flush      <- newEmptyMVar
-    summary    <- newMVar mempty
-    startDate  <- newEmptyMVar
-    userKeyLRU <- newMVar $ newLRU $ pure $ fromIntegral $ getField @"userKeyLRUCapacity" config
+    events              <- newMVar []
+    lastKnownServerTime <- newMVar 0
+    flush               <- newEmptyMVar
+    summary             <- newMVar mempty
+    startDate           <- newEmptyMVar
+    userKeyLRU          <- newMVar $ newLRU $ pure $ fromIntegral $ getField @"userKeyLRUCapacity" config
     pure EventState{..}
 
 convertFeatures :: HashMap Text (FlagSummaryContext (HashMap Text CounterContext))
@@ -71,7 +75,10 @@ convertFeatures summary = (flip HM.map) summary $ \context -> context & field @"
 queueEvent :: ConfigI -> EventState -> EventType -> IO ()
 queueEvent config state event = if not (shouldSendEvents config) then pure () else
     modifyMVar_ (getField @"events" state) $ \events ->
-    if length events < fromIntegral (getField @"eventsCapacity" config) then pure (event : events) else pure events
+        pure $ case event of
+          EventTypeSummary _ -> (event : events)
+          _ | length events < fromIntegral (getField @"eventsCapacity" config) -> (event : events)
+          _ -> events
 
 unixMilliseconds :: IO Natural
 unixMilliseconds = (round . (* 1000)) <$> getPOSIXTime
@@ -85,7 +92,7 @@ processSummary config state = tryTakeMVar (getField @"startDate" state) >>= \cas
     (Just startDate) -> do
         endDate  <- unixMilliseconds
         features <- convertFeatures <$> swapMVar (getField @"summary" state) mempty
-        makeBaseEvent SummaryEvent {..} >>= queueEvent config state . EventTypeSummary
+        queueEvent config state $ EventTypeSummary $ SummaryEvent {..}
 
 class EventKind a where
     eventKind :: a -> Text
@@ -113,10 +120,20 @@ instance ToJSON a => ToJSON (FlagSummaryContext a) where
 data CounterContext = CounterContext
     { count     :: !Natural
     , version   :: !(Maybe Natural)
-    , variation :: !(Maybe Natural)
+    , variation :: !(Maybe Integer)
     , value     :: !Value
     , unknown   :: !Bool
-    } deriving (Generic, Show, ToJSON)
+    } deriving (Generic, Show)
+
+instance ToJSON CounterContext where
+    toJSON context = object $
+        [ "count" .= getField @"count" context
+        , "value" .= getField @"value" context
+        ] <> filter ((/=) Null . snd)
+        [ "version" .= getField @"version" context
+        , "variation" .= getField @"variation" context
+        , "unknown" .= if (getField @"unknown" context) then Just True else Nothing
+        ]
 
 data IdentifyEvent = IdentifyEvent
     { key  :: !Text
@@ -138,7 +155,7 @@ data FeatureEvent = FeatureEvent
     , value        :: !Value
     , defaultValue :: !(Maybe Value)
     , version      :: !(Maybe Natural)
-    , variation    :: !(Maybe Natural)
+    , variation    :: !(Maybe Integer)
     , reason       :: !(Maybe EvaluationReason)
     , contextKind  :: !ContextKind
     } deriving (Generic, Show)
@@ -172,6 +189,9 @@ addUserToEvent :: (HasField' "user" r (Maybe Value), HasField' "userKey" r (Mayb
 addUserToEvent config user event = if getField @"inlineUsersInEvents" config
     then setField @"user" (pure $ userSerializeRedacted config user) event
     else setField @"userKey" (pure $ getField @"key" user) event
+
+forceUserInlineInEvent :: ConfigI -> UserI -> FeatureEvent -> FeatureEvent
+forceUserInlineInEvent config user event = setField @"userKey" Nothing $ setField @"user" (pure $ userSerializeRedacted config user) event
 
 makeFeatureEvent :: ConfigI -> UserI -> Bool -> EvalEvent -> FeatureEvent
 makeFeatureEvent config user includeReason event = addUserToEvent config user $ FeatureEvent
@@ -234,11 +254,11 @@ data BaseEvent event = BaseEvent
     , event        :: event
     } deriving (Generic, Show)
 
-fromObject :: Value -> HashMap Text Value
+fromObject :: Value -> KeyMap Value
 fromObject x = case x of (Object o) -> o; _ -> error "expected object"
 
 instance (EventKind sub, ToJSON sub) => ToJSON (BaseEvent sub) where
-    toJSON event = Object $ HM.union (fromObject $ toJSON $ getField @"event" event) $ HM.fromList
+    toJSON event = Object $ keyMapUnion (fromObject $ toJSON $ getField @"event" event) $ fromList
         [ ("creationDate", toJSON $ getField @"creationDate" event)
         , ("kind",         String $ eventKind $ getField @"event" event)
         ]
@@ -246,7 +266,7 @@ instance (EventKind sub, ToJSON sub) => ToJSON (BaseEvent sub) where
 data EventType =
       EventTypeIdentify !(BaseEvent IdentifyEvent)
     | EventTypeFeature  !(BaseEvent FeatureEvent)
-    | EventTypeSummary  !(BaseEvent SummaryEvent)
+    | EventTypeSummary  !(SummaryEvent)
     | EventTypeCustom   !(BaseEvent CustomEvent)
     | EventTypeIndex    !(BaseEvent IndexEvent)
     | EventTypeDebug    !(BaseEvent DebugEvent)
@@ -256,8 +276,8 @@ instance ToJSON EventType where
     toJSON event = case event of
         EventTypeIdentify x -> toJSON x
         EventTypeFeature  x -> toJSON x
-        EventTypeSummary  x -> toJSON x
-        EventTypeCustom   x -> toJSON x
+        EventTypeSummary  x -> Object $ HM.insert "kind" (String "summary") (fromObject $ toJSON x)
+        EventTypeCustom   x -> toJSON $ x
         EventTypeIndex    x -> toJSON x
         EventTypeDebug    x -> toJSON x
         EventTypeAlias    x -> toJSON x
@@ -277,7 +297,7 @@ newUnknownFlagEvent key defaultValue reason = EvalEvent
     , debugEventsUntilDate = Nothing
     }
 
-newSuccessfulEvalEvent :: Flag -> Maybe Natural -> Value -> Maybe Value -> EvaluationReason -> Maybe Text -> EvalEvent
+newSuccessfulEvalEvent :: Flag -> Maybe Integer -> Value -> Maybe Value -> EvaluationReason -> Maybe Text -> EvalEvent
 newSuccessfulEvalEvent flag variation value defaultValue reason prereqOf = EvalEvent
     { key                  = getField @"key" flag
     , variation            = variation
@@ -335,21 +355,31 @@ runSummary now state event unknown = putIfEmptyMVar (getField @"startDate" state
 processEvalEvent :: Natural -> ConfigI -> EventState -> UserI -> Bool -> Bool -> EvalEvent -> IO ()
 processEvalEvent now config state user includeReason unknown event = do
     let featureEvent = makeFeatureEvent config user includeReason event
-    when (getField @"trackEvents" event) $
+        trackEvents = (getField @"trackEvents" event)
+        inlineUsers = (getField @"inlineUsersInEvents" config)
+        debugEventsUntilDate = fromMaybe 0 (getField @"debugEventsUntilDate" event)
+    lastKnownServerTime <- intToNatural <$> (* 1000) <$> readMVar (getField @"lastKnownServerTime" state)
+    when trackEvents $
         queueEvent config state $ EventTypeFeature $ BaseEvent now $ featureEvent
-    when (now < fromMaybe 0 (getField @"debugEventsUntilDate" event)) $
-        queueEvent config state $ EventTypeDebug $ BaseEvent now $ DebugEvent featureEvent
+    when (now < debugEventsUntilDate && lastKnownServerTime < debugEventsUntilDate) $
+        queueEvent config state $ EventTypeDebug $ BaseEvent now $ DebugEvent $ forceUserInlineInEvent config user featureEvent
     runSummary now state event unknown
-    maybeIndexUser now config user state
+    unless (trackEvents && inlineUsers) $
+        maybeIndexUser now config user state
 
 processEvalEvents :: ConfigI -> EventState -> UserI -> Bool -> [EvalEvent] -> Bool -> IO ()
 processEvalEvents config state user includeReason events unknown = unixMilliseconds >>= \now ->
     mapM_ (processEvalEvent now config state user includeReason unknown) events
 
 maybeIndexUser :: Natural -> ConfigI -> UserI -> EventState -> IO ()
-maybeIndexUser now config user state = modifyMVar_ (getField @"userKeyLRU" state) $ \cache ->
-    let key = getField @"key" user in case LRU.lookup key cache of
-        (cache', Just _)  -> pure cache'
-        (cache', Nothing) -> do
-            queueEvent config state (EventTypeIndex $ BaseEvent now $ IndexEvent { user = userSerializeRedacted config user })
-            pure $ LRU.insert key () cache'
+maybeIndexUser now config user state = do
+    noticedUser <- noticeUser state user
+    when noticedUser $
+        queueEvent config state (EventTypeIndex $ BaseEvent now $ IndexEvent { user = userSerializeRedacted config user })
+
+noticeUser :: EventState -> UserI -> IO Bool
+noticeUser state user = modifyMVar (getField @"userKeyLRU" state) $ \cache -> do
+    let key = getField @"key" user
+    case LRU.lookup key cache of
+        (cache', Just _)  -> pure (cache', False)
+        (cache', Nothing) -> pure (LRU.insert key () cache', True)

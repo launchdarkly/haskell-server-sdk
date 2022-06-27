@@ -1,15 +1,24 @@
 version: 2.1
 jobs:
   build-test-linux:
+    parameters:
+        resolver:
+            type: string
+            default: 'lts-14.1'
     docker:
-      - image: fpco/stack-build:lts
+        - image: fpco/stack-build:<<parameters.resolver>>
+    environment:
+      STACK_YAML: stack-<<parameters.resolver>>.yaml
     steps:
       - checkout
+      - run:
+          name: Install dependencies
+          command: pkg-config --exists libpcre || apt-get update && apt-get install -y --no-install-recommends libpcre3-dev
       - restore_cache:
           name: Restore Cached Dependencies
           keys:
-            - haskell-v1-linux-{{ checksum "stack.yaml" }}-{{ checksum "package.yaml" }}
-            - haskell-v1-linux-{{ checksum "stack.yaml" }}
+            - haskell-v1-linux-{{ checksum "stack-<<parameters.resolver>>.yaml" }}-{{ checksum "package.yaml" }}
+            - haskell-v1-linux-{{ checksum "stack-<<parameters.resolver>>.yaml" }}
       - run:
           name: Resolve/Update Dependencies
           command: stack --no-terminal setup
@@ -21,14 +30,70 @@ jobs:
           command: stack --no-terminal test
       - save_cache:
           name: Cache Dependencies
-          key: haskell-v1-linux-{{ checksum "stack.yaml" }}-{{ checksum "package.yaml" }}
+          key: haskell-v1-linux-{{ checksum "stack-<<parameters.resolver>>.yaml" }}-{{ checksum "package.yaml" }}
           paths:
             - "/root/.stack"
             - ".stack-work"
 
+      - run:
+          name: make test output directory
+          command: mkdir /tmp/test-results
+      - run: make build-contract-tests
+      - run:
+          command: make start-contract-test-service
+          background: true
+      - run:
+          name: run contract tests
+          command: TEST_HARNESS_PARAMS="-junit /tmp/test-results/contract-tests-junit.xml" make run-contract-tests
+
+      - store_test_results:
+          path: /tmp/test-results/
+
+  build-test-linux-ghc:
+    parameters:
+        ghc-version:
+            type: string
+            default: '9.0.2'
+    docker:
+      - image: haskell:<<parameters.ghc-version>>
+    environment:
+      STACK_YAML: stack-ghc-<<parameters.ghc-version>>.yaml
+    steps:
+      - checkout
+      - run:
+          name: Install dependencies
+          command: apt-get update && apt-get install -y --no-install-recommends libpcre3-dev
+      - restore_cache:
+          name: Restore Cached Dependencies
+          keys:
+            - haskell-v1-linux-{{ checksum "stack-ghc-<<parameters.ghc-version>>.yaml" }}-{{ checksum "package.yaml" }}
+            - haskell-v1-linux-{{ checksum "stack-ghc-<<parameters.ghc-version>>.yaml" }}
+      - run:
+          name: Resolve/Update Dependencies
+          command: stack --no-terminal setup
+      - run:
+          name: Build
+          command: stack --no-terminal build
+      - run:
+          name: Run tests
+          command: stack --no-terminal test
+      - save_cache:
+          name: Cache Dependencies
+          key: haskell-v1-linux-{{ checksum "stack-ghc-<<parameters.ghc-version>>.yaml" }}-{{ checksum "package.yaml" }}
+          paths:
+            - "/root/.stack"
+            - ".stack-work"
+
+
   build-test-osx:
+    parameters:
+        resolver:
+            type: string
+            default: 'lts-14.1'
     macos:
-      xcode: "11.2.1"
+      xcode: "12.5.1"
+    environment:
+      STACK_YAML: stack-<<parameters.resolver>>.yaml
     steps:
       - checkout
       - run:
@@ -37,8 +102,8 @@ jobs:
       - restore_cache:
           name: Restore Cached Dependencies
           keys:
-            - haskell-v1-osx-{{ checksum "stack.yaml" }}-{{ checksum "package.yaml" }}
-            - haskell-v1-osx-{{ checksum "stack.yaml" }}
+            - haskell-v1-osx-{{ checksum "stack-<<parameters.resolver>>.yaml"}}-{{ checksum "package.yaml" }}
+            - haskell-v1-osx-{{ checksum "stack-<<parameters.resolver>>.yaml"}}
       - run:
           name: Resolve/Update Dependencies
           command: stack --no-terminal setup
@@ -50,7 +115,7 @@ jobs:
           command: stack --no-terminal test
       - save_cache:
           name: Cache Dependencies
-          key: haskell-v1-osx-{{ checksum "stack.yaml" }}-{{ checksum "package.yaml" }}
+          key: haskell-v1-osx-{{ checksum "stack-<<parameters.resolver>>.yaml"}}-{{ checksum "package.yaml" }}
           paths:
             - "/root/.stack"
             - ".stack-work"
@@ -59,5 +124,15 @@ workflows:
   version: 2
   build_and_test_all:
     jobs:
-      - build-test-linux
-      - build-test-osx
+      - build-test-linux:
+          matrix:
+              parameters:
+                resolver: ["lts-14.1", "lts-16.31", "lts-18.27"]
+      - build-test-linux-ghc:
+          matrix:
+              parameters:
+                ghc-version: []
+      - build-test-osx:
+          matrix:
+              parameters:
+                resolver: ["lts-14.1", "lts-16.31", "lts-18.27"]

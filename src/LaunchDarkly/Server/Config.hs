@@ -23,22 +23,25 @@ module LaunchDarkly.Server.Config
     , configSetStoreBackend
     , configSetStoreTTL
     , configSetUseLdd
+    , configSetDataSourceFactory
     ) where
 
 import Control.Monad.Logger                (LoggingT, runStdoutLoggingT)
 import Data.Generics.Product               (setField)
 import Data.Set                            (Set)
-import Data.Text                           (Text)
+import Data.Text                           (Text, dropWhileEnd)
 import Data.Monoid                         (mempty)
 import GHC.Natural                         (Natural)
 import Network.HTTP.Client                 (Manager)
 
 import LaunchDarkly.Server.Config.Internal (Config(..), mapConfig, ConfigI(..))
 import LaunchDarkly.Server.Store           (StoreInterface)
+import LaunchDarkly.Server.DataSource.Internal (DataSourceFactory)
 
 -- | Create a default configuration from a given SDK key.
 makeConfig :: Text -> Config
-makeConfig key = Config $ ConfigI
+makeConfig key = 
+    Config $ ConfigI
     { key                   = key
     , baseURI               = "https://app.launchdarkly.com"
     , streamURI             = "https://stream.launchdarkly.com"
@@ -58,6 +61,7 @@ makeConfig key = Config $ ConfigI
     , offline               = False
     , requestTimeoutSeconds = 30
     , useLdd                = False
+    , dataSourceFactory     = Nothing 
     , manager               = Nothing
     }
 
@@ -68,17 +72,17 @@ configSetKey = mapConfig . setField @"key"
 -- | The base URI of the main LaunchDarkly service. This should not normally be
 -- changed except for testing.
 configSetBaseURI :: Text -> Config -> Config
-configSetBaseURI = mapConfig . setField @"baseURI"
+configSetBaseURI = mapConfig . setField @"baseURI" . dropWhileEnd ((==) '/')
 
 -- | The base URI of the LaunchDarkly streaming service. This should not
 -- normally be changed except for testing.
 configSetStreamURI :: Text -> Config -> Config
-configSetStreamURI = mapConfig . setField @"streamURI"
+configSetStreamURI = mapConfig . setField @"streamURI" . dropWhileEnd ((==) '/')
 
 -- | The base URI of the LaunchDarkly service that accepts analytics events.
 -- This should not normally be changed except for testing.
 configSetEventsURI :: Text -> Config -> Config
-configSetEventsURI = mapConfig . setField @"eventsURI"
+configSetEventsURI = mapConfig . setField @"eventsURI" . dropWhileEnd ((==) '/')
 
 -- | Configures a handle to an external store such as Redis.
 configSetStoreBackend :: Maybe StoreInterface -> Config -> Config
@@ -150,12 +154,17 @@ configSetOffline = mapConfig . setField @"offline"
 configSetRequestTimeoutSeconds :: Natural -> Config -> Config
 configSetRequestTimeoutSeconds = mapConfig . setField @"requestTimeoutSeconds"
 
--- | Sets whether this client should use the LaunchDarkly relay in daemon mode.
--- In this mode, the client does not subscribe to the streaming or polling API,
--- but reads data only from the feature store. See:
--- https://docs.launchdarkly.com/docs/the-relay-proxy
+-- | Sets whether this client should use the LaunchDarkly Relay Proxy in daemon
+-- mode. In this mode, the client does not subscribe to the streaming or polling
+-- API, but reads data only from the feature store. See:
+-- https://docs.launchdarkly.com/home/relay-proxy
 configSetUseLdd :: Bool -> Config -> Config
 configSetUseLdd = mapConfig . setField @"useLdd"
+
+-- | Sets a data source to use instead of the default network based data source 
+-- see "LaunchDarkly.Server.Integrations.FileData"
+configSetDataSourceFactory :: Maybe DataSourceFactory -> Config -> Config
+configSetDataSourceFactory = mapConfig . setField @"dataSourceFactory"
 
 -- | Sets the 'Manager' to use with the client. If not set explicitly a new
 -- 'Manager' will be created when creating the client.

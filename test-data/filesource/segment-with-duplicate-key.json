@@ -1,0 +1,12 @@
+{
+  "segments": {
+    "another": {
+      "key": "another",
+      "included": []
+    },
+  	"seg1": {
+  	  "key": "seg1",
+  	  "included": ["user1a"]
+  	}
+  }
+}

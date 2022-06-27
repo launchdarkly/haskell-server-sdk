@@ -7,16 +7,17 @@ module LaunchDarkly.Server.User.Internal
     ) where
 
 import           Data.Aeson                          (FromJSON, ToJSON, Value(..), (.:), (.:?), withObject, object, parseJSON, toJSON)
-import           Data.Foldable                       (fold, or)
+import           Data.Foldable                       (fold)
 import           Data.Generics.Product               (getField)
 import qualified Data.HashMap.Strict as              HM
 import           Data.HashMap.Strict                 (HashMap)
 import qualified Data.Set as                         S
 import           Data.Set                            (Set)
 import           Data.Text                           (Text)
-import qualified Data.Vector as                      V
+import           Data.Vector                         ()
 import           GHC.Generics                        (Generic)
 
+import           LaunchDarkly.AesonCompat            (KeyMap, adjustKey, keyToText, deleteKey, filterKeys, insertKey, objectKeys)
 import           LaunchDarkly.Server.Config.Internal (ConfigI)
 
 mapUser :: (UserI -> UserI) -> User -> User
@@ -100,26 +101,28 @@ userSerializeRedacted config user = if getField @"allAttributesPrivate" config
     then userSerializeAllPrivate user
     else userSerializeRedactedNotAllPrivate (getField @"privateAttributeNames" config) user
 
-fromObject :: Value -> HashMap Text Value
+fromObject :: Value -> KeyMap Value
 fromObject x = case x of (Object o) -> o; _ -> error "expected object"
 
-keysToSet :: (Ord k) => HashMap k v -> Set k
-keysToSet = S.fromList . HM.keys
+keysToSet :: KeyMap v -> Set Text
+keysToSet = S.fromList . objectKeys
 
-setPrivateAttrs :: Set Text -> HashMap Text Value -> Value
-setPrivateAttrs private redacted = Object $ HM.insert "privateAttrs" (Array $ V.fromList $ map String $ S.toList private) redacted
+setPrivateAttrs :: Set Text -> KeyMap Value -> Value
+setPrivateAttrs private redacted
+  | S.null private = Object $ redacted
+  | otherwise = Object $ insertKey "privateAttrs" (toJSON private) redacted
 
-redact :: Set Text -> HashMap Text Value -> HashMap Text Value
-redact private = HM.filterWithKey (\k _ -> S.notMember k private)
+redact :: Set Text -> KeyMap Value -> KeyMap Value
+redact private = filterKeys (\k -> S.notMember (keyToText k) private)
 
 userSerializeAllPrivate :: UserI -> Value
 userSerializeAllPrivate user = setPrivateAttrs private (redact private raw) where
-    raw     = HM.delete "custom" $ HM.delete "privateAttributeNames" $ fromObject $ toJSON user
-    private = S.delete "anonymous" $ S.delete "key" $ S.union (keysToSet raw) (keysToSet $ getField @"custom" user)
+    raw     = deleteKey "custom" $ deleteKey "privateAttributeNames" $ fromObject $ toJSON user
+    private = S.delete "anonymous" $ S.delete "key" $ S.union (keysToSet raw) (S.fromList $ HM.keys $ getField @"custom" user)
 
 userSerializeRedactedNotAllPrivate :: Set Text -> UserI -> Value
 userSerializeRedactedNotAllPrivate globalPrivate user = setPrivateAttrs private redacted where
-    raw      = HM.delete "privateAttributeNames" $ fromObject $ toJSON user
+    raw      = deleteKey "privateAttributeNames" $ fromObject $ toJSON user
     keys     = S.union (keysToSet raw) (keysToSet $ fromObject $ toJSON $ getField @"custom" user)
     private  = S.intersection keys (S.union globalPrivate $ getField @"privateAttributeNames" user)
-    redacted = HM.adjust (Object . redact private . fromObject) "custom" $ redact private raw
+    redacted = adjustKey (Object . redact private . fromObject) "custom" $ redact private raw

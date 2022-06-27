@@ -55,7 +55,7 @@ evaluateInternalClient client key user fallback includeReason = do
             pure (errorDetail $ EvalErrorExternalStore err, True, pure event)
         Right Nothing     -> do
             let event = newUnknownFlagEvent key fallback (EvaluationReasonError EvalErrorFlagNotFound)
-            pure (errorDetail EvalErrorFlagNotFound, True, pure event)
+            pure (errorDefault EvalErrorFlagNotFound fallback, True, pure event)
         Right (Just flag) -> do
             (reason, events) <- evaluateDetail flag user $ getField @"store" client
             let reason' = setFallback reason fallback
@@ -67,13 +67,15 @@ evaluateInternalClient client key user fallback includeReason = do
 getOffValue :: Flag -> EvaluationReason -> EvaluationDetail Value
 getOffValue flag reason = case getField @"offVariation" flag of
     Just offVariation -> getVariation flag offVariation reason
-    Nothing           -> EvaluationDetail { value = Null, variationIndex = mzero, reason = reason }
+    Nothing -> EvaluationDetail { value = Null, variationIndex = mzero, reason = reason }
 
-getVariation :: Flag -> Natural -> EvaluationReason -> EvaluationDetail Value
-getVariation flag index reason = let variations = getField @"variations" flag in
-    if fromIntegral index >= length variations
-        then EvaluationDetail { value = Null, variationIndex = mzero, reason = EvaluationReasonError EvalErrorKindMalformedFlag }
-        else EvaluationDetail { value = genericIndex variations index, variationIndex = pure index, reason = reason }
+getVariation :: Flag -> Integer -> EvaluationReason -> EvaluationDetail Value
+getVariation flag index reason
+    | idx < 0 = EvaluationDetail { value = Null, variationIndex = mzero, reason = EvaluationReasonError EvalErrorKindMalformedFlag }
+    | idx >= length variations = EvaluationDetail { value = Null, variationIndex = mzero, reason = EvaluationReasonError EvalErrorKindMalformedFlag }
+    | otherwise = EvaluationDetail { value = genericIndex variations index, variationIndex = pure index, reason = reason }
+  where idx = fromIntegral index
+        variations = getField @"variations" flag
 
 evaluateDetail :: (Monad m, LaunchDarklyStoreRead store m) => Flag -> UserI -> store
     -> m (EvaluationDetail Value, [EvalEvent])
@@ -123,8 +125,11 @@ evaluateInternal flag user store = result where
         targetMatch = return . checkTarget <$> getField @"targets" flag
         in fromMaybe fallthrough <$> firstJustM Prelude.id (ruleMatch ++ targetMatch)
 
+errorDefault :: EvalErrorKind -> Value -> EvaluationDetail Value
+errorDefault kind v = EvaluationDetail { value = v, variationIndex = mzero, reason = EvaluationReasonError kind }
+
 errorDetail :: EvalErrorKind -> EvaluationDetail Value
-errorDetail kind = EvaluationDetail { value = Null, variationIndex = mzero, reason = EvaluationReasonError kind }
+errorDetail kind = errorDefault kind Null
 
 getValueForVariationOrRollout :: Flag -> VariationOrRollout -> UserI -> EvaluationReason -> EvaluationDetail Value
 getValueForVariationOrRollout flag vr user reason =
@@ -142,7 +147,7 @@ ruleMatchesUser :: Monad m => LaunchDarklyStoreRead store m => Rule -> UserI -> 
 ruleMatchesUser rule user store =
     allM (\clause -> clauseMatchesUser store clause user) (getField @"clauses" rule)
 
-variationIndexForUser :: VariationOrRollout -> UserI -> Text -> Text -> (Maybe Natural, Bool)
+variationIndexForUser :: VariationOrRollout -> UserI -> Text -> Text -> (Maybe Integer, Bool)
 variationIndexForUser vor user key salt
     | (Just variation) <- getField @"variation" vor = (pure variation, False)
     | (Just rollout) <- getField @"rollout" vor = let
@@ -197,6 +202,7 @@ matchAny op value = any (op value)
 clauseMatchesUserNoSegments :: Clause -> UserI -> Bool
 clauseMatchesUserNoSegments clause user = case valueOf user $ getField @"attribute" clause of
     Nothing        -> False
+    Just (Null)    -> False
     Just (Array a) -> maybeNegate clause $ V.any (\x -> matchAny f x v) a
     Just x         -> maybeNegate clause $ matchAny f x v
     where

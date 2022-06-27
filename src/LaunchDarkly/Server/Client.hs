@@ -18,6 +18,8 @@ module LaunchDarkly.Server.Client
     , EvaluationReason(..)
     , EvalErrorKind(..)
     , allFlags
+    , allFlagsState
+    , AllFlagsState
     , close
     , flushEvents
     , identify
@@ -29,38 +31,81 @@ module LaunchDarkly.Server.Client
 
 import           Control.Concurrent                    (forkFinally, killThread)
 import           Control.Concurrent.MVar               (putMVar, takeMVar, newEmptyMVar)
-import           Control.Monad                         (void, forM_)
+import           Control.Monad                         (void, forM_, unless)
 import           Control.Monad.IO.Class                (liftIO)
-import           Control.Monad.Logger                  (LoggingT, logDebug)
-import           Data.IORef                            (newIORef, writeIORef)
+import           Control.Monad.Logger                  (LoggingT, logDebug, logWarn)
+import           Control.Monad.Fix                     (mfix)
+import           Data.IORef                            (newIORef, writeIORef, readIORef)
 import           Data.HashMap.Strict                   (HashMap)
 import qualified Data.HashMap.Strict as                HM
+import           Data.Maybe                            (fromMaybe)
 import           Data.Text                             (Text)
-import           Data.Aeson                            (Value(..))
-import           Data.Generics.Product                 (getField, setField)
+import qualified Data.Text as                          T
+import           Data.Text.Encoding                    (encodeUtf8)
+import           Data.Aeson                            (Value(..), toJSON, ToJSON, (.=), object)
+import           Data.Generics.Product                 (getField)
 import           Data.Scientific                       (toRealFloat, fromFloatDigits)
+import qualified Network.HTTP.Client as                Http
+import           GHC.Generics                          (Generic)
+import           GHC.Natural                           (Natural)
 import           Network.HTTP.Client                   (newManager)
 import           Network.HTTP.Client.TLS               (tlsManagerSettings)
 import           System.Clock                          (TimeSpec(..))
 
-import           LaunchDarkly.Server.Config.Internal   (Config(..), shouldSendEvents)
-import           LaunchDarkly.Server.Client.Internal
-import           LaunchDarkly.Server.User.Internal     (User(..), userSerializeRedacted)
-import           LaunchDarkly.Server.Details           (EvaluationDetail(..), EvaluationReason(..), EvalErrorKind(..))
-import           LaunchDarkly.Server.Events            (IdentifyEvent(..), CustomEvent(..), AliasEvent(..), EventType(..), makeBaseEvent, queueEvent, makeEventState, addUserToEvent, userGetContextKind)
-import           LaunchDarkly.Server.Network.Eventing  (eventThread)
-import           LaunchDarkly.Server.Network.Streaming (streamingThread)
-import           LaunchDarkly.Server.Network.Polling   (pollingThread)
-import           LaunchDarkly.Server.Store.Internal    (makeStoreIO, getAllFlagsC)
-import           LaunchDarkly.Server.Evaluate          (evaluateTyped, evaluateDetail)
+import           LaunchDarkly.Server.Client.Internal          (Client(..), ClientI(..), getStatusI, clientVersion)
+import           LaunchDarkly.Server.Client.Status            (Status(..))
+import           LaunchDarkly.Server.Config.ClientContext     (ClientContext(..))
+import           LaunchDarkly.Server.Config.HttpConfiguration (HttpConfiguration(..))
+import           LaunchDarkly.Server.Config.Internal          (ConfigI, Config(..), shouldSendEvents)
+import           LaunchDarkly.Server.DataSource.Internal      (DataSource(..), DataSourceFactory, DataSourceUpdates(..), defaultDataSourceUpdates, nullDataSourceFactory)
+import           LaunchDarkly.Server.Details                  (EvaluationDetail(..), EvaluationReason(..), EvalErrorKind(..))
+import           LaunchDarkly.Server.Evaluate                 (evaluateTyped, evaluateDetail)
+import           LaunchDarkly.Server.Events                   (IdentifyEvent(..), CustomEvent(..), AliasEvent(..), EventType(..), makeBaseEvent, queueEvent, makeEventState, addUserToEvent, userGetContextKind, maybeIndexUser, unixMilliseconds, noticeUser)
+import           LaunchDarkly.Server.Features                 (isClientSideOnlyFlag, isInExperiment)
+import           LaunchDarkly.Server.Network.Eventing         (eventThread)
+import           LaunchDarkly.Server.Network.Polling          (pollingThread)
+import           LaunchDarkly.Server.Network.Streaming        (streamingThread)
+import           LaunchDarkly.Server.Store.Internal           (makeStoreIO, getAllFlagsC)
+import           LaunchDarkly.Server.User.Internal            (User(..), userSerializeRedacted)
+
+networkDataSourceFactory :: (ClientContext -> DataSourceUpdates -> LoggingT IO ()) -> DataSourceFactory
+networkDataSourceFactory threadF clientContext dataSourceUpdates = do
+    initialized <- liftIO $ newIORef False
+    thread <- liftIO newEmptyMVar
+    sync <- liftIO newEmptyMVar
+
+    let dataSourceIsInitialized = readIORef initialized
+
+        dataSourceStart = do
+            putMVar thread =<< forkFinally (runLogger clientContext $ threadF clientContext dataSourceUpdates) (\_ -> putMVar sync ())
+            writeIORef initialized True
+
+        dataSourceStop = runLogger clientContext $ do
+            $(logDebug) "Killing download thread"
+            liftIO $ killThread =<< takeMVar thread
+            $(logDebug) "Waiting on download thread to die"
+            liftIO $ void $ takeMVar sync
+
+    pure $ DataSource{..}
+
+makeHttpConfiguration :: ConfigI -> IO HttpConfiguration
+makeHttpConfiguration config = do
+    tlsManager <- newManager tlsManagerSettings
+    let defaultRequestHeaders = [ ("Authorization", encodeUtf8 $ getField @"key" config)
+                                , ("User-Agent" , "HaskellServerClient/" <> encodeUtf8 clientVersion)
+                                ]
+        defaultRequestTimeout = Http.responseTimeoutMicro $ fromIntegral $ getField @"requestTimeoutSeconds" config * 1000000
+    pure $ HttpConfiguration{..}
+
+makeClientContext :: ConfigI -> IO ClientContext
+makeClientContext config = do
+    let runLogger = getField @"logger" config
+    httpConfiguration <- makeHttpConfiguration config
+    pure $ ClientContext{..}
 
 -- | Create a new instance of the LaunchDarkly client.
 makeClient :: Config -> IO Client
-makeClient (Config config) = do
-    let runLogger          = getField @"logger" config
-        eventThreadPair    = Nothing
-        downloadThreadPair = Nothing
-
+makeClient (Config config) = mfix $ \(Client client) -> do
     status  <- newIORef Uninitialized
     store   <- makeStoreIO (getField @"storeBackend" config) (TimeSpec (fromIntegral $ getField @"storeTTLSeconds" config) 0)
     manager <- case getField @"manager" config of
@@ -68,22 +113,35 @@ makeClient (Config config) = do
       Nothing      -> newManager tlsManagerSettings
     events  <- makeEventState config
 
-    let client          = ClientI {..}
-        downloadThreadF = if getField @"streaming" config then streamingThread else pollingThread
+    clientContext <- makeClientContext config
 
-    eventThreadPair'    <- if not (shouldSendEvents config) then pure Nothing else do
+    let dataSourceUpdates = defaultDataSourceUpdates status store
+    dataSource <- dataSourceFactory config clientContext dataSourceUpdates
+    eventThreadPair    <- if not (shouldSendEvents config) then pure Nothing else do
         sync   <- newEmptyMVar
-        thread <- forkFinally (runLogger $ eventThread manager client) (\_ -> putMVar sync ())
+        thread <- forkFinally (runLogger clientContext $ eventThread manager client) (\_ -> putMVar sync ())
         pure $ pure (thread, sync)
 
-    downloadThreadPair' <- if (getField @"offline" config) || (getField @"useLdd" config) then pure Nothing else do
-        sync   <- newEmptyMVar
-        thread <- forkFinally (runLogger $ downloadThreadF manager client) (\_ -> putMVar sync ())
-        pure $ pure (thread, sync)
+    dataSourceStart dataSource
 
-    pure $ Client
-        $ setField @"downloadThreadPair" downloadThreadPair'
-        $ setField @"eventThreadPair"    eventThreadPair' client
+    pure $ Client $ ClientI{..}
+
+
+dataSourceFactory :: ConfigI -> DataSourceFactory
+dataSourceFactory config =
+    if getField @"offline" config || getField @"useLdd" config then
+        nullDataSourceFactory
+    else
+        case getField @"dataSourceFactory" config of
+            Just factory ->
+                factory
+            Nothing ->
+                let dataSourceThread =
+                        if getField @"streaming" config then
+                            streamingThread (getField @"streamURI" config)
+                        else
+                            pollingThread (getField @"baseURI" config) (getField @"pollIntervalSeconds" config)
+                in networkDataSourceFactory dataSourceThread
 
 clientRunLogger :: ClientI -> (LoggingT IO () -> IO ())
 clientRunLogger client = getField @"logger" $ getField @"config" client
@@ -91,6 +149,89 @@ clientRunLogger client = getField @"logger" $ getField @"config" client
 -- | Return the initialization status of the Client
 getStatus :: Client -> IO Status
 getStatus (Client client) = getStatusI client
+
+-- TODO(mmk) This method exists in multiple places. Should we move this into a util file?
+fromObject :: Value -> HashMap Text Value
+fromObject x = case x of (Object o) -> o; _ -> error "expected object"
+
+-- | AllFlagsState captures the state of all feature flag keys as evaluated for
+-- a specific user. This includes their values, as well as other metadata.
+data AllFlagsState = AllFlagsState
+    { evaluations :: !(HashMap Text Value)
+    , state :: !(HashMap Text FlagState)
+    , valid :: !Bool
+    } deriving (Show, Generic)
+
+instance ToJSON AllFlagsState where
+    toJSON state = Object $
+        HM.insert "$flagsState" (toJSON $ getField @"state" state) $
+        HM.insert "$valid" (toJSON $ getField @"valid" state)
+        (fromObject $ toJSON $ getField @"evaluations" state)
+
+data FlagState = FlagState
+    { version :: !(Maybe Natural)
+    , variation :: !(Maybe Integer)
+    , reason :: !(Maybe EvaluationReason)
+    , trackEvents :: !Bool
+    , trackReason :: !Bool
+    , debugEventsUntilDate :: !(Maybe Natural)
+    } deriving (Show, Generic)
+
+instance ToJSON FlagState where
+    toJSON state = object $
+        filter ((/=) Null . snd)
+        [ "version" .= getField @"version" state
+        , "variation" .= getField @"variation" state
+        , "trackEvents" .= if getField @"trackEvents" state then Just True else Nothing
+        , "trackReason" .= if getField @"trackReason" state then Just True else Nothing
+        , "reason" .= getField @"reason" state
+        , "debugEventsUntilDate" .= getField @"debugEventsUntilDate" state
+        ]
+
+-- | Returns an object that encapsulates the state of all feature flags for a
+-- given user. This includes the flag values, and also metadata that can be
+-- used on the front end.
+--
+-- The most common use case for this method is to bootstrap a set of
+-- client-side feature flags from a back-end service.
+--
+-- The first parameter will limit to only flags that are marked for use with
+-- the client-side SDK (by default, all flags are included).
+--
+-- The second parameter will include evaluation reasons in the state.
+--
+-- The third parameter will omit any metadata that is normally only used for
+-- event generation, such as flag versions and evaluation reasons, unless the
+-- flag has event tracking or debugging turned on
+--
+-- For more information, see the Reference Guide:
+-- https://docs.launchdarkly.com/sdk/features/all-flags#haskell
+allFlagsState :: Client -> User -> Bool -> Bool -> Bool -> IO (AllFlagsState)
+allFlagsState (Client client) (User user) client_side_only with_reasons details_only_for_tracked_flags  = do
+    status <- getAllFlagsC $ getField @"store" client
+    case status of
+        Left _      -> pure AllFlagsState { evaluations = HM.empty, state = HM.empty, valid = False }
+        Right flags -> do
+            filtered <- pure $ (HM.filter (\flag -> (not client_side_only) || isClientSideOnlyFlag flag) flags)
+            details <- mapM (\flag -> (\detail -> (flag, fst detail)) <$> (evaluateDetail flag user $ getField @"store" client)) filtered
+            evaluations <- pure $ HM.map (getField @"value" . snd) details
+            now <- unixMilliseconds
+            state <- pure $ HM.map (\(flag, detail) -> do
+                let reason' = getField @"reason" detail
+                    inExperiment = isInExperiment flag reason'
+                    isDebugging = now < fromMaybe 0 (getField @"debugEventsUntilDate" flag)
+                    trackReason' = inExperiment
+                    trackEvents' = getField @"trackEvents" flag
+                    omitDetails = details_only_for_tracked_flags && (not (trackEvents' || trackReason' || isDebugging))
+                FlagState
+                    { version = if omitDetails then Nothing else Just $ getField @"version" flag
+                    , variation = getField @"variationIndex" detail
+                    , reason = if omitDetails || ((not with_reasons) && (not trackReason')) then Nothing else Just reason'
+                    , trackEvents = trackEvents' || inExperiment
+                    , trackReason = trackReason'
+                    , debugEventsUntilDate = getField @"debugEventsUntilDate" flag
+                    }) details
+            pure $ AllFlagsState { evaluations = evaluations, state = state, valid = True }
 
 -- | Returns a map from feature flag keys to values for a given user. If the
 -- result of the flag's evaluation would result in the default value, `Null`
@@ -105,12 +246,15 @@ allFlags (Client client) (User user) = do
             evals <- mapM (\flag -> evaluateDetail flag user $ getField @"store" client) flags
             pure $ HM.map (getField @"value" . fst) evals
 
--- | Identify reports details about a a user.
+-- | Identify reports details about a user.
 identify :: Client -> User -> IO ()
-identify (Client client) (User user) = do
-    let user' = userSerializeRedacted (getField @"config" client) user
-    x <- makeBaseEvent $ IdentifyEvent { key = getField @"key" user, user = user' }
-    queueEvent (getField @"config" client) (getField @"events" client) (EventTypeIdentify x)
+identify (Client client) (User user)
+    | T.null (getField @"key" user) = clientRunLogger client $ $(logWarn) "identify called with empty user key!"
+    | otherwise = do
+        let user' = userSerializeRedacted (getField @"config" client) user
+        x <- makeBaseEvent $ IdentifyEvent { key = getField @"key" user, user = user' }
+        _ <- noticeUser (getField @"events" client) user
+        queueEvent (getField @"config" client) (getField @"events" client) (EventTypeIdentify x)
 
 -- | Track reports that a user has performed an event. Custom data can be
 -- attached to the event, and / or a numeric value.
@@ -128,7 +272,11 @@ track (Client client) (User user) key value metric = do
         , value       = value
         , contextKind = userGetContextKind user
         }
-    queueEvent (getField @"config" client) (getField @"events" client) (EventTypeCustom x)
+    let config = (getField @"config" client)
+        events = (getField @"events" client)
+    queueEvent config events (EventTypeCustom x)
+    unless (getField @"inlineUsersInEvents" config) $
+        unixMilliseconds >>= \now -> maybeIndexUser now config user events
 
 -- | Alias associates two users for analytics purposes with an alias event.
 --
@@ -157,11 +305,7 @@ close :: Client -> IO ()
 close outer@(Client client) = clientRunLogger client $ do
     $(logDebug) "Setting client status to ShuttingDown"
     liftIO $ writeIORef (getField @"status" client) ShuttingDown
-    forM_ (getField @"downloadThreadPair" client) $ \(thread, sync) -> do
-        $(logDebug) "Killing download thread"
-        liftIO $ killThread thread
-        $(logDebug) "Waiting on download thread to die"
-        liftIO $ void $ takeMVar sync
+    liftIO $ dataSourceStop $ getField @"dataSource" client
     forM_ (getField @"eventThreadPair" client) $ \(_, sync) -> do
         $(logDebug) "Triggering event flush"
         liftIO $ flushEvents outer
@@ -196,7 +340,7 @@ jsonConverter = (,) id pure
 boolVariation :: Client -> Text -> User -> Bool -> IO Bool
 boolVariation = dropReason . reorderStuff boolConverter False
 
--- | Evaluate a Boolean typed flag, and return an explation.
+-- | Evaluate a Boolean typed flag, and return an explanation.
 boolVariationDetail :: Client -> Text -> User -> Bool -> IO (EvaluationDetail Bool)
 boolVariationDetail = reorderStuff boolConverter True
 

@@ -1,0 +1,28 @@
+{
+    "flags": {
+        "another": {
+            "key": "another",
+            "on": true,
+            "fallthrough": {
+                "variation": 0
+            },
+            "variations": [
+                "fall",
+                "off",
+                "on"
+            ]
+        },
+        "flag1": {
+            "key": "flag1",
+            "on": false,
+            "fallthrough": {
+                "variation": 0
+            },
+            "variations": [
+                "fall",
+                "off",
+                "on"
+            ]
+        }
+    }
+}

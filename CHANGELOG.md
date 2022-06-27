@@ -6,8 +6,6 @@ All notable changes to the LaunchDarkly Haskell Server-side SDK will be document
 ### Added:
 - The SDK now supports the ability to control the proportion of traffic allocation to an experiment. This works in conjunction with a new platform feature now available to early access customers.
 
-
-
 ## [2.1.1] - 2021-03-05
 ### Changed:
 - Updated dependency ranges. Thanks @dbaynard !
@@ -65,7 +63,7 @@ All notable changes to the LaunchDarkly Haskell Server-side SDK will be document
 ### Added:
 - Added support for utilizing external features stores. See `LaunchDarkly.Server.Store` for details on implementing a store. You can configure usage of a specific store with `configSetStoreBackend`.
 - Added support for Redis as an external feature store. See the `launchdarkly-server-sdk-redis` package for details.
-- Added support for LaunchDarkly daemon mode configurable with `configSetUseLdd`.
+- Added support for LaunchDarkly daemon mode configurable with `configSetUseLdd`. To learn more, read [Using daemon mode](https://docs.launchdarkly.com/home/relay-proxy/using#using-daemon-mode).
 ### Fixed:
 - Incorrect ToJSON instances for flag rules and operators.
 - Updated bucketing logic to fallback to last variation instead of producing an error.

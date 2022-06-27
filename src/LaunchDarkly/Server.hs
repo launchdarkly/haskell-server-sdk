@@ -23,6 +23,7 @@ module LaunchDarkly.Server
     , configSetStoreBackend
     , configSetStoreTTL
     , configSetUseLdd
+    , configSetDataSourceFactory
     , User
     , makeUser
     , userSetKey
@@ -54,6 +55,8 @@ module LaunchDarkly.Server
     , EvaluationReason(..)
     , EvalErrorKind(..)
     , allFlags
+    , allFlagsState
+    , AllFlagsState
     , close
     , flushEvents
     , identify

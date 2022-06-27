@@ -1,8 +1,9 @@
+{-# LANGUAGE OverloadedLists #-}
 module LaunchDarkly.Server.Details where
 
 import           Data.Aeson.Types       (Value(..), ToJSON, toJSON)
-import qualified Data.HashMap.Strict as HM
 import           Data.Text              (Text)
+import           GHC.Exts               (fromList)
 import           GHC.Natural            (Natural)
 import           GHC.Generics           (Generic)
 
@@ -12,7 +13,7 @@ data EvaluationDetail value = EvaluationDetail
     { value          :: !value
       -- ^ The result of the flag evaluation. This will be either one of the
       -- flag's variations or the default value passed by the application.
-    , variationIndex :: !(Maybe Natural)
+    , variationIndex :: !(Maybe Integer)
       -- ^ The index of the returned value within the flag's list of variations,
       -- e.g. 0 for the first variation - or Nothing if the default value was
       -- returned.
@@ -68,17 +69,27 @@ data EvaluationReason
 instance ToJSON EvaluationReason where
     toJSON x = case x of
         EvaluationReasonOff                                        ->
-            Object $ HM.fromList [("kind", "OFF")]
+            Object $ fromList [("kind", "OFF")]
         EvaluationReasonTargetMatch                                ->
-            Object $ HM.fromList [("kind", "TARGET_MATCH")]
-        (EvaluationReasonRuleMatch ruleIndex ruleId inExperiment)  ->
-            Object $ HM.fromList [("kind", "RULE_MATCH"), ("ruleIndex", toJSON ruleIndex), ("ruleId", toJSON ruleId), ("inExperiment", toJSON inExperiment)]
+            Object $ fromList [("kind", "TARGET_MATCH")]
+        (EvaluationReasonRuleMatch ruleIndex ruleId True)  ->
+            Object $ fromList [("kind", "RULE_MATCH"), ("ruleIndex", toJSON ruleIndex), ("ruleId", toJSON ruleId), ("inExperiment", toJSON True)]
+        (EvaluationReasonRuleMatch ruleIndex ruleId False)  ->
+            Object $ fromList [("kind", "RULE_MATCH"), ("ruleIndex", toJSON ruleIndex), ("ruleId", toJSON ruleId)]
         (EvaluationReasonPrerequisiteFailed prerequisiteKey)       ->
-            Object $ HM.fromList [("kind", "PREREQUISITE_FAILED"), ("prerequisiteKey", toJSON prerequisiteKey)]
-        EvaluationReasonFallthrough inExperiment                   ->
-            Object $ HM.fromList [("kind", "FALLTHROUGH"), ("inExperiment", toJSON inExperiment)]
+            Object $ fromList [("kind", "PREREQUISITE_FAILED"), ("prerequisiteKey", toJSON prerequisiteKey)]
+        EvaluationReasonFallthrough True                   ->
+            Object $ fromList [("kind", "FALLTHROUGH"), ("inExperiment", toJSON True)]
+        EvaluationReasonFallthrough False                   ->
+            Object $ fromList [("kind", "FALLTHROUGH")]
         (EvaluationReasonError errorKind)                          ->
-            Object $ HM.fromList [("kind", "ERROR"), ("errorKind", toJSON errorKind)]
+            Object $ fromList [("kind", "ERROR"), ("errorKind", toJSON errorKind)]
+
+isInExperiment :: EvaluationReason -> Bool
+isInExperiment reason = case reason of
+    EvaluationReasonRuleMatch _ _ inExperiment -> inExperiment
+    EvaluationReasonFallthrough inExperiment -> inExperiment
+    _ -> False
 
 -- | Defines the possible values of the errorKind property of EvaluationReason.
 data EvalErrorKind
