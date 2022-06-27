@@ -27,10 +27,10 @@ newtype Client = Client ClientI
 
 -- | The version string for this library.
 clientVersion :: Text
-clientVersion = "2.2.0"
+clientVersion = "3.0.0"
 
 setStatus :: ClientI -> Status -> IO ()
-setStatus client status' = 
+setStatus client status' =
     atomicModifyIORef' (getField @"status" client) (fmap (,()) (transitionStatus status'))
 
 getStatusI :: ClientI -> IO Status

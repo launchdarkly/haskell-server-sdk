@@ -2,6 +2,22 @@
 
 All notable changes to the LaunchDarkly Haskell Server-side SDK will be documented in this file. This project adheres to [Semantic Versioning](http://semver.org).
 
+## [3.0.0] - 2022-06-27
+### Added:
+- Add flag support for the client side availability property, as well
+as the older the ability to decode from the older clientSide format.
+- The new allFlagsState function should be used instead of allFlags if you are passing flag data to the front end for use with the JavaScript SDK. It preserves some flag metadata that the front end requires in order to send analytics events correctly. Versions 2.5.0 and above of the JavaScript SDK are able to use this metadata, but the output of allFlagsState will still work with older versions.
+- It is now possible to inject feature flags into the client from local JSON files, replacing the normal LaunchDarkly connection. This would typically be for testing purposes. See LaunchDarkly.Server.Integrations.FileData.
+- LaunchDarkly.Server.Integrations.TestData is another new way to inject feature flag data programmatically into the SDK for testing—either with fixed values for each flag, or with targets and/or rules that can return different values for different users. Unlike FileData, this mechanism does not use any external resources, only the data that your test code has provided.
+
+### Changed:
+- CI builds now include a cross-platform test suite implemented in https://github.com/launchdarkly/sdk-test-harness. This covers many test cases that are also implemented in unit tests, but may be extended in the future to ensure consistent behavior across SDKs in other areas.
+- The SDK will track the last known server time as specified in the Date header when sending events. This value, along with the current system time, will be used to determine if debug event should still be sent.
+- VariationIndex has been changed from Natural to Integer.
+
+### Fixed:
+- When evaluating against a user attribute, if the attribute is null, it should always be treated as a non-match.
+
 ## [2.2.0] - 2021-06-17
 ### Added:
 - The SDK now supports the ability to control the proportion of traffic allocation to an experiment. This works in conjunction with a new platform feature now available to early access customers.
