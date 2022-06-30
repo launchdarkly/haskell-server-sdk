@@ -3,13 +3,11 @@ module LaunchDarkly.Server.Events where
 import           Data.Aeson                          (ToJSON, Value(..), toJSON, object, (.=))
 import           Data.Text                           (Text)
 import           GHC.Exts                            (fromList)
-import           GHC.Natural                         (Natural, intToNatural)
+import           GHC.Natural                         (Natural, naturalFromInteger)
 import           GHC.Generics                        (Generic)
 import           Data.Generics.Product               (HasField', getField, field, setField)
 import qualified Data.Text as                        T
 import           Control.Concurrent.MVar             (MVar, putMVar, swapMVar, newEmptyMVar, newMVar, tryTakeMVar, modifyMVar_, modifyMVar, readMVar)
-import qualified Data.HashMap.Strict as              HM
-import           Data.HashMap.Strict                 (HashMap)
 import           Data.Time.Clock.POSIX               (getPOSIXTime)
 import           Control.Lens                        ((&), (%~))
 import           Data.Maybe                          (fromMaybe)
@@ -17,7 +15,7 @@ import           Data.Cache.LRU                      (LRU, newLRU)
 import           Control.Monad                       (when, unless)
 import qualified Data.Cache.LRU as                   LRU
 
-import           LaunchDarkly.AesonCompat            (KeyMap, keyMapUnion)
+import           LaunchDarkly.AesonCompat            (KeyMap, keyMapUnion, insertKey, mapValues, objectValues, lookupKey)
 import           LaunchDarkly.Server.Config.Internal (ConfigI, shouldSendEvents)
 import           LaunchDarkly.Server.User.Internal   (UserI, userSerializeRedacted)
 import           LaunchDarkly.Server.Details         (EvaluationReason(..))
@@ -32,7 +30,7 @@ instance ToJSON ContextKind where
       ContextKindAnonymousUser -> "anonymousUser"
 
 userGetContextKind :: UserI -> ContextKind
-userGetContextKind user = if (getField @"anonymous" user)
+userGetContextKind user = if getField @"anonymous" user
     then ContextKindAnonymousUser else ContextKindUser
 
 data EvalEvent = EvalEvent
@@ -51,9 +49,9 @@ data EvalEvent = EvalEvent
 
 data EventState = EventState
     { events              :: !(MVar [EventType])
-    , lastKnownServerTime :: !(MVar Int)
+    , lastKnownServerTime :: !(MVar Integer)
     , flush               :: !(MVar ())
-    , summary             :: !(MVar (HashMap Text (FlagSummaryContext (HashMap Text CounterContext))))
+    , summary             :: !(MVar (KeyMap (FlagSummaryContext (KeyMap CounterContext))))
     , startDate           :: !(MVar Natural)
     , userKeyLRU          :: !(MVar (LRU Text ()))
     } deriving (Generic)
@@ -68,20 +66,20 @@ makeEventState config = do
     userKeyLRU          <- newMVar $ newLRU $ pure $ fromIntegral $ getField @"userKeyLRUCapacity" config
     pure EventState{..}
 
-convertFeatures :: HashMap Text (FlagSummaryContext (HashMap Text CounterContext))
-    -> HashMap Text (FlagSummaryContext [CounterContext])
-convertFeatures summary = (flip HM.map) summary $ \context -> context & field @"counters" %~ HM.elems
+convertFeatures :: KeyMap (FlagSummaryContext (KeyMap CounterContext))
+    -> KeyMap (FlagSummaryContext [CounterContext])
+convertFeatures summary = flip mapValues summary $ \context -> context & field @"counters" %~ objectValues
 
 queueEvent :: ConfigI -> EventState -> EventType -> IO ()
 queueEvent config state event = if not (shouldSendEvents config) then pure () else
     modifyMVar_ (getField @"events" state) $ \events ->
         pure $ case event of
-          EventTypeSummary _ -> (event : events)
-          _ | length events < fromIntegral (getField @"eventsCapacity" config) -> (event : events)
+          EventTypeSummary _ -> event : events
+          _ | length events < fromIntegral (getField @"eventsCapacity" config) -> event : events
           _ -> events
 
 unixMilliseconds :: IO Natural
-unixMilliseconds = (round . (* 1000)) <$> getPOSIXTime
+unixMilliseconds = round . (* 1000) <$> getPOSIXTime
 
 makeBaseEvent :: a -> IO (BaseEvent a)
 makeBaseEvent child = unixMilliseconds >>= \now -> pure $ BaseEvent { creationDate = now, event = child }
@@ -100,7 +98,7 @@ class EventKind a where
 data SummaryEvent = SummaryEvent
     { startDate :: !Natural
     , endDate   :: !Natural
-    , features  :: !(HashMap Text (FlagSummaryContext [CounterContext]))
+    , features  :: !(KeyMap (FlagSummaryContext [CounterContext]))
     } deriving (Generic, Show, ToJSON)
 
 instance EventKind SummaryEvent where
@@ -132,7 +130,7 @@ instance ToJSON CounterContext where
         ] <> filter ((/=) Null . snd)
         [ "version" .= getField @"version" context
         , "variation" .= getField @"variation" context
-        , "unknown" .= if (getField @"unknown" context) then Just True else Nothing
+        , "unknown" .= if getField @"unknown" context then Just True else Nothing
         ]
 
 data IdentifyEvent = IdentifyEvent
@@ -170,7 +168,7 @@ instance ToJSON FeatureEvent where
         , ("version",     toJSON $ getField @"version"      event)
         , ("variation",   toJSON $ getField @"variation"    event)
         , ("reason",      toJSON $ getField @"reason"       event)
-        , ("contextKind", let c = (getField @"contextKind" event) in
+        , ("contextKind", let c = getField @"contextKind" event in
             if c == ContextKindUser then Null else toJSON c)
         ]
 
@@ -223,7 +221,7 @@ instance ToJSON CustomEvent where
         , ("userKey",     toJSON $ getField @"userKey"     ctx)
         , ("metricValue", toJSON $ getField @"metricValue" ctx)
         , ("data",        toJSON $ getField @"value"       ctx)
-        , ("contextKind", let c = (getField @"contextKind" ctx) in
+        , ("contextKind", let c = getField @"contextKind" ctx in
             if c == ContextKindUser then Null else toJSON c)
         ]
 
@@ -266,7 +264,7 @@ instance (EventKind sub, ToJSON sub) => ToJSON (BaseEvent sub) where
 data EventType =
       EventTypeIdentify !(BaseEvent IdentifyEvent)
     | EventTypeFeature  !(BaseEvent FeatureEvent)
-    | EventTypeSummary  !(SummaryEvent)
+    | EventTypeSummary  !SummaryEvent
     | EventTypeCustom   !(BaseEvent CustomEvent)
     | EventTypeIndex    !(BaseEvent IndexEvent)
     | EventTypeDebug    !(BaseEvent DebugEvent)
@@ -276,8 +274,8 @@ instance ToJSON EventType where
     toJSON event = case event of
         EventTypeIdentify x -> toJSON x
         EventTypeFeature  x -> toJSON x
-        EventTypeSummary  x -> Object $ HM.insert "kind" (String "summary") (fromObject $ toJSON x)
-        EventTypeCustom   x -> toJSON $ x
+        EventTypeSummary  x -> Object $ insertKey "kind" (String "summary") (fromObject $ toJSON x)
+        EventTypeCustom   x -> toJSON x
         EventTypeIndex    x -> toJSON x
         EventTypeDebug    x -> toJSON x
         EventTypeAlias    x -> toJSON x
@@ -327,13 +325,13 @@ makeSummaryKey event = T.intercalate "-"
     , fromMaybe "" $ fmap (T.pack . show) $ getField @"variation" event
     ]
 
-summarizeEvent :: (HashMap Text (FlagSummaryContext (HashMap Text CounterContext)))
-    -> EvalEvent -> Bool -> (HashMap Text (FlagSummaryContext (HashMap Text CounterContext)))
+summarizeEvent :: KeyMap (FlagSummaryContext (KeyMap CounterContext))
+    -> EvalEvent -> Bool -> KeyMap (FlagSummaryContext (KeyMap CounterContext))
 summarizeEvent context event unknown = result where
     key = makeSummaryKey event
-    root = case HM.lookup (getField @"key" event) context of
+    root = case lookupKey (getField @"key" event) context of
         (Just x) -> x; Nothing  -> FlagSummaryContext (getField @"defaultValue" event) mempty
-    leaf = case HM.lookup key (getField @"counters" root) of
+    leaf = case lookupKey key (getField @"counters" root) of
         (Just x) -> x & field @"count" %~ (1 +)
         Nothing  -> CounterContext
             { count     = 1
@@ -342,8 +340,8 @@ summarizeEvent context event unknown = result where
             , value     = getField @"value" event
             , unknown   = unknown
             }
-    result = flip (HM.insert $ getField @"key" event) context $
-        root & field @"counters" %~ HM.insert key leaf
+    result = flip (insertKey $ getField @"key" event) context $
+        root & field @"counters" %~ insertKey key leaf
 
 putIfEmptyMVar :: MVar a -> a -> IO ()
 putIfEmptyMVar mvar value = tryTakeMVar mvar >>= \case Just x -> putMVar mvar x; Nothing -> putMVar mvar value;
@@ -355,12 +353,12 @@ runSummary now state event unknown = putIfEmptyMVar (getField @"startDate" state
 processEvalEvent :: Natural -> ConfigI -> EventState -> UserI -> Bool -> Bool -> EvalEvent -> IO ()
 processEvalEvent now config state user includeReason unknown event = do
     let featureEvent = makeFeatureEvent config user includeReason event
-        trackEvents = (getField @"trackEvents" event)
-        inlineUsers = (getField @"inlineUsersInEvents" config)
+        trackEvents = getField @"trackEvents" event
+        inlineUsers = getField @"inlineUsersInEvents" config
         debugEventsUntilDate = fromMaybe 0 (getField @"debugEventsUntilDate" event)
-    lastKnownServerTime <- intToNatural <$> (* 1000) <$> readMVar (getField @"lastKnownServerTime" state)
+    lastKnownServerTime <- naturalFromInteger <$> (* 1000) <$> readMVar (getField @"lastKnownServerTime" state)
     when trackEvents $
-        queueEvent config state $ EventTypeFeature $ BaseEvent now $ featureEvent
+        queueEvent config state $ EventTypeFeature $ BaseEvent now featureEvent
     when (now < debugEventsUntilDate && lastKnownServerTime < debugEventsUntilDate) $
         queueEvent config state $ EventTypeDebug $ BaseEvent now $ DebugEvent $ forceUserInlineInEvent config user featureEvent
     runSummary now state event unknown

@@ -127,7 +127,7 @@ workflows:
       - build-test-linux:
           matrix:
               parameters:
-                resolver: ["lts-14.1", "lts-16.31", "lts-18.27"]
+                resolver: ["lts-14.1", "lts-16.31", "lts-18.27", "lts-19.13"]
       - build-test-linux-ghc:
           matrix:
               parameters:
@@ -135,4 +135,4 @@ workflows:
       - build-test-osx:
           matrix:
               parameters:
-                resolver: ["lts-14.1", "lts-16.31", "lts-18.27"]
+                resolver: ["lts-14.1", "lts-16.31", "lts-18.27", "lts-19.13"]

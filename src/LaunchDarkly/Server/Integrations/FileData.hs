@@ -15,10 +15,9 @@ module LaunchDarkly.Server.Integrations.FileData
 import           LaunchDarkly.Server.DataSource.Internal (DataSourceFactory, DataSource(..), DataSourceUpdates(..))
 import qualified LaunchDarkly.Server.Features as F
 import           LaunchDarkly.Server.Client.Status
+import           LaunchDarkly.AesonCompat (KeyMap, mapWithKey)
 import           Data.Maybe (fromMaybe)
 import qualified Data.ByteString.Lazy as BSL
-import           Data.HashMap.Strict (HashMap)
-import qualified Data.HashMap.Strict as HM
 import           Data.HashSet (HashSet)
 import           Data.Text (Text)
 import           GHC.Generics (Generic)
@@ -95,9 +94,9 @@ fromFileSegment key fileSegment =
              }
 
 data FileBody = FileBody
-    { flags      :: Maybe (HashMap Text FileFlag)
-    , flagValues :: Maybe (HashMap Text Value)
-    , segments   :: Maybe (HashMap Text FileSegment)
+    { flags      :: Maybe (KeyMap FileFlag)
+    , flagValues :: Maybe (KeyMap Value)
+    , segments   :: Maybe (KeyMap FileSegment)
     } deriving (Generic, Show, FromJSON)
 
 instance Semigroup FileBody where
@@ -215,8 +214,8 @@ dataSourceFactory sources _clientContext dataSourceUpdates = do
         dataSourceStart = do
             FileBody mFlags mFlagValues mSegments <- mconcat <$> traverse loadFile sources
             let mSimpleFlags = fmap (fmap expandSimpleFlag) mFlagValues
-                flags' = maybe mempty (HM.mapWithKey fromFileFlag) (mFlags <> mSimpleFlags)
-                segments' = maybe mempty (HM.mapWithKey fromFileSegment) mSegments
+                flags' = maybe mempty (mapWithKey fromFileFlag) (mFlags <> mSimpleFlags)
+                segments' = maybe mempty (mapWithKey fromFileSegment) mSegments
             _ <- dataSourceUpdatesInit dataSourceUpdates flags' segments'
             dataSourceUpdatesSetStatus dataSourceUpdates Initialized
             writeIORef inited True

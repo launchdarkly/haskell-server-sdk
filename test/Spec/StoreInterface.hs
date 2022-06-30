@@ -4,8 +4,6 @@ import           Control.Monad                      (void)
 import           Data.Function                      ((&))
 import           Data.IORef                         (newIORef, readIORef, atomicModifyIORef', writeIORef)
 import           Data.Either                        (isLeft)
-import           Data.HashMap.Strict                (HashMap)
-import qualified Data.HashMap.Strict as             HM
 import           Data.ByteString                    ()
 import           Test.HUnit
 import           System.Clock                       (TimeSpec(..))
@@ -13,6 +11,7 @@ import           System.Clock                       (TimeSpec(..))
 import           Util.Features                      (makeTestFlag)
 
 import           LaunchDarkly.Server.Store.Internal
+import           LaunchDarkly.AesonCompat           (emptyObject, insertKey, singleton)
 
 makeTestStore :: Maybe StoreInterface -> IO (StoreHandle IO)
 makeTestStore backend = makeStoreIO backend $ TimeSpec 10 0
@@ -31,7 +30,7 @@ testFailInit = TestCase $ do
     store <- makeTestStore $ pure $ makeStoreInterface
         { storeInterfaceInitialize = \_ -> pure $ Left "err"
         }
-    initializeStore store HM.empty HM.empty >>= (Left "err" @?=)
+    initializeStore store emptyObject emptyObject >>= (Left "err" @?=)
 
 testFailGet :: Test
 testFailGet = TestCase $ do
@@ -72,11 +71,11 @@ testGetAllInvalidJSON :: Test
 testGetAllInvalidJSON = TestCase $ do
     let flag = makeTestFlag "abc" 52
     store <- makeTestStore $ pure $ makeStoreInterface
-        { storeInterfaceAllFeatures = \_ -> pure $ Right $ HM.empty
-            & HM.insert "abc" (versionedToRaw $ Versioned (pure flag) 52)
-            & HM.insert "xyz" (RawFeature (pure "invalid json") 64)
+        { storeInterfaceAllFeatures = \_ -> pure $ Right $ emptyObject
+            & insertKey "abc" (versionedToRaw $ Versioned (pure flag) 52)
+            & insertKey "xyz" (RawFeature (pure "invalid json") 64)
         }
-    getAllFlagsC store >>= (Right (HM.singleton "abc" flag) @?=)
+    getAllFlagsC store >>= (Right (singleton "abc" flag) @?=)
 
 testInitializedCache :: Test
 testInitializedCache = TestCase $ do
@@ -133,35 +132,35 @@ testUpsertInvalidatesAllFlags = TestCase $ do
             readIORef upsertResult
         , storeInterfaceAllFeatures = \_ -> do
             atomicModifyIORef' allCounter (\c -> (c + 1, ()))
-            pure $ Right HM.empty
+            pure $ Right emptyObject
         }
-    getAllFlagsC store        >>= (Right HM.empty @=?)
+    getAllFlagsC store        >>= (Right emptyObject @=?)
     readIORef allCounter      >>= (1 @=?)
     deleteFlag store "abc" 52 >>= (Right () @=?)
     readIORef upsertCounter   >>= (1 @=?)
-    getAllFlagsC store        >>= (Right HM.empty @=?)
+    getAllFlagsC store        >>= (Right emptyObject @=?)
     readIORef allCounter      >>= (2 @=?)
     writeIORef upsertResult $ Right False
     deleteFlag store "abc" 53 >>= (Right () @=?)
     readIORef upsertCounter   >>= (2 @=?)
-    getAllFlagsC store        >>= (Right HM.empty @=?)
+    getAllFlagsC store        >>= (Right emptyObject @=?)
     readIORef allCounter      >>= (2 @=?)
 
 testAllFlagsCache :: Test
 testAllFlagsCache = TestCase $ do
     counter <- newIORef 0
-    value   <- newIORef HM.empty
+    value   <- newIORef emptyObject
     store   <- makeTestStore $ pure $ makeStoreInterface
         { storeInterfaceAllFeatures = \_ -> do
             atomicModifyIORef' counter (\c -> (c + 1, ()))
-            pure $ Right HM.empty
+            pure $ Right emptyObject
         }
-    getAllFlagsC store         >>= (Right HM.empty @=?)
+    getAllFlagsC store         >>= (Right emptyObject @=?)
     readIORef counter          >>= (1 @=?)
-    getAllFlagsC store         >>= (Right HM.empty @=?)
+    getAllFlagsC store         >>= (Right emptyObject @=?)
     readIORef counter          >>= (1 @=?)
     storeHandleExpireAll store >>= (Right () @=?)
-    getAllFlagsC store         >>= (Right HM.empty @=?)
+    getAllFlagsC store         >>= (Right emptyObject @=?)
     readIORef counter          >>= (2 @=?)
 
 testAllFlagsUpdatesRegularCache :: Test
@@ -169,9 +168,9 @@ testAllFlagsUpdatesRegularCache = TestCase $ do
     let flag = makeTestFlag "abc" 12
     store <- makeTestStore $ pure $ makeStoreInterface
         { storeInterfaceAllFeatures = \_ -> pure $ Right $
-            HM.singleton "abc" (versionedToRaw $ Versioned (pure flag) 12)
+            singleton "abc" (versionedToRaw $ Versioned (pure flag) 12)
         }
-    getAllFlagsC store   >>= (Right (HM.singleton "abc" flag) @=?)
+    getAllFlagsC store   >>= (Right (singleton "abc" flag) @=?)
     getFlagC store "abc" >>= (Right (pure flag) @=?)
 
 allTests :: Test

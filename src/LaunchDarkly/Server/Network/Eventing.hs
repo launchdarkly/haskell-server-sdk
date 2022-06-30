@@ -25,7 +25,7 @@ import           LaunchDarkly.Server.Network.Common  (tryAuthorized, checkAuthor
 import           LaunchDarkly.Server.Events          (processSummary, EventState)
 
 -- A true result indicates a retry does not need to be attempted
-processSend :: (MonadIO m, MonadLogger m, MonadMask m, MonadThrow m) => Manager -> Request -> m (Bool, Int)
+processSend :: (MonadIO m, MonadLogger m, MonadMask m, MonadThrow m) => Manager -> Request -> m (Bool, Integer)
 processSend manager req = (liftIO $ tryHTTP $ httpLbs req manager) >>= \case
     (Left err)       -> $(logError) (T.pack $ show err) >> pure (False, 0)
     (Right response) -> do
@@ -47,7 +47,7 @@ setEventHeaders request = request
     , method         = "POST"
     }
 
-updateLastKnownServerTime :: EventState -> Int -> IO ()
+updateLastKnownServerTime :: EventState -> Integer -> IO ()
 updateLastKnownServerTime state serverTime = modifyMVar_ (getField @"lastKnownServerTime" state) (\lastKnown -> pure $ max serverTime lastKnown)
 
 eventThread :: (MonadIO m, MonadLogger m, MonadMask m) => Manager -> ClientI -> m ()
