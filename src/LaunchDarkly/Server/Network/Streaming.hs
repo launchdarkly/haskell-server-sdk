@@ -11,7 +11,6 @@ import           Data.ByteString                     (ByteString)
 import qualified Data.ByteString as                  B
 import           Control.Applicative                 (many)
 import           Data.Text.Encoding                  (decodeUtf8, encodeUtf8)
-import           Data.HashMap.Strict                 (HashMap)
 import           Network.HTTP.Client                 (Manager, Response(..), Request, HttpException(..), HttpExceptionContent(..), brRead, throwErrorStatusCodes)
 import           Control.Monad.Logger                (MonadLogger, logInfo, logWarn, logError, logDebug)
 import           Control.Monad.IO.Class              (MonadIO, liftIO)
@@ -30,10 +29,12 @@ import           LaunchDarkly.Server.Store.Internal           (StoreResult)
 import           LaunchDarkly.Server.DataSource.Internal      (DataSourceUpdates(..))
 import           LaunchDarkly.Server.Features                 (Flag, Segment)
 import           LaunchDarkly.Server.Network.Common           (handleUnauthorized, checkAuthorization, withResponseGeneric, tryHTTP)
+import           LaunchDarkly.AesonCompat                     (KeyMap)
+
 
 data PutBody = PutBody
-    { flags    :: !(HashMap Text Flag)
-    , segments :: !(HashMap Text Segment)
+    { flags    :: !(KeyMap Flag)
+    , segments :: !(KeyMap Segment)
     } deriving (Generic, Show, FromJSON)
 
 data PathData d = PathData

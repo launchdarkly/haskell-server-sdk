@@ -34,14 +34,13 @@ import           Data.ByteString.Lazy         (toStrict, fromStrict)
 import           Data.Text                    (Text)
 import           Data.Function                ((&))
 import           Data.Maybe                   (isJust)
-import           Data.HashMap.Strict          (HashMap)
-import qualified Data.HashMap.Strict as       HM
 import           Data.Generics.Product        (setField, getField, field)
 import           System.Clock                 (TimeSpec, Clock(Monotonic), getTime)
 import           GHC.Generics                 (Generic)
 import           GHC.Natural                  (Natural)
 
 import           LaunchDarkly.Server.Features (Segment, Flag)
+import           LaunchDarkly.AesonCompat     (KeyMap, mapValues, emptyObject, insertKey, lookupKey, insertKey, deleteKey, mapMaybeValues)
 
 -- Store result not defined in terms of StoreResultM so we dont have to export.
 type StoreResultM m a = m (Either Text a)
@@ -54,20 +53,20 @@ type StoreResult a = IO (Either Text a)
 class LaunchDarklyStoreRead store m where
     getFlagC        :: store -> Text -> StoreResultM m (Maybe Flag)
     getSegmentC     :: store -> Text -> StoreResultM m (Maybe Segment)
-    getAllFlagsC    :: store -> StoreResultM m (HashMap Text Flag)
+    getAllFlagsC    :: store -> StoreResultM m (KeyMap Flag)
     getInitializedC :: store -> StoreResultM m Bool
 
 class LaunchDarklyStoreWrite store m where
-    storeInitializeC :: store -> HashMap Text (Versioned Flag) -> HashMap Text (Versioned Segment) -> StoreResultM m ()
+    storeInitializeC :: store -> KeyMap (Versioned Flag) -> KeyMap (Versioned Segment) -> StoreResultM m ()
     upsertSegmentC   :: store -> Text -> Versioned (Maybe Segment) -> StoreResultM m ()
     upsertFlagC      :: store -> Text -> Versioned (Maybe Flag) -> StoreResultM m ()
 
 data StoreHandle m = StoreHandle
     { storeHandleGetFlag       :: !(Text -> StoreResultM m (Maybe Flag))
     , storeHandleGetSegment    :: !(Text -> StoreResultM m (Maybe Segment))
-    , storeHandleAllFlags      :: !(StoreResultM m (HashMap Text Flag))
+    , storeHandleAllFlags      :: !(StoreResultM m (KeyMap Flag))
     , storeHandleInitialized   :: !(StoreResultM m Bool)
-    , storeHandleInitialize    :: !(HashMap Text (Versioned Flag) -> HashMap Text (Versioned Segment) -> StoreResultM m ())
+    , storeHandleInitialize    :: !(KeyMap (Versioned Flag) -> KeyMap (Versioned Segment) -> StoreResultM m ())
     , storeHandleUpsertSegment :: !(Text -> Versioned (Maybe Segment) -> StoreResultM m ())
     , storeHandleUpsertFlag    :: !(Text -> Versioned (Maybe Flag) -> StoreResultM m ())
     , storeHandleExpireAll     :: !(StoreResultM m ())
@@ -85,9 +84,9 @@ instance Monad m => LaunchDarklyStoreWrite (StoreHandle m) m where
     upsertFlagC      = storeHandleUpsertFlag
 
 initializeStore :: (LaunchDarklyStoreWrite store m, Monad m) => store
-    -> HashMap Text Flag -> HashMap Text Segment -> StoreResultM m ()
+    -> KeyMap Flag -> KeyMap Segment -> StoreResultM m ()
 initializeStore store flags segments = storeInitializeC store (makeVersioned flags) (makeVersioned segments)
-    where makeVersioned = HM.map (\f -> Versioned f (getField @"version" f))
+    where makeVersioned = mapValues (\f -> Versioned f (getField @"version" f))
 
 insertFlag :: (LaunchDarklyStoreWrite store m, Monad m) => store -> Flag -> StoreResultM m ()
 insertFlag store flag = upsertFlagC store (getField @"key" flag) $ Versioned (pure flag) (getField @"version" flag)
@@ -104,9 +103,9 @@ deleteSegment store key version = upsertSegmentC store key $ Versioned Nothing v
 makeStoreIO :: Maybe StoreInterface -> TimeSpec -> IO (StoreHandle IO)
 makeStoreIO backend ttl = do
     state <- newIORef State
-        { allFlags    = Expirable HM.empty True 0
-        , flags       = HM.empty
-        , segments    = HM.empty
+        { allFlags    = Expirable emptyObject True 0
+        , flags       = emptyObject
+        , segments    = emptyObject
         , initialized = Expirable False True 0
         }
     let store = Store state backend ttl
@@ -133,9 +132,9 @@ data Versioned a = Versioned
     } deriving (Generic)
 
 data State = State
-    { allFlags    :: !(Expirable (HashMap Text Flag))
-    , flags       :: !(HashMap Text (Expirable (Versioned (Maybe Flag))))
-    , segments    :: !(HashMap Text (Expirable (Versioned (Maybe Segment))))
+    { allFlags    :: !(Expirable (KeyMap Flag))
+    , flags       :: !(KeyMap (Expirable (Versioned (Maybe Flag))))
+    , segments    :: !(KeyMap (Expirable (Versioned (Maybe Segment))))
     , initialized :: !(Expirable Bool)
     } deriving (Generic)
 
@@ -146,7 +145,7 @@ type FeatureNamespace = Text
 
 -- | The interface implemented by external stores for use by the SDK.
 data StoreInterface = StoreInterface
-    { storeInterfaceAllFeatures   :: !(FeatureNamespace -> StoreResult (HashMap Text RawFeature))
+    { storeInterfaceAllFeatures   :: !(FeatureNamespace -> StoreResult (KeyMap RawFeature))
       -- ^ A map of all features in a given namespace including deleted.
     , storeInterfaceGetFeature    :: !(FeatureNamespace -> FeatureKey -> StoreResult RawFeature)
       -- ^ Return the value of a key in a namespace.
@@ -156,7 +155,7 @@ data StoreInterface = StoreInterface
     , storeInterfaceIsInitialized :: !(StoreResult Bool)
       -- ^ Checks if the external store has been initialized, which may
       -- have been done by another instance of the SDK.
-    , storeInterfaceInitialize    :: !(HashMap FeatureNamespace (HashMap FeatureKey RawFeature) -> StoreResult ())
+    , storeInterfaceInitialize    :: !(KeyMap (KeyMap RawFeature) -> StoreResult ())
       -- ^ A map of namespaces, and items in namespaces. The entire store state
       -- should be replaced with these values.
     }
@@ -181,8 +180,8 @@ expireAllItems :: Store -> IO ()
 expireAllItems store = atomicModifyIORef' (getField @"state" store) $ \state -> (, ()) $ state
     & field @"allFlags"    %~ expire
     & field @"initialized" %~ expire
-    & field @"flags"       %~ HM.map expire
-    & field @"segments"    %~ HM.map expire
+    & field @"flags"       %~ mapValues expire
+    & field @"segments"    %~ mapValues expire
     where expire = setField @"forceExpire" True
 
 isExpired :: Store -> TimeSpec -> Expirable a -> Bool
@@ -192,23 +191,23 @@ isExpired store now item = (isJust $ getField @"backend" store) && ((getField @"
 getMonotonicTime :: IO TimeSpec
 getMonotonicTime = getTime Monotonic
 
-initialize :: Store -> HashMap Text (Versioned Flag) -> HashMap Text (Versioned Segment) -> StoreResult ()
+initialize :: Store -> KeyMap (Versioned Flag) -> KeyMap (Versioned Segment) -> StoreResult ()
 initialize store flags segments = case getField @"backend" store of
     Nothing      -> do
         atomicModifyIORef' (getField @"state" store) $ \state -> (, ()) $ state
-            & setField @"flags"       (HM.map (\f -> Expirable f True 0) $ c flags)
-            & setField @"segments"    (HM.map (\f -> Expirable f True 0) $ c segments)
-            & setField @"allFlags"    (Expirable (HM.map (getField @"value") flags) True 0)
+            & setField @"flags"       (mapValues (\f -> Expirable f True 0) $ c flags)
+            & setField @"segments"    (mapValues (\f -> Expirable f True 0) $ c segments)
+            & setField @"allFlags"    (Expirable (mapValues (getField @"value") flags) True 0)
             & setField @"initialized" (Expirable True False 0)
         pure $ Right ()
     Just backend -> (storeInterfaceInitialize backend) raw >>= \case
         Left err -> pure $ Left err
         Right () -> expireAllItems store >> pure (Right ())
     where
-        raw = HM.empty
-            & HM.insert "flags"    (HM.map versionedToRaw $ c flags)
-            & HM.insert "segments" (HM.map versionedToRaw $ c segments)
-        c x = HM.map (\f -> f & field @"value" %~ Just) x
+        raw = emptyObject
+            & insertKey "flags"    (mapValues versionedToRaw $ c flags)
+            & insertKey "segments" (mapValues versionedToRaw $ c segments)
+        c x = mapValues (\f -> f & field @"value" %~ Just) x
 
 rawToVersioned :: (FromJSON a) => RawFeature -> Maybe (Versioned (Maybe a))
 rawToVersioned raw = case rawFeatureBuffer raw of
@@ -231,17 +230,17 @@ tryGetBackend backend namespace key =
             Just versioned -> pure $ Right versioned
 
 getGeneric :: FromJSON a => Store -> Text -> Text
-    -> Lens' State (HashMap Text (Expirable (Versioned (Maybe a))))
+    -> Lens' State (KeyMap (Expirable (Versioned (Maybe a))))
     -> StoreResult (Maybe a)
 getGeneric store namespace key lens = do
     state <- readIORef $ getField @"state" store
     case getField @"backend" store of
-        Nothing      -> case HM.lookup key (state ^. lens) of
+        Nothing      -> case lookupKey key (state ^. lens) of
             Nothing -> pure $ Right Nothing
             Just x  -> pure $ Right $ getField @"value" $ getField @"value" x
         Just backend -> do
             now <- getMonotonicTime
-            case HM.lookup key (state ^. lens) of
+            case lookupKey key (state ^. lens) of
                 Nothing -> updateFromBackend backend now
                 Just x  -> if isExpired store now x
                     then updateFromBackend backend now
@@ -251,7 +250,7 @@ getGeneric store namespace key lens = do
             Left err -> pure $ Left err
             Right v  -> do
                 atomicModifyIORef' (getField @"state" store) $ \stateRef -> (, ()) $ stateRef & lens %~
-                    (HM.insert key (Expirable v False now))
+                    (insertKey key (Expirable v False now))
                 pure $ Right $ getField @"value" v
 
 getFlag :: Store -> Text -> StoreResult (Maybe Flag)
@@ -261,7 +260,7 @@ getSegment :: Store -> Text -> StoreResult (Maybe Segment)
 getSegment store key = getGeneric store "segments" key (field @"segments")
 
 upsertGeneric :: (ToJSON a) => Store -> Text -> Text -> Versioned (Maybe a)
-    -> Lens' State (HashMap Text (Expirable (Versioned (Maybe a))))
+    -> Lens' State (KeyMap (Expirable (Versioned (Maybe a))))
     -> (Bool -> State -> State)
     -> StoreResult ()
 upsertGeneric store namespace key versioned lens action = do
@@ -276,16 +275,16 @@ upsertGeneric store namespace key versioned lens action = do
                 Right updated -> if not updated then pure (Right ()) else do
                     now <- getMonotonicTime
                     void $ atomicModifyIORef' (getField @"state" store) $ \stateRef -> (, ()) $ stateRef
-                        & lens %~ (HM.insert key (Expirable versioned False now))
+                        & lens %~ (insertKey key (Expirable versioned False now))
                         & action True
                     pure $ Right ()
     where
-        upsertMemory state = case HM.lookup key (state ^. lens) of
+        upsertMemory state = case lookupKey key (state ^. lens) of
             Nothing       -> updateMemory state
             Just existing -> if (getField @"version" $ getField @"value" existing) < getField @"version" versioned
                 then updateMemory state else state
         updateMemory state = state
-            & lens %~ (HM.insert key (Expirable versioned False 0))
+            & lens %~ (insertKey key (Expirable versioned False 0))
             & action False
 
 upsertFlag :: Store -> Text -> Versioned (Maybe Flag) -> StoreResult ()
@@ -294,23 +293,23 @@ upsertFlag store key versioned = upsertGeneric store "flags" key versioned (fiel
         then state & field @"allFlags" %~ (setField @"forceExpire" True)
         else state & (field @"allFlags" . field @"value") %~ updateAllFlags
     updateAllFlags allFlags = case getField @"value" versioned of
-        Nothing   -> HM.delete key allFlags
-        Just flag -> HM.insert key flag allFlags
+        Nothing   -> deleteKey key allFlags
+        Just flag -> insertKey key flag allFlags
 
 upsertSegment :: Store -> Text -> Versioned (Maybe Segment) -> StoreResult ()
 upsertSegment store key versioned = upsertGeneric store "segments" key versioned (field @"segments") postAction where
     postAction _ state = state
 
-filterAndCacheFlags :: Store -> TimeSpec -> HashMap Text RawFeature -> IO (HashMap Text Flag)
+filterAndCacheFlags :: Store -> TimeSpec -> KeyMap RawFeature -> IO (KeyMap Flag)
 filterAndCacheFlags store now raw = do
-    let decoded  = HM.mapMaybe rawToVersioned raw
-        allFlags = HM.mapMaybe (getField @"value") decoded
+    let decoded  = mapMaybeValues rawToVersioned raw
+        allFlags = mapMaybeValues (getField @"value") decoded
     atomicModifyIORef' (getField @"state" store) $ \state -> (, ()) $
         setField @"allFlags" (Expirable allFlags False now) $
-            setField @"flags" (HM.map (\x -> Expirable x False now) decoded) state
+            setField @"flags" (mapValues (\x -> Expirable x False now) decoded) state
     pure allFlags
 
-getAllFlags :: Store -> StoreResult (HashMap Text Flag)
+getAllFlags :: Store -> StoreResult (KeyMap Flag)
 getAllFlags store = do
     state <- readIORef $ getField @"state" store
     let memoryFlags = pure $ Right $ getField @"value" $ getField @"allFlags" state

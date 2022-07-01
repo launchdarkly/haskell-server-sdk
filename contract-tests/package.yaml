@@ -8,10 +8,10 @@ maintainer:          "dev@launchdarkly.com"
 copyright:           "2019 Catamorphic, Co"
 
 dependencies:
-- aeson >=1.4.4.0 && <1.6
-- base >= 4.7 && < 5
+- aeson >=1.4.4.0 && <1.6 || >= 2.0.1.0 && <2.1
+- base >= 4.12 && < 5
 - containers >=0.6.0.1 && <0.7
-- generic-lens >=1.1.0.0 && <2.2
+- generic-lens >=1.1.0.0 && <2.3
 - http-types >=0.12.3 && <0.13
 - launchdarkly-server-sdk
 - mtl >=2.2.2 && <2.3

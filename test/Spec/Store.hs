@@ -2,8 +2,6 @@ module Spec.Store (allTests, testWithStore) where
 
 import           Test.HUnit
 import           Data.Text                          (Text)
-import           Data.HashMap.Strict                (HashMap)
-import qualified Data.HashMap.Strict as             HM
 import           Control.Monad                      (void)
 import           GHC.Natural                        (Natural)
 import           GHC.Int                            (Int64)
@@ -11,6 +9,7 @@ import           System.Clock                       (TimeSpec(..))
 
 import           Util.Features                      (makeTestFlag, makeTestSegment)
 
+import           LaunchDarkly.AesonCompat           (emptyObject, singleton)
 import           LaunchDarkly.Server.Features       (Flag(..), VariationOrRollout(..))
 import           LaunchDarkly.Server.Store.Internal
 import           LaunchDarkly.Server.Store.Redis
@@ -18,9 +17,9 @@ import           LaunchDarkly.Server.Store.Redis
 testInitializationEmpty ::  IO (StoreHandle IO) -> Test
 testInitializationEmpty makeStore = TestCase $ do
     store <- makeStore
-    getInitializedC store                         >>= (pure False @=?)
-    storeHandleInitialize store HM.empty HM.empty >>= (pure () @=?)
-    getInitializedC store                         >>= (pure True @=?)
+    getInitializedC store                                >>= (pure False @=?)
+    storeHandleInitialize store emptyObject emptyObject  >>= (pure () @=?)
+    getInitializedC store                                >>= (pure True @=?)
 
 testInitializationWithFeatures :: IO (StoreHandle IO) -> Test
 testInitializationWithFeatures makeStore = TestCase $ do
@@ -34,9 +33,9 @@ testInitializationWithFeatures makeStore = TestCase $ do
     where
         segmentA  = makeTestSegment "a" 50
         flagA     = makeTestFlag "a" 52
-        flagsR    = HM.singleton "a" flagA
-        flagsV    = HM.singleton "a" (Versioned flagA 52)
-        segmentsV = HM.singleton "a" (Versioned segmentA 50)
+        flagsR    = singleton "a" flagA
+        flagsV    = singleton "a" (Versioned flagA 52)
+        segmentsV = singleton "a" (Versioned segmentA 50)
 
 testGetAndUpsertAndGetAndGetAllFlags :: IO (StoreHandle IO) -> Test
 testGetAndUpsertAndGetAndGetAllFlags makeStore = TestCase $ do
@@ -44,7 +43,7 @@ testGetAndUpsertAndGetAndGetAllFlags makeStore = TestCase $ do
     getFlagC store "a"                               >>= (pure Nothing @=?)
     upsertFlagC store "a" (Versioned (pure flag) 52) >>= (pure () @=?)
     getFlagC store "a"                               >>= (pure (pure flag) @=?)
-    getAllFlagsC store                               >>= (pure (HM.singleton "a" flag) @=?)
+    getAllFlagsC store                               >>= (pure (singleton "a" flag) @=?)
     where
         flag = makeTestFlag "a" 52
 
@@ -63,10 +62,10 @@ testUpsertRespectsVersion makeStore = TestCase $ do
     upsertFlagC store "a" (Versioned (pure $ makeTestFlag "a" 1) 1) >>= (pure () @=?)
     upsertFlagC store "a" (Versioned (pure $ makeTestFlag "a" 2) 2) >>= (pure () @=?)
     getFlagC store "a"                                              >>= (pure (pure $ makeTestFlag "a" 2) @=?)
-    getAllFlagsC store                                              >>= (pure (HM.singleton "a" $ makeTestFlag "a" 2) @=?)
+    getAllFlagsC store                                              >>= (pure (singleton "a" $ makeTestFlag "a" 2) @=?)
     upsertFlagC store "a" (Versioned (pure $ makeTestFlag "a" 1) 1) >>= (pure () @=?)
     getFlagC store "a"                                              >>= (pure (pure $ makeTestFlag "a" 2) @=?)
-    getAllFlagsC store                                              >>= (pure (HM.singleton "a" $ makeTestFlag "a" 2) @=?)
+    getAllFlagsC store                                              >>= (pure (singleton "a" $ makeTestFlag "a" 2) @=?)
     upsertFlagC store "a" (Versioned Nothing 3)                     >>= (pure () @=?)
     getFlagC store "a"                                              >>= (pure Nothing @=?)
     getAllFlagsC store                                              >>= (pure mempty @=?)

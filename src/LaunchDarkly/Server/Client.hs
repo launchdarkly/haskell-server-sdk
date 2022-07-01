@@ -36,8 +36,6 @@ import           Control.Monad.IO.Class                (liftIO)
 import           Control.Monad.Logger                  (LoggingT, logDebug, logWarn)
 import           Control.Monad.Fix                     (mfix)
 import           Data.IORef                            (newIORef, writeIORef, readIORef)
-import           Data.HashMap.Strict                   (HashMap)
-import qualified Data.HashMap.Strict as                HM
 import           Data.Maybe                            (fromMaybe)
 import           Data.Text                             (Text)
 import qualified Data.Text as                          T
@@ -67,6 +65,8 @@ import           LaunchDarkly.Server.Network.Polling          (pollingThread)
 import           LaunchDarkly.Server.Network.Streaming        (streamingThread)
 import           LaunchDarkly.Server.Store.Internal           (makeStoreIO, getAllFlagsC)
 import           LaunchDarkly.Server.User.Internal            (User(..), userSerializeRedacted)
+import           LaunchDarkly.AesonCompat                     (KeyMap, insertKey, emptyObject, mapValues, filterObject)
+  
 
 networkDataSourceFactory :: (ClientContext -> DataSourceUpdates -> LoggingT IO ()) -> DataSourceFactory
 networkDataSourceFactory threadF clientContext dataSourceUpdates = do
@@ -151,21 +151,21 @@ getStatus :: Client -> IO Status
 getStatus (Client client) = getStatusI client
 
 -- TODO(mmk) This method exists in multiple places. Should we move this into a util file?
-fromObject :: Value -> HashMap Text Value
+fromObject :: Value -> KeyMap Value
 fromObject x = case x of (Object o) -> o; _ -> error "expected object"
 
 -- | AllFlagsState captures the state of all feature flag keys as evaluated for
 -- a specific user. This includes their values, as well as other metadata.
 data AllFlagsState = AllFlagsState
-    { evaluations :: !(HashMap Text Value)
-    , state :: !(HashMap Text FlagState)
+    { evaluations :: !(KeyMap Value)
+    , state :: !(KeyMap FlagState)
     , valid :: !Bool
     } deriving (Show, Generic)
 
 instance ToJSON AllFlagsState where
     toJSON state = Object $
-        HM.insert "$flagsState" (toJSON $ getField @"state" state) $
-        HM.insert "$valid" (toJSON $ getField @"valid" state)
+        insertKey "$flagsState" (toJSON $ getField @"state" state) $
+        insertKey "$valid" (toJSON $ getField @"valid" state)
         (fromObject $ toJSON $ getField @"evaluations" state)
 
 data FlagState = FlagState
@@ -210,13 +210,13 @@ allFlagsState :: Client -> User -> Bool -> Bool -> Bool -> IO (AllFlagsState)
 allFlagsState (Client client) (User user) client_side_only with_reasons details_only_for_tracked_flags  = do
     status <- getAllFlagsC $ getField @"store" client
     case status of
-        Left _      -> pure AllFlagsState { evaluations = HM.empty, state = HM.empty, valid = False }
+        Left _      -> pure AllFlagsState { evaluations = emptyObject, state = emptyObject, valid = False }
         Right flags -> do
-            filtered <- pure $ (HM.filter (\flag -> (not client_side_only) || isClientSideOnlyFlag flag) flags)
+            filtered <- pure $ (filterObject (\flag -> (not client_side_only) || isClientSideOnlyFlag flag) flags)
             details <- mapM (\flag -> (\detail -> (flag, fst detail)) <$> (evaluateDetail flag user $ getField @"store" client)) filtered
-            evaluations <- pure $ HM.map (getField @"value" . snd) details
+            evaluations <- pure $ mapValues (getField @"value" . snd) details
             now <- unixMilliseconds
-            state <- pure $ HM.map (\(flag, detail) -> do
+            state <- pure $ mapValues (\(flag, detail) -> do
                 let reason' = getField @"reason" detail
                     inExperiment = isInExperiment flag reason'
                     isDebugging = now < fromMaybe 0 (getField @"debugEventsUntilDate" flag)
@@ -237,14 +237,14 @@ allFlagsState (Client client) (User user) client_side_only with_reasons details_
 -- result of the flag's evaluation would result in the default value, `Null`
 -- will be returned. This method does not send analytics events back to
 -- LaunchDarkly.
-allFlags :: Client -> User -> IO (HashMap Text Value)
+allFlags :: Client -> User -> IO (KeyMap Value)
 allFlags (Client client) (User user) = do
     status <- getAllFlagsC $ getField @"store" client
     case status of
-        Left _      -> pure HM.empty
+        Left _      -> pure emptyObject
         Right flags -> do
             evals <- mapM (\flag -> evaluateDetail flag user $ getField @"store" client) flags
-            pure $ HM.map (getField @"value" . fst) evals
+            pure $ mapValues (getField @"value" . fst) evals
 
 -- | Identify reports details about a user.
 identify :: Client -> User -> IO ()

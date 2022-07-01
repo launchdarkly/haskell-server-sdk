@@ -68,8 +68,6 @@ module LaunchDarkly.Server.Integrations.TestData
 import           Control.Concurrent.MVar                               (MVar, modifyMVar_, newMVar, newEmptyMVar, readMVar, putMVar)
 import           Control.Monad                                         (void)
 import           Data.Foldable                                         (traverse_)
-import           Data.HashMap.Strict                                   (HashMap)
-import qualified Data.HashMap.Strict                                   as HM
 import           Data.IntMap.Strict                                    (IntMap)
 import qualified Data.IntMap.Strict                                    as IntMap
 import           Data.Map.Strict                                       (Map)
@@ -81,6 +79,8 @@ import           Data.Generics.Product                                 (getField
 import           LaunchDarkly.Server.DataSource.Internal
 import qualified LaunchDarkly.Server.Features                          as Features
 import           LaunchDarkly.Server.Integrations.TestData.FlagBuilder
+import           LaunchDarkly.AesonCompat                              (KeyMap, insertKey, insertKey, lookupKey)
+
 
 dataSourceFactory :: TestData -> DataSourceFactory
 dataSourceFactory (TestData ref) _clientContext dataSourceUpdates = do
@@ -105,7 +105,7 @@ type TestDataListener = Features.Flag -> IO ()
 
 data TestData' = TestData'
     { flagBuilders             :: Map Text FlagBuilder
-    , currentFlags             :: HashMap Text Features.Flag
+    , currentFlags             :: KeyMap Features.Flag
     , nextDataSourceListenerId :: Int
     , dataSourceListeners      :: IntMap TestDataListener
     }
@@ -170,11 +170,11 @@ update :: TestData
 update (TestData ref) fb =
     modifyMVar_ ref $ \td -> do
         let key = fbKey fb
-            mOldFlag = HM.lookup key (currentFlags td)
+            mOldFlag = lookupKey key (currentFlags td)
             oldFlagVersion = maybe 0 (getField @"version") mOldFlag
             newFlag = buildFlag (oldFlagVersion + 1) fb
             td' = td{ flagBuilders = Map.insert key fb (flagBuilders td)
-                    , currentFlags = HM.insert key newFlag (currentFlags td)
+                    , currentFlags = insertKey key newFlag (currentFlags td)
                     }
         notifyListeners td newFlag
         pure td'

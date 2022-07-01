@@ -1,7 +1,6 @@
 module LaunchDarkly.Server.Network.Polling (pollingThread) where
 
 import           GHC.Generics                            (Generic)
-import           Data.HashMap.Strict                     (HashMap)
 import           Data.Text                               (Text)
 import qualified Data.Text as                            T
 import           Network.HTTP.Client                     (Manager, Request(..), Response(..), httpLbs)
@@ -16,6 +15,8 @@ import           Network.HTTP.Types.Status               (ok200)
 
 import           LaunchDarkly.Server.Network.Common      (checkAuthorization, tryHTTP, handleUnauthorized)
 import           LaunchDarkly.Server.Features            (Flag, Segment)
+import           LaunchDarkly.AesonCompat                (KeyMap)
+
 
 import GHC.Natural (Natural)
 import LaunchDarkly.Server.DataSource.Internal (DataSourceUpdates(..))
@@ -24,8 +25,8 @@ import LaunchDarkly.Server.Client.Internal (Status(..))
 import LaunchDarkly.Server.Config.HttpConfiguration (HttpConfiguration(..), prepareRequest)
 
 data PollingResponse = PollingResponse
-    { flags    :: !(HashMap Text Flag)
-    , segments :: !(HashMap Text Segment)
+    { flags    :: !(KeyMap Flag)
+    , segments :: !(KeyMap Segment)
     } deriving (Generic, FromJSON, Show)
 
 processPoll :: (MonadIO m, MonadLogger m, MonadMask m, MonadThrow m) => Manager -> DataSourceUpdates -> Request -> m ()

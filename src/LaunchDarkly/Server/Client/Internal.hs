@@ -30,7 +30,7 @@ clientVersion :: Text
 clientVersion = "3.0.0"
 
 setStatus :: ClientI -> Status -> IO ()
-setStatus client status' = 
+setStatus client status' =
     atomicModifyIORef' (getField @"status" client) (fmap (,()) (transitionStatus status'))
 
 getStatusI :: ClientI -> IO Status

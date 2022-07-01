@@ -8,7 +8,6 @@ module LaunchDarkly.Server.DataSource.Internal
     where
 
 import Data.IORef          (IORef, atomicModifyIORef')
-import Data.HashMap.Strict (HashMap)
 import Data.Text           (Text)
 import GHC.Natural         (Natural)
 
@@ -16,6 +15,7 @@ import LaunchDarkly.Server.Config.ClientContext (ClientContext)
 import LaunchDarkly.Server.Client.Status        (Status, transitionStatus)
 import LaunchDarkly.Server.Features             (Segment, Flag)
 import LaunchDarkly.Server.Store.Internal       (initializeStore, insertFlag, insertSegment, deleteFlag, deleteSegment, StoreHandle)
+import LaunchDarkly.AesonCompat                 (KeyMap)
 
 type DataSourceFactory = ClientContext -> DataSourceUpdates -> IO DataSource
 
@@ -30,7 +30,7 @@ data DataSource = DataSource
     }
 
 data DataSourceUpdates = DataSourceUpdates
-    { dataSourceUpdatesInit :: !(HashMap Text Flag -> HashMap Text Segment -> IO (Either Text ()))
+    { dataSourceUpdatesInit :: !(KeyMap Flag -> KeyMap Segment -> IO (Either Text ()))
     , dataSourceUpdatesInsertFlag :: !(Flag -> IO (Either Text ()))
     , dataSourceUpdatesInsertSegment :: !(Segment -> IO (Either Text ()))
     , dataSourceUpdatesDeleteFlag :: !(Text -> Natural -> IO (Either Text ()))

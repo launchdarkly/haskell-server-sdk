@@ -20,8 +20,6 @@ import           Data.Text                  (Text)
 import qualified Data.Text as               T
 import           Data.Text.Encoding         (decodeUtf8, encodeUtf8)
 import           Data.Typeable              (Typeable)
-import qualified Data.HashMap.Strict as     HM
-import           Data.HashMap.Strict        (HashMap)
 import           Data.Generics.Product      (getField, setField)
 import           Database.Redis             (ConnectionLostException, Reply, multiExec, runRedis, del, get
                                             , set, hget, hgetall, hset, watch, Redis, Connection, TxResult(..))
@@ -29,6 +27,7 @@ import           GHC.Natural                (Natural)
 import           GHC.Generics               (Generic)
 
 import           LaunchDarkly.Server.Store  (StoreInterface(..), RawFeature(..), StoreResult(..))
+import           LaunchDarkly.AesonCompat   (KeyMap, mapValues, toList, fromList, objectKeys)
 
 data MinimalFeature = MinimalFeature
     { key     :: Text
@@ -95,10 +94,10 @@ opaqueToRep key opaque = case rawFeatureBuffer opaque of
     Just buffer -> buffer
     Nothing     -> toStrict $ encode $ MinimalFeature key (rawFeatureVersion opaque) True
 
-redisInitialize :: RedisStoreConfig -> HashMap Text (HashMap Text RawFeature) -> StoreResult ()
+redisInitialize :: RedisStoreConfig -> KeyMap (KeyMap RawFeature) -> StoreResult ()
 redisInitialize config values = run config $ do
-    del (map (makeKey config) $ HM.keys values) >>= void . exceptOnReply
-    forM_ (HM.toList values) $ \(kind, features) -> forM_ (HM.toList features) $ \(key, feature) ->
+    del (map (makeKey config) $ objectKeys values) >>= void . exceptOnReply
+    forM_ (toList values) $ \(kind, features) -> forM_ (toList features) $ \(key, feature) ->
         (hset (makeKey config kind) (encodeUtf8 key) $ opaqueToRep key feature) >>= void . exceptOnReply
     set (makeKey config "$inited") "" >>= void . exceptOnReply
 
@@ -130,6 +129,6 @@ redisIsInitialized :: RedisStoreConfig -> StoreResult Bool
 redisIsInitialized config = run config $ get (makeKey config "$inited")
     >>= exceptOnReply >>= pure . isJust
 
-redisGetAll :: RedisStoreConfig -> Text -> StoreResult (HashMap Text RawFeature)
+redisGetAll :: RedisStoreConfig -> Text -> StoreResult (KeyMap RawFeature)
 redisGetAll config kind = run config $ hgetall (makeKey config kind)
-    >>= exceptOnReply >>= pure . HM.map rawToOpaque . HM.fromList . map (\(k, v) -> (decodeUtf8 k, v))
+    >>= exceptOnReply >>= pure . mapValues rawToOpaque . fromList . map (\(k, v) -> (decodeUtf8 k, v))

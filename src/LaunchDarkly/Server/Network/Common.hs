@@ -63,7 +63,7 @@ tryAuthorized client operation = try operation >>= \case
 checkAuthorization :: (MonadThrow m) => Response body -> m ()
 checkAuthorization response = when (elem (responseStatus response) [unauthorized401, forbidden403]) $ throwM UnauthorizedE
 
-getServerTime :: Response body -> Int
+getServerTime :: Response body -> Integer
 getServerTime response
     | date == "" = 0
     | otherwise = fromMaybe 0 (truncate <$> utcTimeToPOSIXSeconds <$> parsedTime)
