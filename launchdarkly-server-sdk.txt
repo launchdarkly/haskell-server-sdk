@@ -7,7 +7,27 @@
 --   Please see the README on GitHub at
 --   <a>https://github.com/launchdarkly/haskell-server-sdk#readme</a>
 @package launchdarkly-server-sdk
-@version 3.0.0
+@version 3.0.1
+
+module LaunchDarkly.AesonCompat
+type KeyMap = HashMap Text
+emptyObject :: KeyMap v
+singleton :: Text -> v -> HashMap Text v
+fromList :: [(Text, v)] -> KeyMap v
+toList :: HashMap Text v -> [(Text, v)]
+deleteKey :: Text -> HashMap Text v -> HashMap Text v
+lookupKey :: Text -> HashMap Text v -> Maybe v
+objectKeys :: HashMap Text v -> [Text]
+objectValues :: HashMap Text v -> [v]
+keyToText :: Text -> Text
+insertKey :: Text -> v -> HashMap Text v -> HashMap Text v
+filterKeys :: (Text -> Bool) -> HashMap Text a -> HashMap Text a
+filterObject :: (v -> Bool) -> HashMap Text v -> HashMap Text v
+adjustKey :: (v -> v) -> Text -> HashMap Text v -> HashMap Text v
+mapValues :: (v1 -> v2) -> HashMap Text v1 -> HashMap Text v2
+mapWithKey :: (Text -> v1 -> v2) -> HashMap Text v1 -> HashMap Text v2
+mapMaybeValues :: (v1 -> Maybe v2) -> HashMap Text v1 -> HashMap Text v2
+keyMapUnion :: HashMap Text v -> HashMap Text v -> HashMap Text v
 
 
 -- | This module contains details for external store implementations.
@@ -26,10 +46,10 @@ type FeatureNamespace = Text
 
 -- | The interface implemented by external stores for use by the SDK.
 data StoreInterface
-StoreInterface :: !FeatureNamespace -> StoreResult (HashMap Text RawFeature) -> !FeatureNamespace -> FeatureKey -> StoreResult RawFeature -> !FeatureNamespace -> FeatureKey -> RawFeature -> StoreResult Bool -> !StoreResult Bool -> !HashMap FeatureNamespace (HashMap FeatureKey RawFeature) -> StoreResult () -> StoreInterface
+StoreInterface :: !FeatureNamespace -> StoreResult (KeyMap RawFeature) -> !FeatureNamespace -> FeatureKey -> StoreResult RawFeature -> !FeatureNamespace -> FeatureKey -> RawFeature -> StoreResult Bool -> !StoreResult Bool -> !KeyMap (KeyMap RawFeature) -> StoreResult () -> StoreInterface
 
 -- | A map of all features in a given namespace including deleted.
-[$sel:storeInterfaceAllFeatures:StoreInterface] :: StoreInterface -> !FeatureNamespace -> StoreResult (HashMap Text RawFeature)
+[$sel:storeInterfaceAllFeatures:StoreInterface] :: StoreInterface -> !FeatureNamespace -> StoreResult (KeyMap RawFeature)
 
 -- | Return the value of a key in a namespace.
 [$sel:storeInterfaceGetFeature:StoreInterface] :: StoreInterface -> !FeatureNamespace -> FeatureKey -> StoreResult RawFeature
@@ -44,7 +64,7 @@ StoreInterface :: !FeatureNamespace -> StoreResult (HashMap Text RawFeature) -> 
 
 -- | A map of namespaces, and items in namespaces. The entire store state
 --   should be replaced with these values.
-[$sel:storeInterfaceInitialize:StoreInterface] :: StoreInterface -> !HashMap FeatureNamespace (HashMap FeatureKey RawFeature) -> StoreResult ()
+[$sel:storeInterfaceInitialize:StoreInterface] :: StoreInterface -> !KeyMap (KeyMap RawFeature) -> StoreResult ()
 
 -- | An abstract representation of a store object.
 data RawFeature
@@ -719,7 +739,7 @@ EvalErrorExternalStore :: !Text -> EvalErrorKind
 --   the result of the flag's evaluation would result in the default value,
 --   <a>Null</a> will be returned. This method does not send analytics
 --   events back to LaunchDarkly.
-allFlags :: Client -> User -> IO (HashMap Text Value)
+allFlags :: Client -> User -> IO (KeyMap Value)
 
 -- | Returns an object that encapsulates the state of all feature flags for
 --   a given user. This includes the flag values, and also metadata that
@@ -1083,7 +1103,7 @@ EvalErrorExternalStore :: !Text -> EvalErrorKind
 --   the result of the flag's evaluation would result in the default value,
 --   <a>Null</a> will be returned. This method does not send analytics
 --   events back to LaunchDarkly.
-allFlags :: Client -> User -> IO (HashMap Text Value)
+allFlags :: Client -> User -> IO (KeyMap Value)
 
 -- | Returns an object that encapsulates the state of all feature flags for
 --   a given user. This includes the flag values, and also metadata that
