@@ -2,6 +2,10 @@
 
 All notable changes to the LaunchDarkly Haskell Server-side SDK will be documented in this file. This project adheres to [Semantic Versioning](http://semver.org).
 
+## [3.0.1] - 2022-07-01
+### Fixed:
+- Fixed Aeson 2.0 compatibility layer.
+
 ## [3.0.0] - 2022-06-27
 ### Added:
 - Add flag support for the client side availability property, as well
