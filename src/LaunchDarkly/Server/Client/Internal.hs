@@ -27,7 +27,7 @@ newtype Client = Client ClientI
 
 -- | The version string for this library.
 clientVersion :: Text
-clientVersion = "3.0.1"
+clientVersion = "3.0.2"
 
 setStatus :: ClientI -> Status -> IO ()
 setStatus client status' =
