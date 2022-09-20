@@ -1,6 +1,7 @@
 version: 2.1
 jobs:
   build-test-linux:
+    resource_class: medium+
     parameters:
         resolver:
             type: string
