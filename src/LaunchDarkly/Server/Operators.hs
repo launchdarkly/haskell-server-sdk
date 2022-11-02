@@ -1,3 +1,5 @@
+{-# LANGUAGE NoPatternSynonyms #-}
+
 module LaunchDarkly.Server.Operators
     ( Op(..)
     , getOperation
