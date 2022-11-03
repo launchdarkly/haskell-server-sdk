@@ -6,6 +6,7 @@ circleci:
   linux:
     timeoutMinutes: 45
     image: fpco/stack-build:lts
+  context: org-global
 
 documentation:
   title: LaunchDarkly Server-Side SDK for Haskell
