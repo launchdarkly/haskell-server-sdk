@@ -2,12 +2,6 @@
 
 set -e
 
-TARGET_FILE=package.yaml
-TEMP_FILE=${TARGET_FILE}.tmp
-sed "s/version:             .*/version:             ${LD_RELEASE_VERSION}/" "${TARGET_FILE}" > "${TEMP_FILE}"
-mv "${TEMP_FILE}" "${TARGET_FILE}"
-
-TARGET_FILE=src/LaunchDarkly/Server/Client/Internal.hs
-TEMP_FILE=${TARGET_FILE}.tmp
-sed "s/clientVersion = \".*\"/clientVersion = \"${LD_RELEASE_VERSION}\"/" "${TARGET_FILE}" > "${TEMP_FILE}"
-mv "${TEMP_FILE}" "${TARGET_FILE}"
+sed -i "s/^\(version:[^0-9]\+\).*/\1${LD_RELEASE_VERSION}/" package.yaml
+sed -i "s/^\(version:[^0-9]\+\).*/\1${LD_RELEASE_VERSION}/" launchdarkly-server-sdk.cabal
+sed -i "s/clientVersion = \".*\"/clientVersion = \"${LD_RELEASE_VERSION}\"/" src/LaunchDarkly/Server/Client/Internal.hs
