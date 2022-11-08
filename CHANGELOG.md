@@ -2,6 +2,16 @@
 
 All notable changes to the LaunchDarkly Haskell Server-side SDK will be documented in this file. This project adheres to [Semantic Versioning](http://semver.org).
 
+## [3.0.3] - 2022-11-08
+### Added:
+- Commit generated Cabal file per the [stack recommendations](https://github.com/commercialhaskell/stack/issues/5210) (Thanks, [philderbeast](https://github.com/launchdarkly/haskell-server-sdk/pull/44))
+
+### Changed:
+- Regenerated `.hlint.yaml` with defaults and counts (Thanks, [philderbeast](https://github.com/launchdarkly/haskell-server-sdk/pull/45)!)
+
+### Fixed:
+- Fixed hlint "pattern parser error" lint. (Thanks, [philderbeast](https://github.com/launchdarkly/haskell-server-sdk/pull/46)!)
+
 ## [3.0.2] - 2022-09-20
 ### Changed:
 - Expanded upper version to allow lens 5.1. (Thanks, [bmillwood](https://github.com/launchdarkly/haskell-server-sdk/pull/42)!)
