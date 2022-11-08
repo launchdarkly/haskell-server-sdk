@@ -1,4 +1,5 @@
 version: 2.1
+
 jobs:
   build-test-linux:
     resource_class: medium+
@@ -13,8 +14,11 @@ jobs:
     steps:
       - checkout
       - run:
-          name: Install dependencies
+          name: Install libpcre
           command: pkg-config --exists libpcre || apt-get update && apt-get install -y --no-install-recommends libpcre3-dev
+      - run:
+          name: Install curl
+          command: command -v curl || apt-get update && apt-get install -y --no-install-recommends curl
       - restore_cache:
           name: Restore Cached Dependencies
           keys:
@@ -26,6 +30,10 @@ jobs:
       - run:
           name: Build
           command: stack --no-terminal build
+      - run:
+          name: Install and run hlint
+          command:
+            curl -sSL https://raw.github.com/ndmitchell/hlint/master/misc/run.sh | sh -s .
       - run:
           name: Run tests
           command: stack --no-terminal test
@@ -121,10 +129,39 @@ jobs:
             - "/root/.stack"
             - ".stack-work"
 
+  verify-cabal-is-updated:
+    docker:
+      - image: haskell:9.0.2
+    working_directory: ~/sdk
+    steps:
+      - checkout
+      - run:
+          name: Install dependencies
+          command: apt-get update && apt-get install -y --no-install-recommends jq git
+      - run:
+          name: Install hpack
+          command: |
+            cd ..
+            cabal update
+            cabal install hpack-0.35.0
+            cd -
+      - run:
+          name: Verify the generated .cabal file is up-to-date
+          command: |
+            hpack
+            if [ $(git status --porcelain | wc -l) -gt 0 ]; then
+              echo "hpack resulted in modified files. Please run hpack locally and commit those changes"
+              echo ""
+              echo "Showing the results of `git status`"
+              git status
+              exit -1
+            fi
+
 workflows:
   version: 2
   build_and_test_all:
     jobs:
+      - verify-cabal-is-updated
       - build-test-linux:
           matrix:
               parameters:

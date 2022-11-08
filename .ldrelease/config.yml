@@ -1,15 +1,18 @@
+version: 2
+
 repo:
   public: haskell-server-sdk
   private: haskell-server-sdk-private
 
-circleci:
-  linux:
-    timeoutMinutes: 45
-    image: fpco/stack-build:lts
+jobs:
+  # Have no fear! This is the officially sanctioned image as seen at
+  # https://docs.haskellstack.org/en/stable/docker_integration/#image-repositories
+  - docker:
+      image: fpco/stack-build:lts
 
 documentation:
   title: LaunchDarkly Server-Side SDK for Haskell
-  githubPages: true
+  gitHubPages: true
 
 sdk:
   displayName: "Haskell (server-side)"
