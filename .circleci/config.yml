@@ -111,8 +111,8 @@ jobs:
       - restore_cache:
           name: Restore Cached Dependencies
           keys:
-            - haskell-v1-osx-{{ checksum "stack-<<parameters.resolver>>.yaml"}}-{{ checksum "package.yaml" }}
-            - haskell-v1-osx-{{ checksum "stack-<<parameters.resolver>>.yaml"}}
+            - haskell-v3-osx-{{ checksum "stack-<<parameters.resolver>>.yaml"}}-{{ checksum "package.yaml" }}
+            - haskell-v3-osx-{{ checksum "stack-<<parameters.resolver>>.yaml"}}
       - run:
           name: Resolve/Update Dependencies
           command: stack --no-terminal setup
@@ -124,9 +124,9 @@ jobs:
           command: stack --no-terminal test
       - save_cache:
           name: Cache Dependencies
-          key: haskell-v1-osx-{{ checksum "stack-<<parameters.resolver>>.yaml"}}-{{ checksum "package.yaml" }}
+          key: haskell-v3-osx-{{ checksum "stack-<<parameters.resolver>>.yaml"}}-{{ checksum "package.yaml" }}
           paths:
-            - "/root/.stack"
+            - "/Users/distiller/.stack"
             - ".stack-work"
 
   verify-cabal-is-updated:
