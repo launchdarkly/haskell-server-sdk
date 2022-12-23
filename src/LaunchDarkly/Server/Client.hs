@@ -24,7 +24,6 @@ module LaunchDarkly.Server.Client
     , flushEvents
     , identify
     , track
-    , alias
     , Status(..)
     , getStatus
     ) where
@@ -58,7 +57,7 @@ import           LaunchDarkly.Server.Config.Internal          (ConfigI, Config(.
 import           LaunchDarkly.Server.DataSource.Internal      (DataSource(..), DataSourceFactory, DataSourceUpdates(..), defaultDataSourceUpdates, nullDataSourceFactory)
 import           LaunchDarkly.Server.Details                  (EvaluationDetail(..), EvaluationReason(..), EvalErrorKind(..))
 import           LaunchDarkly.Server.Evaluate                 (evaluateTyped, evaluateDetail)
-import           LaunchDarkly.Server.Events                   (IdentifyEvent(..), CustomEvent(..), AliasEvent(..), EventType(..), makeBaseEvent, queueEvent, makeEventState, addUserToEvent, userGetContextKind, maybeIndexUser, unixMilliseconds, noticeUser)
+import           LaunchDarkly.Server.Events                   (IdentifyEvent(..), CustomEvent(..), EventType(..), makeBaseEvent, queueEvent, makeEventState, addUserToEvent, userGetContextKind, maybeIndexUser, unixMilliseconds, noticeUser)
 import           LaunchDarkly.Server.Features                 (isClientSideOnlyFlag, isInExperiment)
 import           LaunchDarkly.Server.Network.Eventing         (eventThread)
 import           LaunchDarkly.Server.Network.Polling          (pollingThread)
@@ -66,7 +65,7 @@ import           LaunchDarkly.Server.Network.Streaming        (streamingThread)
 import           LaunchDarkly.Server.Store.Internal           (makeStoreIO, getAllFlagsC)
 import           LaunchDarkly.Server.User.Internal            (User(..), userSerializeRedacted)
 import           LaunchDarkly.AesonCompat                     (KeyMap, insertKey, emptyObject, mapValues, filterObject)
-  
+
 
 networkDataSourceFactory :: (ClientContext -> DataSourceUpdates -> LoggingT IO ()) -> DataSourceFactory
 networkDataSourceFactory threadF clientContext dataSourceUpdates = do
@@ -277,20 +276,6 @@ track (Client client) (User user) key value metric = do
     queueEvent config events (EventTypeCustom x)
     unless (getField @"inlineUsersInEvents" config) $
         unixMilliseconds >>= \now -> maybeIndexUser now config user events
-
--- | Alias associates two users for analytics purposes with an alias event.
---
--- The first parameter should be the new version of the user,
--- the second parameter should be the old version.
-alias :: Client -> User -> User -> IO ()
-alias (Client client) (User currentUser) (User previousUser) = do
-    x <- makeBaseEvent $ AliasEvent
-        { key                 = getField @"key" currentUser
-        , contextKind         = userGetContextKind currentUser
-        , previousKey         = getField @"key" previousUser
-        , previousContextKind = userGetContextKind previousUser
-        }
-    queueEvent (getField @"config" client) (getField @"events" client) (EventTypeAlias x)
 
 -- | Flush tells the client that all pending analytics events (if any) should be
 -- delivered as soon as possible. Flushing is asynchronous, so this method will

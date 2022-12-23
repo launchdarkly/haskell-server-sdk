@@ -61,7 +61,6 @@ module LaunchDarkly.Server
     , flushEvents
     , identify
     , track
-    , alias
     , Status(..)
     , getStatus
     ) where

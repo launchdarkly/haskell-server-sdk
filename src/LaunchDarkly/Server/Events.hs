@@ -228,25 +228,6 @@ instance ToJSON CustomEvent where
 instance EventKind CustomEvent where
     eventKind _ = "custom"
 
-data AliasEvent = AliasEvent
-    { key                 :: !Text
-    , contextKind         :: !ContextKind
-    , previousKey         :: !Text
-    , previousContextKind :: !ContextKind
-    }
-    deriving (Generic, Show)
-
-instance ToJSON AliasEvent where
-    toJSON ctx = object $ filter ((/=) Null . snd)
-        [ ("key",                 toJSON $ getField @"key"                 ctx)
-        , ("contextKind",         toJSON $ getField @"contextKind"         ctx)
-        , ("previousKey",         toJSON $ getField @"previousKey"         ctx)
-        , ("previousContextKind", toJSON $ getField @"previousContextKind" ctx)
-        ]
-
-instance EventKind AliasEvent where
-    eventKind _ = "alias"
-
 data BaseEvent event = BaseEvent
     { creationDate :: Natural
     , event        :: event
@@ -268,7 +249,6 @@ data EventType =
     | EventTypeCustom   !(BaseEvent CustomEvent)
     | EventTypeIndex    !(BaseEvent IndexEvent)
     | EventTypeDebug    !(BaseEvent DebugEvent)
-    | EventTypeAlias    !(BaseEvent AliasEvent)
 
 instance ToJSON EventType where
     toJSON event = case event of
@@ -278,7 +258,6 @@ instance ToJSON EventType where
         EventTypeCustom   x -> toJSON x
         EventTypeIndex    x -> toJSON x
         EventTypeDebug    x -> toJSON x
-        EventTypeAlias    x -> toJSON x
 
 newUnknownFlagEvent :: Text -> Value -> EvaluationReason -> EvalEvent
 newUnknownFlagEvent key defaultValue reason = EvalEvent

@@ -61,13 +61,8 @@ runCommand appStateRef = do
                   "evaluate" -> evaluateCommand c (evaluate commandParams)
                   "evaluateAll" -> evaluateAllCommand c (evaluateAll commandParams)
                   "customEvent" -> customCommand c (customEvent commandParams)
-                  "aliasEvent" -> aliasCommand c (aliasEvent commandParams)
                   "identifyEvent" -> identifyCommand c (identifyEvent commandParams)
                   "flushEvents" -> liftIO $ LD.flushEvents c
-
-aliasCommand :: LD.Client -> Maybe AliasEventParams -> ActionM ()
-aliasCommand _ Nothing = error "Missing alias event params"
-aliasCommand c (Just p) = liftIO $ LD.alias c (getField @"user" p) (getField @"previousUser" p)
 
 identifyCommand :: LD.Client -> Maybe IdentifyEventParams -> ActionM ()
 identifyCommand _ Nothing = error "Missing identify event params"

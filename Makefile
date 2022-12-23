@@ -1,5 +1,10 @@
 TEMP_TEST_OUTPUT=/tmp/contract-test-service.log
 
+# TEST_HARNESS_PARAMS can be set to add -skip parameters for any contract tests that cannot yet pass
+# Explanation of current skips:
+TEST_HARNESS_PARAMS := $(TEST_HARNESS_PARAMS) \
+	-skip 'events/alias events'
+
 build-contract-tests:
 	@cd contract-tests && stack build
 

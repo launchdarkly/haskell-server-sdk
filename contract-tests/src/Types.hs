@@ -44,7 +44,6 @@ data CommandParams = CommandParams
     , evaluateAll :: !(Maybe EvaluateAllFlagsParams)
     , customEvent :: !(Maybe CustomEventParams)
     , identifyEvent :: !(Maybe IdentifyEventParams)
-    , aliasEvent :: !(Maybe AliasEventParams)
     } deriving (FromJSON, Generic)
 
 data EvaluateFlagParams = EvaluateFlagParams
@@ -91,11 +90,6 @@ instance FromJSON CustomEventParams where
 
 data IdentifyEventParams = IdentifyEventParams
     { user :: !LD.User
-    } deriving (FromJSON, Generic)
-
-data AliasEventParams = AliasEventParams
-    { user :: !LD.User
-    , previousUser :: !LD.User
     } deriving (FromJSON, Generic)
 
 instance FromJSON LD.User where
