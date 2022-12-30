@@ -3,8 +3,13 @@ module Spec.Context (allTests) where
 import Test.HUnit
 
 import LaunchDarkly.Server.Context
+import qualified LaunchDarkly.Server.Reference as R
 import Control.Monad.Cont (liftIO)
 import Data.Text (Text)
+import qualified Data.Vector as V
+import Data.Aeson (Value(..))
+import Data.Function ((&))
+import LaunchDarkly.AesonCompat (fromList)
 
 confirmInvalidContext :: Context -> Text -> Assertion
 confirmInvalidContext context expectedError = liftIO $ (do
@@ -45,6 +50,36 @@ multiKindWithSingleKindWillReturnSingleKind = TestCase $
   assertEqual "" user (makeMultiContext [user])
   where user = makeContext "user-key" "user"
 
+singleContextSupportsValueRetrieval :: Test
+singleContextSupportsValueRetrieval = TestCase $
+  let address = Object $ fromList [("city", "Chicago"), ("state", "IL")]
+      favorites = Object $ fromList [("food", "Pizza"), ("sport", "baseball")]
+      preferences = Object $ fromList [("favorites", favorites)]
+      user = makeContext "user-key" "user"
+        & contextSetName "Example"
+        & contextSetAnonymous False
+        & contextSetAttribute "groups" (Array $ V.fromList ["beta_testers"])
+        & contextSetAttribute "address" address
+        & contextSetAttribute "preferences" preferences
+  in (do
+    assertEqual "" "user-key" $ getValueForReference (R.makeReference "key") user
+    assertEqual "" "user" $ getValueForReference (R.makeReference "kind") user
+    assertEqual "" "Example" $ getValueForReference (R.makeReference "name") user
+    assertEqual "" (Bool False) $ getValueForReference (R.makeReference "anonymous") user
+    assertEqual "" "Chicago" $ getValueForReference (R.makeReference "/address/city") user
+    assertEqual "" "baseball" $ getValueForReference (R.makeReference "/preferences/favorites/sport") user
+    assertEqual "" (Array $ V.fromList ["beta_testers"]) $ getValueForReference (R.makeReference "/groups") user
+    assertEqual "" Null $ getValueForReference (R.makeReference "/groups/0") user)
+
+multiKindCanOnlyRetrieveKindAttribute :: Test
+multiKindCanOnlyRetrieveKindAttribute = TestCase $
+  let user = makeContext "user-key" "user"
+      org = makeContext "org-key" "org"
+      multi = makeMultiContext [user, org]
+  in (do
+    assertEqual "" "multi" $ getValueForReference (R.makeReference "kind") multi
+    assertEqual "" Null $ getValueForReference (R.makeReference "key") multi)
+
 allTests :: Test
 allTests = TestList
   [ invalidKey
@@ -53,4 +88,6 @@ allTests = TestList
   , multiKindRequiresUnique
   , multiKindRequiresSingleContextsOnly
   , multiKindWithSingleKindWillReturnSingleKind
+  , multiKindCanOnlyRetrieveKindAttribute
+  , singleContextSupportsValueRetrieval
   ]

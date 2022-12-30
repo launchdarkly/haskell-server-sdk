@@ -10,6 +10,9 @@ module LaunchDarkly.Server.Context
   , contextSetPrivateAttributes
   , contextIsValid
   , contextError
+  , individualContext
+  , getValue
+  , getValueForReference
   )
 
 where
@@ -20,6 +23,7 @@ import Data.Maybe (mapMaybe)
 
 import qualified LaunchDarkly.Server.Context.Internal as CTX
 import LaunchDarkly.Server.Context.Internal (Context(..), ContextI(..), SingleContext(..), MultiContext(..))
+import LaunchDarkly.Server.Reference (Reference)
 import qualified Data.HashSet as HS
 import Data.List (sortBy)
 import Data.Text (intercalate)
@@ -135,7 +139,7 @@ contextSetAttribute "_meta" _ c = c
 contextSetAttribute "privateAttributeNames" _ c = c
 contextSetAttribute attribute value c = CTX.mapContext (\ci -> CTX.contextSetAttribute attribute value ci) c
 
--- | Sets the name attribute for a a single-kind context.
+-- | Sets the private attributes for a a single-kind context.
 --
 -- Calling this method on an invalid or multi-kind context is a no-op.
 contextSetPrivateAttributes :: [Text] -> Context -> Context
@@ -148,3 +152,39 @@ contextIsValid = CTX.mapValue CTX.contextIsValid
 -- | Returns the error associated with the context if it is invalid.
 contextError :: Context -> Maybe Text
 contextError = CTX.mapValue CTX.contextError
+
+-- TODO: Come back and implement this when needed.
+individualContext :: Text -> Maybe Context
+individualContext _ = undefined
+
+-- | Looks up the value of any attribute of the Context by name. This includes only attributes that are addressable in
+-- evaluations-- not metadata such as private attributes.
+--
+-- For a single-kind context, the attribute name can be any custom attribute. It can also be one of the built-in ones
+-- like "kind", "key", or "name".
+--
+-- For a multi-kind context, the only supported attribute name is "kind". Use 'individualContext' to inspect a Context
+-- for a particular kind and then get its attributes.
+--
+-- This method does not support complex expressions for getting individual values out of JSON objects or arrays, such as
+-- "/address/street". Use 'getValueForReference' for that purpose.
+--
+-- If the value is found, the return value is the attribute value; otherwise, it is Null.
+getValue :: Text -> Context -> Value
+getValue reference = CTX.mapValue (\ci -> CTX.getValue reference ci)
+
+-- | Looks up the value of any attribute of the Context, or a value contained within an attribute, based on a
+-- 'Reference' instance. This includes only attributes that are addressable in evaluations-- not metadata such as
+-- private attributes.
+--
+-- This implements the same behavior that the SDK uses to resolve attribute references during a flag evaluation. In a
+-- single-kind context, the 'Reference' can represent a simple attribute name-- either a built-in one like "name" or
+-- "key", or a custom attribute -- or, it can be a slash-delimited path using a JSON-Pointer-like syntax. See
+-- 'Reference' for more details.
+--
+-- For a multi-kind context, the only supported attribute name is "kind". Use 'individualContext' to inspect a Context
+-- for a particular kind and then get its attributes.
+--
+-- If the value is found, the return value is the attribute value; otherwise, it is Null.
+getValueForReference :: Reference -> Context -> Value
+getValueForReference reference = CTX.mapValue (\ci -> CTX.getValueForReference reference ci)

@@ -1,3 +1,6 @@
+{-# LANGUAGE ViewPatterns #-}
+{-# LANGUAGE NamedFieldPuns #-}
+
 module LaunchDarkly.Server.Context.Internal
   ( Context(..)
   , ContextI(..)
@@ -15,6 +18,8 @@ module LaunchDarkly.Server.Context.Internal
   , unwrapSingleContext
   , contextKind
   , contextKey
+  , getValue
+  , getValueForReference
   )
 where
 
@@ -23,7 +28,10 @@ import Data.Generics.Product (getField, setField)
 import Data.Text (Text, replace)
 import GHC.Generics (Generic)
 import Data.Function ((&))
-import LaunchDarkly.AesonCompat (KeyMap, singleton, insertKey)
+import LaunchDarkly.AesonCompat (KeyMap, singleton, insertKey, lookupKey)
+import qualified LaunchDarkly.Server.Reference as R
+import LaunchDarkly.Server.Reference (Reference)
+import Data.Maybe (fromMaybe)
 
 mapContext :: (ContextI -> ContextI) -> Context -> Context
 mapContext f (Context c) = Context $ f c
@@ -114,3 +122,31 @@ contextKind c = getField @"kind" c
 
 contextKey :: SingleContext -> Text
 contextKey c = getField @"key" c
+
+getValue :: Text -> ContextI -> Value
+getValue ref = getValueForReference (R.makeLiteral ref)
+
+getValueForReference :: Reference -> ContextI -> Value
+getValueForReference _ (InvalidContext _) = Null
+getValueForReference (R.isValid -> False) _ = Null
+getValueForReference reference (Multi _)
+  | R.getComponents reference == ["kind"] = "multi"
+  | otherwise = Null
+getValueForReference reference (Single c) = case R.getComponents reference of
+    [] -> Null
+    (component:components) ->
+      let value = fromMaybe Null $ getTopLevelValue component c
+      in foldl getValueRecursively value components
+
+getValueRecursively :: Value -> Text -> Value
+getValueRecursively (Object nm) component = fromMaybe Null (lookupKey component nm)
+getValueRecursively _ _ = Null
+
+getTopLevelValue :: Text -> SingleContext -> (Maybe Value)
+getTopLevelValue "key" (SingleContext { key }) = Just $ String key
+getTopLevelValue "kind" (SingleContext { kind }) = Just $ String kind
+getTopLevelValue "name" (SingleContext { name = Nothing}) = Nothing
+getTopLevelValue "name" (SingleContext { name = Just n}) = Just $ String n
+getTopLevelValue "anonymous" (SingleContext { anonymous }) = Just $ Bool anonymous
+getTopLevelValue _ (SingleContext { attributes = Nothing }) = Nothing
+getTopLevelValue key (SingleContext { attributes = Just attrs }) = lookupKey key attrs

@@ -8,11 +8,11 @@ import qualified Spec.Context
 import qualified Spec.Evaluate
 import qualified Spec.Features
 import qualified Spec.Operators
+import qualified Spec.Reference
 import qualified Spec.Redis
 import qualified Spec.Segment
 import qualified Spec.Store
 import qualified Spec.StoreInterface
-import qualified Spec.Redis
 import qualified Spec.DataSource
 import qualified Spec.Integrations.FileData
 import qualified Spec.Streaming
@@ -26,6 +26,7 @@ main = void $ runTestTT $ TestList
     , Spec.Evaluate.allTests
     , Spec.Features.allTests
     , Spec.Operators.allTests
+    , Spec.Reference.allTests
     , Spec.Redis.allTests
     , Spec.Segment.allTests
     , Spec.Store.allTests

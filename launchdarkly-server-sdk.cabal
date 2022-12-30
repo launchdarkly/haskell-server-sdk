@@ -42,6 +42,7 @@ library
       LaunchDarkly.Server.Client
       LaunchDarkly.Server.Config
       LaunchDarkly.Server.Context
+      LaunchDarkly.Server.Reference
       LaunchDarkly.Server.User
       LaunchDarkly.Server.Store
       LaunchDarkly.Server.Integrations.FileData
@@ -141,6 +142,7 @@ test-suite haskell-server-sdk-test
       Spec.Integrations.TestData
       Spec.Operators
       Spec.Redis
+      Spec.Reference
       Spec.Segment
       Spec.Store
       Spec.StoreInterface
@@ -171,6 +173,7 @@ test-suite haskell-server-sdk-test
       LaunchDarkly.Server.Network.Polling
       LaunchDarkly.Server.Network.Streaming
       LaunchDarkly.Server.Operators
+      LaunchDarkly.Server.Reference
       LaunchDarkly.Server.Store
       LaunchDarkly.Server.Store.Internal
       LaunchDarkly.Server.User
