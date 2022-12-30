@@ -87,6 +87,7 @@ library:
   - LaunchDarkly.Server
   - LaunchDarkly.Server.Client
   - LaunchDarkly.Server.Config
+  - LaunchDarkly.Server.Context
   - LaunchDarkly.Server.User
   - LaunchDarkly.Server.Store
   - LaunchDarkly.Server.Integrations.FileData

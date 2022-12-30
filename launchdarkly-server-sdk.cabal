@@ -1,6 +1,6 @@
 cabal-version: 1.12
 
--- This file has been generated from package.yaml by hpack version 0.35.0.
+-- This file has been generated from package.yaml by hpack version 0.35.1.
 --
 -- see: https://github.com/sol/hpack
 
@@ -41,6 +41,7 @@ library
       LaunchDarkly.Server
       LaunchDarkly.Server.Client
       LaunchDarkly.Server.Config
+      LaunchDarkly.Server.Context
       LaunchDarkly.Server.User
       LaunchDarkly.Server.Store
       LaunchDarkly.Server.Integrations.FileData
@@ -51,6 +52,7 @@ library
       LaunchDarkly.Server.Config.ClientContext
       LaunchDarkly.Server.Config.HttpConfiguration
       LaunchDarkly.Server.Config.Internal
+      LaunchDarkly.Server.Context.Internal
       LaunchDarkly.Server.DataSource.Internal
       LaunchDarkly.Server.Details
       LaunchDarkly.Server.Evaluate
@@ -131,6 +133,7 @@ test-suite haskell-server-sdk-test
   main-is: Spec.hs
   other-modules:
       Spec.Bucket
+      Spec.Context
       Spec.DataSource
       Spec.Evaluate
       Spec.Features
@@ -153,6 +156,8 @@ test-suite haskell-server-sdk-test
       LaunchDarkly.Server.Config.ClientContext
       LaunchDarkly.Server.Config.HttpConfiguration
       LaunchDarkly.Server.Config.Internal
+      LaunchDarkly.Server.Context
+      LaunchDarkly.Server.Context.Internal
       LaunchDarkly.Server.DataSource.Internal
       LaunchDarkly.Server.Details
       LaunchDarkly.Server.Evaluate
