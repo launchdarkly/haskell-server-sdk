@@ -4,17 +4,17 @@ module Spec.Integrations.FileData
 
 import           Test.HUnit
 
+import           Data.Generics.Product (getField)
 import           LaunchDarkly.Server
 import           LaunchDarkly.Server.Features (Segment(..))
 import           LaunchDarkly.Server.DataSource.Internal
 import           LaunchDarkly.Server.Integrations.FileData
-import           LaunchDarkly.Server.Client.Status
 import           LaunchDarkly.Server.Client.Internal
 import           LaunchDarkly.Server.Store.Internal (storeHandleGetSegment)
-import           LaunchDarkly.Server.User
 import qualified Data.HashSet as HS
 import           Control.Exception
 import           Control.Monad.Logger
+import LaunchDarkly.AesonCompat (emptyObject)
 
 allTests :: Test
 allTests = TestList
@@ -75,7 +75,8 @@ testMalformedFile = TestCase $ do
         config = testConfig factory
         user1 = makeContext "user1" "user"
     withClient config $ \client -> do
-        assertEqual "No Flags set" mempty =<< allFlags client user1
+        (\state -> assertEqual "No Flags set" emptyObject (getField @"evaluations" state))
+          =<< allFlagsState client user1 False False False
 
 testNoDataFile :: Test
 testNoDataFile = TestCase $ do
@@ -83,7 +84,8 @@ testNoDataFile = TestCase $ do
         config = testConfig factory
         user1 = makeContext "user1" "user"
     withClient config $ \client -> do
-        assertEqual "No Flags set" mempty =<< allFlags client user1
+        (\state -> assertEqual "No Flags set" emptyObject (getField @"evaluations" state))
+          =<< allFlagsState client user1 False False False
 
 testSegmentFile :: Test
 testSegmentFile = TestCase $ do

@@ -54,7 +54,6 @@ module LaunchDarkly.Server
     , EvaluationDetail(..)
     , EvaluationReason(..)
     , EvalErrorKind(..)
-    , allFlags
     , allFlagsState
     , AllFlagsState
     , close

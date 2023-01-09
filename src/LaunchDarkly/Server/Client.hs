@@ -17,7 +17,6 @@ module LaunchDarkly.Server.Client
     , EvaluationDetail(..)
     , EvaluationReason(..)
     , EvalErrorKind(..)
-    , allFlags
     , allFlagsState
     , AllFlagsState
     , close
@@ -231,19 +230,6 @@ allFlagsState (Client client) context client_side_only with_reasons details_only
                     , debugEventsUntilDate = getField @"debugEventsUntilDate" flag
                     }) details
             pure $ AllFlagsState { evaluations = evaluations, state = state, valid = True }
-
--- | Returns a map from feature flag keys to values for a given context. If the
--- result of the flag's evaluation would result in the default value, `Null`
--- will be returned. This method does not send analytics events back to
--- LaunchDarkly.
-allFlags :: Client -> Context -> IO (KeyMap Value)
-allFlags (Client client) context = do
-    status <- getAllFlagsC $ getField @"store" client
-    case status of
-        Left _      -> pure emptyObject
-        Right flags -> do
-            evals <- mapM (\flag -> evaluateDetail flag context $ getField @"store" client) flags
-            pure $ mapValues (getField @"value" . fst) evals
 
 -- | Identify reports details about a context.
 identify :: Client -> Context -> IO ()
