@@ -17,9 +17,10 @@ import qualified Data.Cache.LRU as                   LRU
 
 import           LaunchDarkly.AesonCompat            (KeyMap, keyMapUnion, insertKey, mapValues, objectValues, lookupKey)
 import           LaunchDarkly.Server.Config.Internal (ConfigI, shouldSendEvents)
-import           LaunchDarkly.Server.User.Internal   (UserI, userSerializeRedacted)
+import           LaunchDarkly.Server.User.Internal   (UserI, userSerializeRedacted, User(..))
 import           LaunchDarkly.Server.Details         (EvaluationReason(..))
 import           LaunchDarkly.Server.Features        (Flag)
+import           LaunchDarkly.Server.Context (Context, toLegacyUser)
 
 data ContextKind = ContextKindUser | ContextKindAnonymousUser
     deriving (Eq, Show)
@@ -344,9 +345,10 @@ processEvalEvent now config state user includeReason unknown event = do
     unless (trackEvents && inlineUsers) $
         maybeIndexUser now config user state
 
-processEvalEvents :: ConfigI -> EventState -> UserI -> Bool -> [EvalEvent] -> Bool -> IO ()
-processEvalEvents config state user includeReason events unknown = unixMilliseconds >>= \now ->
-    mapM_ (processEvalEvent now config state user includeReason unknown) events
+processEvalEvents :: ConfigI -> EventState -> Context -> Bool -> [EvalEvent] -> Bool -> IO ()
+processEvalEvents config state context includeReason events unknown = case toLegacyUser context of
+    Just (User user) -> unixMilliseconds >>= \now -> mapM_ (processEvalEvent now config state user includeReason unknown) events
+    Nothing -> pure ()
 
 maybeIndexUser :: Natural -> ConfigI -> UserI -> EventState -> IO ()
 maybeIndexUser now config user state = do

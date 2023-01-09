@@ -1,3 +1,5 @@
+{-# LANGUAGE NamedFieldPuns #-}
+
 module LaunchDarkly.Server.Features where
 
 import Control.Lens                  (element, (^?))
@@ -215,8 +217,18 @@ data Segment = Segment
     } deriving (Generic, FromJSON, ToJSON, Show, Eq)
 
 data Clause = Clause
-    { attribute :: !Text
-    , negate    :: !Bool
-    , op        :: !Op
-    , values    :: ![Value]
-    } deriving (Generic, FromJSON, ToJSON, Show, Eq)
+    { attribute   :: !Text
+    , contextKind :: !Text
+    , negate      :: !Bool
+    , op          :: !Op
+    , values      :: ![Value]
+    } deriving (Generic, ToJSON, Show, Eq)
+
+instance FromJSON Clause where
+    parseJSON = withObject "Clause" $ \o -> do
+        attribute <- o .: "attribute"
+        contextKind <- o .:? "contextKind"
+        negate <- o .: "negate"
+        op <- o .: "op"
+        values <- o .: "values"
+        return $ Clause { attribute, contextKind = fromMaybe "user" contextKind, negate, op, values }

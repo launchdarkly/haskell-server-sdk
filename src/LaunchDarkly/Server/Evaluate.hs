@@ -21,7 +21,7 @@ import           GHC.Natural                         (Natural)
 import           Data.Word                           (Word8)
 import           Data.ByteString                     (ByteString)
 
-import           LaunchDarkly.Server.Context         (Context(..), toLegacyUser, getKey, getValue)
+import           LaunchDarkly.Server.Context         (Context(..), toLegacyUser, getKey, getValue, getKinds, getIndividualContext)
 import           LaunchDarkly.Server.Client.Internal (ClientI, Status(Initialized), getStatusI)
 import           LaunchDarkly.Server.User.Internal   (User(..), valueOf)
 import           LaunchDarkly.Server.Features        (Flag, Segment, Prerequisite, SegmentRule, Clause, VariationOrRollout, Rule, RolloutKind(RolloutKindExperiment))
@@ -50,9 +50,7 @@ evaluateTyped client key context fallback wrap includeReason convert = getStatus
 
 evaluateInternalClient :: ClientI -> Text -> Context -> Value -> Bool -> IO (EvaluationDetail Value)
 evaluateInternalClient _ _ (Invalid _) fallback _ = pure $ errorDefault EvalErrorInvalidContext fallback
-evaluateInternalClient client key context fallback includeReason =
-    let (User user) = fromJust $ toLegacyUser context
-    in do
+evaluateInternalClient client key context fallback includeReason = do
     (reason, unknown, events) <- getFlagC (getField @"store" client) key >>= \case
         Left err          -> do
             let event = newUnknownFlagEvent key fallback (EvaluationReasonError $ EvalErrorExternalStore err)
@@ -65,7 +63,7 @@ evaluateInternalClient client key context fallback includeReason =
             let reason' = setFallback reason fallback
             pure (reason', False, flip (:) events $ newSuccessfulEvalEvent flag (getField @"variationIndex" reason')
                 (getField @"value" reason') (Just fallback) (getField @"reason" reason') Nothing)
-    processEvalEvents (getField @"config" client) (getField @"events" client) user includeReason events unknown
+    processEvalEvents (getField @"config" client) (getField @"events" client) context includeReason events unknown
     pure reason
 
 getOffValue :: Flag -> EvaluationReason -> EvaluationDetail Value
@@ -200,17 +198,33 @@ bucketableStringValue _          = Nothing
 maybeNegate :: Clause -> Bool -> Bool
 maybeNegate clause value = if getField @"negate" clause then not value else value
 
-matchAny :: (Value -> Value -> Bool) -> Value -> [Value] -> Bool
-matchAny op value = any (op value)
+-- For a given clause, determine if the provided value matches that clause.
+--
+-- The operation to be check and the values to compare against are both extract from within the Clause itself.
+matchAnyClauseValue :: Clause -> Value -> Bool
+matchAnyClauseValue clause contextValue = any (f contextValue) v
+  where f = getOperation $ getField @"op" clause
+        v = getField @"values" clause
+
+-- If attribute is "kind", then we treat operator and values as a match expression against a list of all individual
+-- kinds in the context. That is, for a multi-kind context with kinds of "org" and "user", it is a match if either
+-- of those strings is a match with Operator and Values.
+clauseMatchesByKind :: Clause -> Context -> Bool
+clauseMatchesByKind clause context  = foldr f False (getKinds context)
+  where f kind result
+          | result == True = True
+          | otherwise = matchAnyClauseValue clause (String kind)
 
 clauseMatchesContextNoSegments :: Clause -> Context -> Bool
-clauseMatchesContextNoSegments clause context = case getValue (getField @"attribute" clause) context of
-    Null    -> False
-    Array a -> maybeNegate clause $ V.any (\x -> matchAny f x v) a
-    x       -> maybeNegate clause $ matchAny f x v
-    where
-        f = getOperation $ getField @"op" clause
-        v = getField @"values" clause
+clauseMatchesContextNoSegments clause context =
+  if attr == "kind" then maybeNegate clause $ clauseMatchesByKind clause context
+  else case getIndividualContext (getField @"contextKind" clause) context of
+    Nothing -> False
+    Just ctx -> case getValue attr ctx of
+        Null    -> False
+        Array a -> maybeNegate clause $ V.any (matchAnyClauseValue clause) a
+        x       -> maybeNegate clause $ matchAnyClauseValue clause x
+  where attr = getField @"attribute" clause
 
 clauseMatchesContext :: (Monad m, LaunchDarklyStoreRead store m) => store -> Clause -> Context -> m Bool
 clauseMatchesContext store clause context

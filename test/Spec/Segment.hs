@@ -81,10 +81,11 @@ testMatchingRuleWithFullRollout = True ~=? (segmentContainsContext segment conte
                 { id       = "rule"
                 , clauses  =
                     [ Clause
-                        { attribute = "email"
-                        , negate    = False
-                        , op        = OpIn
-                        , values    = [String "test@example.com"]
+                        { attribute   = "email"
+                        , contextKind = "user"
+                        , negate      = False
+                        , op          = OpIn
+                        , values      = [String "test@example.com"]
                         }
                     ]
                 , weight   = Just 100000
@@ -109,10 +110,11 @@ testMatchingRuleWithZeroRollout = False ~=? (segmentContainsContext segment cont
                 { id       = "rule"
                 , clauses  =
                     [ Clause
-                        { attribute = "email"
-                        , negate    = False
-                        , op        = OpIn
-                        , values    = [String "test@example.com"]
+                        { attribute   = "email"
+                        , contextKind = "user"
+                        , negate      = False
+                        , op          = OpIn
+                        , values      = [String "test@example.com"]
                         }
                     ]
                 , weight   = Just 0
@@ -137,16 +139,18 @@ testMatchingRuleWithMultipleClauses = True ~=? (segmentContainsContext segment c
                 { id       = "rule"
                 , clauses  =
                     [ Clause
-                        { attribute = "email"
-                        , negate    = False
-                        , op        = OpIn
-                        , values    = [String "test@example.com"]
+                        { attribute   = "email"
+                        , contextKind = "user"
+                        , negate      = False
+                        , op          = OpIn
+                        , values      = [String "test@example.com"]
                         }
                     , Clause
-                        { attribute = "name"
-                        , negate    = False
-                        , op        = OpIn
-                        , values    = ["bob"]
+                        { attribute   = "name"
+                        , contextKind = "user"
+                        , negate      = False
+                        , op          = OpIn
+                        , values      = ["bob"]
                         }
                     ]
                 , weight   = Nothing
@@ -173,16 +177,18 @@ testNonMatchingRuleWithMultipleClauses = False ~=? (segmentContainsContext segme
                 { id       = "rule"
                 , clauses  =
                     [ Clause
-                        { attribute = "email"
-                        , negate    = False
-                        , op        = OpIn
-                        , values    = [String "test@example.com"]
+                        { attribute   = "email"
+                        , contextKind = "user"
+                        , negate      = False
+                        , op          = OpIn
+                        , values      = [String "test@example.com"]
                         }
                     , Clause
-                        { attribute = "name"
-                        , negate    = False
-                        , op        = OpIn
-                        , values    = ["bill"]
+                        { attribute   = "name"
+                        , contextKind = "user"
+                        , negate      = False
+                        , op          = OpIn
+                        , values      = ["bill"]
                         }
                     ]
                 , weight   = Nothing

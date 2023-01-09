@@ -27,6 +27,7 @@ module LaunchDarkly.Server.Context
   , getValueForReference
   , getValue
   , getKey
+  , getKinds
   , toLegacyUser
   )
 
@@ -40,7 +41,7 @@ import qualified LaunchDarkly.Server.Reference as R
 import qualified Data.HashSet as HS
 import qualified Data.Vector as V
 import Data.List (sortBy)
-import LaunchDarkly.AesonCompat (KeyMap, singleton, insertKey, lookupKey, toList, emptyObject, deleteKey, foldrWithKey, mapValues, fromList)
+import LaunchDarkly.AesonCompat (KeyMap, singleton, insertKey, lookupKey, toList, emptyObject, deleteKey, foldrWithKey, mapValues, fromList, objectKeys)
 import Data.Generics.Product (setField)
 import GHC.Generics (Generic)
 import Data.Function ((&))
@@ -240,6 +241,19 @@ getIndividualContext kind c@(Single (SingleContext { kind = k }))
     | otherwise = Nothing
 getIndividualContext _ _ = Nothing
 
+-- Internally used convenience function for retrieving a list of context kinds in the provided context.
+--
+-- A single kind context will return a single element list containing only that one kind.
+-- Multi-kind contexts will return a list of kinds for each of its sub-contexts.
+-- An invalid context will return the empty list.
+getKinds :: Context -> [Text]
+getKinds (Single c) = [kind c]
+getKinds (Multi (MultiContext { contexts })) = objectKeys contexts
+getKinds _ = []
+
+-- Internally used convenience function to retrieve a context's key.
+--
+-- This method is functionally equivalent to @fromMaybe "" $ getValue "key"@, it's just nicer to use.
 getKey :: Context -> Text
 getKey (Single c) = key c
 getKey _ = ""

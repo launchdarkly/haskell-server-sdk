@@ -318,15 +318,20 @@ testFlagReturnsFallthroughVariationIfPrerequisiteIsMetAndThereAreNoRules = TestC
                 }
             }
 
-testClauseCanMatchCustomAttribute :: Test
-testClauseCanMatchCustomAttribute = TestCase $ do
+testClauseCanMatchOnKind :: Test
+testClauseCanMatchOnKind = TestCase $ do
     store <- makeStoreIO Nothing 0
-    x <- evaluateDetail flag context store
-    assertEqual "test" expected x
+    orgDetail <- evaluateDetail flag orgContext store
+    userDetail <- evaluateDetail flag userContext store
+    multiDetail <- evaluateDetail flag multiContext store
+
+    assertEqual "test" expectedMatch orgDetail
+    assertEqual "test" expectedFailure userDetail
+    assertEqual "test" expectedMatch multiDetail
 
     where
 
-    expected = (EvaluationDetail
+    expectedMatch = (EvaluationDetail
         { value          = Bool True
         , variationIndex = pure 1
         , reason         = EvaluationReasonRuleMatch
@@ -336,9 +341,15 @@ testClauseCanMatchCustomAttribute = TestCase $ do
             }
         }, [])
 
-    context = makeContext "x" "user"
-        & withAttribute "name" "bob"
-        & withAttribute "legs" (Number 4)
+    expectedFailure = (EvaluationDetail
+        { value          = Bool False
+        , variationIndex = pure 0
+        , reason         = EvaluationReasonFallthrough { inExperiment = False }
+        }, [])
+
+    orgContext = makeContext "x" "org"
+    userContext = makeContext "x" "user"
+    multiContext = makeMultiContext [orgContext, userContext]
 
     flag = Flag
         { key                    = "feature"
@@ -354,10 +365,79 @@ testClauseCanMatchCustomAttribute = TestCase $ do
             [ Rule
                 { clauses            =
                     [ Clause
-                        { attribute = "name"
-                        , op        = OpIn
-                        , values    = [String "bob"]
-                        , negate    = False
+                        { attribute   = "kind"
+                        , contextKind = "user"
+                        , op          = OpIn
+                        , values      = [String "org"]
+                        , negate      = False
+                        }
+                    ]
+                , variationOrRollout = VariationOrRollout
+                    { variation = Just 1
+                    , rollout   = Nothing
+                    }
+                , id                 = "clause"
+                , trackEvents        = False
+                }
+            ]
+        , fallthrough            = VariationOrRollout
+            { variation = Just 0
+            , rollout   = Nothing
+            }
+        , offVariation           = Just 0
+        , variations             = [Bool False, Bool True]
+        , debugEventsUntilDate   = Nothing
+        , clientSideAvailability  = ClientSideAvailability { usingEnvironmentId = True, usingMobileKey = False, explicit = True }
+        }
+
+testClauseCanMatchCustomAttribute :: Test
+testClauseCanMatchCustomAttribute = TestCase $ do
+    store <- makeStoreIO Nothing 0
+    userDetail <- evaluateDetail flag userContext store
+    orgDetail <- evaluateDetail flag orgContext store
+    assertEqual "test" expectedMatch userDetail
+    assertEqual "test" expectedFailure orgDetail
+
+    where
+
+    expectedMatch = (EvaluationDetail
+        { value          = Bool True
+        , variationIndex = pure 1
+        , reason         = EvaluationReasonRuleMatch
+            { ruleIndex    = 0
+            , ruleId       = "clause"
+            , inExperiment = False
+            }
+        }, [])
+
+    expectedFailure = (EvaluationDetail
+        { value          = Bool False
+        , variationIndex = pure 0
+        , reason         = EvaluationReasonFallthrough { inExperiment = False }
+        }, [])
+
+    userContext = makeContext "x" "user" & withAttribute "legs" (Number 4)
+    orgContext = makeContext "x" "org" & withAttribute "legs" (Number 4)
+
+    flag = Flag
+        { key                    = "feature"
+        , version                = 1
+        , on                     = True
+        , trackEvents            = False
+        , trackEventsFallthrough = False
+        , deleted                = False
+        , prerequisites          = []
+        , salt                   = ""
+        , targets                = []
+        , rules                  =
+            [ Rule
+                { clauses            =
+                    [ Clause
+                        { attribute   = "legs"
+                        , contextKind = "user"
+                        , op          = OpIn
+                        , values      = [Number 4]
+                        , negate      = False
                         }
                     ]
                 , variationOrRollout = VariationOrRollout
@@ -439,6 +519,7 @@ allTests = TestList
     , testFlagReturnsOffVariationIfPrerequisiteIsNotMet
     , testFlagReturnsFallthroughVariationIfPrerequisiteIsMetAndThereAreNoRules
     , testClauseCanMatchCustomAttribute
+    , testClauseCanMatchOnKind
     , testEvaluatingUnknownFlagReturnsDefault
     , testEvaluatingUnknownFlagReturnsDefaultWithDetail
     , testDefaultIsReturnedIfFlagEvaluatesToNil
