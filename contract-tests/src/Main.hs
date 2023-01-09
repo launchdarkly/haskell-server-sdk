@@ -1,22 +1,29 @@
-import Control.Monad.Trans (liftIO, lift)
+{-# LANGUAGE NamedFieldPuns #-}
+{-# LANGUAGE Strict #-}
+
+import Control.Monad.Trans (liftIO)
 import Control.Concurrent (MVar, newEmptyMVar, forkIO, putMVar, takeMVar)
 import System.Timeout (timeout)
-import Data.Aeson (FromJSON, ToJSON, toJSON, Value (..) )
-import Data.Generics.Product (getField, setField)
-import Data.Scientific (toRealFloat, fromFloatDigits, floatingOrInteger)
+import Data.Aeson (ToJSON, toJSON, Value (..), encode, decode )
+import Data.Generics.Product (getField)
+import Data.Scientific (toRealFloat, floatingOrInteger)
 import Data.IORef
 import Data.Maybe
-import Data.Text
 import Data.Text (Text)
 import GHC.Generics (Generic)
 import Network.HTTP.Types
 import Types
 import Web.Scotty
-import qualified Data.List
+import qualified Data.HashMap.Strict as HM
+import qualified Data.List as L
 import qualified Data.Map as M
 import qualified Data.Text.Lazy as LTB
 import qualified LaunchDarkly.Server as LD
 import qualified Utils
+import Data.Function ((&))
+import LaunchDarkly.Server (Context, withAttribute, withPrivateAttributes, getError)
+import Data.Text.Lazy (toStrict, fromStrict)
+import Data.Text.Lazy.Encoding (decodeUtf8, encodeUtf8)
 
 data AppState = AppState { clients :: M.Map Int LD.Client, counter :: Int }
 
@@ -27,7 +34,14 @@ getAppStatus :: ActionM ()
 getAppStatus = json AppStatus
     { name = "haskell-server-sdk"
     , clientVersion = LD.clientVersion
-    , capabilities = ["server-side", "strongly-typed", "all-flags-with-reasons", "all-flags-client-side-only", "all-flags-details-only-for-tracked-flags"]
+    , capabilities =
+        [ "server-side"
+        , "strongly-typed"
+        , "all-flags-with-reasons"
+        , "all-flags-client-side-only"
+        , "all-flags-details-only-for-tracked-flags"
+        , "context-type"
+        ]
     }
 
 shutdownService :: MVar () -> ActionM ()
@@ -63,10 +77,46 @@ runCommand appStateRef = do
                   "customEvent" -> customCommand c (customEvent commandParams)
                   "identifyEvent" -> identifyCommand c (identifyEvent commandParams)
                   "flushEvents" -> liftIO $ LD.flushEvents c
+                  "contextBuild" -> contextBuildCommand $ contextBuild commandParams
+                  "contextConvert" -> contextConvertCommand $ contextConvert commandParams
+                  _ -> error "An unknown command was requested"
 
 identifyCommand :: LD.Client -> Maybe IdentifyEventParams -> ActionM ()
 identifyCommand _ Nothing = error "Missing identify event params"
 identifyCommand c (Just p) = liftIO $ LD.identify c (getField @"user" p)
+
+contextBuildCommand :: Maybe ContextBuildParams -> ActionM ()
+contextBuildCommand Nothing = error "Missing context build params"
+contextBuildCommand (Just ContextBuildParams { single = Just buildParam}) =
+  json $ createContextResponse $ contextBuildSingle buildParam
+contextBuildCommand (Just ContextBuildParams { multi = Just buildParams}) =
+  json $ createContextResponse $ LD.makeMultiContext $ L.map contextBuildSingle buildParams
+contextBuildCommand _ = json $ ContextResponse { output = Nothing, errorMessage = Just "No build parameters provided" }
+
+contextBuildSingle :: ContextBuildParam -> LD.Context
+contextBuildSingle (ContextBuildParam {kind, key, name, anonymous, private, custom}) =
+  let context = LD.makeContext key (fromMaybe "user" kind)
+        & contextWithAttribute "name" (String <$> name)
+        & contextWithAttribute "anonymous" (Bool <$> anonymous)
+        & withPrivateAttributes (fromMaybe [] private)
+  in HM.foldrWithKey (\k v c -> contextWithAttribute k (Just v) c) context (fromMaybe HM.empty custom)
+
+contextWithAttribute :: Text -> (Maybe Value) -> Context -> Context
+contextWithAttribute _ Nothing c = c
+contextWithAttribute attr (Just v) c = withAttribute attr v c
+
+contextConvertCommand :: Maybe ContextConvertParams -> ActionM ()
+contextConvertCommand Nothing = error "Missing context convert params"
+contextConvertCommand (Just ContextConvertParams { input }) =
+  let context = decode $ encodeUtf8 $ fromStrict input
+  in case context of
+    Just ctx -> json $ createContextResponse ctx
+    Nothing -> json $ ContextResponse { output = Nothing, errorMessage = Just "Error decoding input string" }
+
+createContextResponse :: Context -> ContextResponse
+createContextResponse c = case getError c of
+  Nothing -> ContextResponse { output = Just $ (toStrict (decodeUtf8 (encode c))), errorMessage = Nothing }
+  Just e -> ContextResponse { output = Nothing, errorMessage = Just e }
 
 customCommand :: LD.Client -> Maybe CustomEventParams -> ActionM ()
 customCommand _ Nothing = error "Missing custom event params"
@@ -108,6 +158,7 @@ evaluateWithDetail c user flagKey "int" (Number v) = case floatingOrInteger v of
 evaluateWithDetail c user flagKey "double" (Number v) = toFlagResponseWithDetail <$> LD.doubleVariationDetail c flagKey user (toRealFloat v)
 evaluateWithDetail c user flagKey "string" (String v) = toFlagResponseWithDetail <$> LD.stringVariationDetail c flagKey user v
 evaluateWithDetail c user flagKey "any" v = toFlagResponseWithDetail <$> LD.jsonVariationDetail c flagKey user v
+evaluateWithDetail _ _ _ _ _ = error("Invalid type provided")
 
 evaluateWithoutDetail :: LD.Client -> LD.User -> Text -> Text -> Value -> IO EvaluateFlagResponse
 evaluateWithoutDetail c user flagKey "bool" (Bool v) = toFlagResponseWithoutDetail <$> LD.boolVariation c flagKey user v
@@ -117,6 +168,7 @@ evaluateWithoutDetail c user flagKey "int" (Number v) = case floatingOrInteger v
 evaluateWithoutDetail c user flagKey "double" (Number v) = toFlagResponseWithoutDetail <$> LD.doubleVariation c flagKey user (toRealFloat v)
 evaluateWithoutDetail c user flagKey "string" (String v) = toFlagResponseWithoutDetail <$> LD.stringVariation c flagKey user v
 evaluateWithoutDetail c user flagKey "any" v = toFlagResponseWithoutDetail <$> LD.jsonVariation c flagKey user v
+evaluateWithoutDetail _ _ _ _ _ = error("Invalid type provided")
 
 evaluateAllCommand :: LD.Client -> Maybe EvaluateAllFlagsParams -> ActionM ()
 evaluateAllCommand _ Nothing = error "Missing evaluate all params"
@@ -126,15 +178,15 @@ evaluateAllCommand c (Just p) = do
 
 stopClient :: IORef AppState -> ActionM ()
 stopClient appStateRef = do
-    clientId <- param "clientId"
+    clientIdParam <- param "clientId"
     appState <- liftIO $ readIORef appStateRef
-    let id = read clientId :: Int
-        client = M.lookup id (clients appState)
+    let clientId = read clientIdParam :: Int
+        client = M.lookup clientId (clients appState)
     case client of
       Nothing -> error "Invalid client provided"
       Just c ->  liftIO $ do
           LD.close c
-          modifyIORef' appStateRef (\a -> a { clients = M.delete id (clients a)})
+          modifyIORef' appStateRef (\a -> a { clients = M.delete clientId (clients a)})
 
 routes :: IORef AppState -> MVar () -> ScottyM ()
 routes appStateRef shutdownMVar = do
@@ -148,7 +200,8 @@ server :: IO ()
 server = do
     appStateRef <- newIORef $ AppState { clients = M.empty, counter = 0 }
     shutdownMVar <- newEmptyMVar
-    forkIO $ scotty 8000 (routes appStateRef shutdownMVar)
+    _ <- forkIO $ scotty 8000 (routes appStateRef shutdownMVar)
     takeMVar shutdownMVar
 
+main :: IO ()
 main = server

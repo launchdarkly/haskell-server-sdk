@@ -11,6 +11,7 @@
 
 {-# LANGUAGE ViewPatterns #-}
 {-# LANGUAGE NamedFieldPuns #-}
+{-# LANGUAGE BlockArguments #-}
 
 module LaunchDarkly.Server.Context
   ( Context
@@ -29,25 +30,40 @@ module LaunchDarkly.Server.Context
 
 where
 
-import Data.Aeson (Value(..))
+import Data.Aeson (Value(..), ToJSON, toJSON, FromJSON, parseJSON, withObject, (.:?), (.:), fromJSON, Result (Success))
 import Data.Text (Text, unpack, replace)
 import Data.Maybe (mapMaybe, fromMaybe)
-
 import LaunchDarkly.Server.Reference (Reference)
 import qualified LaunchDarkly.Server.Reference as R
 import qualified Data.HashSet as HS
+import qualified Data.Vector as V
 import Data.List (sortBy)
 import Data.Text (intercalate)
-import LaunchDarkly.AesonCompat (KeyMap, singleton, insertKey, lookupKey)
+import LaunchDarkly.AesonCompat (KeyMap, singleton, insertKey, lookupKey, toList, emptyObject, deleteKey, foldrWithKey, mapValues, fromList)
 import Data.Generics.Product (setField)
 import GHC.Generics (Generic)
 import Data.Function ((&))
+import Data.Aeson.Types (Parser, prependFailure, typeMismatch)
 
 -- | data record for the Context type
 data Context =
   Single SingleContext
   | Multi MultiContext
-  | Invalid { error :: !Text } deriving (Show, Eq)
+  | Invalid { error :: !Text } deriving (Generic, Show, Eq)
+
+instance ToJSON Context where
+  toJSON (Single c) = toJSON c
+  toJSON (Multi c) = toJSON c
+  toJSON (Invalid c) = toJSON c
+
+instance FromJSON Context where
+  parseJSON a@(Object o) =
+    case lookupKey "kind" o of
+        Nothing -> parseLegacyUser a
+        Just (String "multi") -> parseMultiContext a
+        Just _ -> parseSingleContext a
+
+  parseJSON invalid = prependFailure "parsing Context failed, " (typeMismatch "Object" invalid)
 
 data SingleContext = SingleContext
   { key :: !Text
@@ -59,10 +75,18 @@ data SingleContext = SingleContext
   , privateAttributes :: !(Maybe [Text])
   } deriving (Generic, Show, Eq)
 
+instance ToJSON SingleContext where
+  toJSON = (toJsonObject True)
+
 data MultiContext = MultiContext
   { fullKey :: !Text
-  , contexts :: ![SingleContext]
+  , contexts :: !(KeyMap SingleContext)
   } deriving (Generic, Show, Eq)
+
+instance ToJSON MultiContext where
+  toJSON (MultiContext { contexts }) = mapValues (\c -> toJsonObject False c) contexts
+    & insertKey "kind" "multi"
+    & Object
 
 -- | Create a single kind context from the provided hash.
 --
@@ -70,11 +94,17 @@ data MultiContext = MultiContext
 -- [SDK documentation](https://docs.launchdarkly.com/sdk/features/user-config).
 makeContext :: Text -> Text -> Context
 makeContext "" _ = Invalid { error = "context key must not be empty" }
-makeContext _ "" = Invalid { error = "context kind must not be empty" }
-makeContext _ "kind" = Invalid { error = "context kind cannot be 'kind'" }
-makeContext _ "multi" = Invalid { error = "context kind cannot be 'multi'" }
-makeContext key kind
-  | (all (`elem` ['a'..'z'] ++ ['.', '-']) (unpack kind)) == False = Invalid { error = "context kind contains disallowed characters" }
+makeContext key kind = makeSingleContext key kind
+
+-- This function is used internally to create a context with legacy key validation rules; namely, a legacy context is
+-- allowed to have an empty key. No other type of context is. Users of this SDK can only use the makeContext
+-- to create a single-kind context, which includes the non-empty key restriction.
+makeSingleContext :: Text -> Text -> Context
+makeSingleContext _ "" = Invalid { error = "context kind must not be empty" }
+makeSingleContext _ "kind" = Invalid { error = "context kind cannot be 'kind'" }
+makeSingleContext _ "multi" = Invalid { error = "context kind cannot be 'multi'" }
+makeSingleContext key kind
+  | (all (`elem` ['a'..'z'] ++ ['A' .. 'Z'] ++ ['0' .. '9'] ++ ['.', '-', '_']) (unpack kind)) == False = Invalid { error = "context kind contains disallowed characters" }
   | otherwise = Single SingleContext
     { key = key
     , fullKey = canonicalizeKey key kind
@@ -107,7 +137,7 @@ makeMultiContext contexts =
     (a, _, c) | a /= c -> Invalid { error = "multi-kind contexts cannot contain two single-kind contexts with the same kind" }
     _ -> Multi MultiContext
       { fullKey =  intercalate ":" $ map (\c -> canonicalizeKey (key c) (kind c) ) sorted
-      , contexts = singleContexts
+      , contexts = fromList $ map (\c -> ((kind c), c)) singleContexts
       }
 
 -- | Sets the name attribute for a a single-kind context.
@@ -162,6 +192,7 @@ withAttribute :: Text -> Value -> Context -> Context
 withAttribute "key" _ c = c
 withAttribute "kind" _ c = c
 withAttribute "name" (String value) c = withName value c
+withAttribute "name" Null (Single c) = Single $ c { name = Nothing }
 withAttribute "name" _ c = c
 withAttribute "anonymous" (Bool value) c = withAnonymous value c
 withAttribute "anonymous" _ c = c
@@ -177,6 +208,7 @@ withAttribute _ _ c = c
 --
 -- Calling this method on an invalid or multi-kind context is a no-op.
 withPrivateAttributes :: [Text] -> Context -> Context
+withPrivateAttributes [] (Single c) = Single $ c { privateAttributes = Nothing }
 withPrivateAttributes attrs (Single c) = Single $ c { privateAttributes = Just attrs }
 withPrivateAttributes _ c = c
 
@@ -190,9 +222,21 @@ getError :: Context -> Maybe Text
 getError (Invalid e) = Just e
 getError _ = Nothing
 
--- TODO: Come back and implement this when needed.
-getIndividualContext :: Text -> Maybe Context
-getIndividualContext _ = undefined
+-- | Returns the single-kind Context corresponding to one of the kinds in this context.
+--
+-- If this method is called on a single-kind Context and the requested kind matches the context's kind, then that
+-- context is returned.
+--
+-- If the method is called on a multi-context, the provided kind must match the context kind of one of the individual
+-- contexts.
+--
+-- If there is no context corresponding to `kind`, the method returns Nothing.
+getIndividualContext :: Text -> Context -> Maybe Context
+getIndividualContext kind (Multi (MultiContext { contexts })) = Single <$> lookupKey kind contexts
+getIndividualContext kind c@(Single (SingleContext { kind = k }))
+    | kind == k = Just c
+    | otherwise = Nothing
+getIndividualContext _ _ = Nothing
 
 -- | Looks up the value of any attribute of the Context by name. This includes only attributes that are addressable in
 -- evaluations-- not metadata such as private attributes.
@@ -266,3 +310,75 @@ canonicalizeKey key kind = kind <> ":" <> (replace "%" "%25" key & replace ":" "
 unwrapSingleContext :: Context -> Maybe SingleContext
 unwrapSingleContext (Single c) = Just c
 unwrapSingleContext _ = Nothing
+
+-- Internally used function for encoding a SingleContext into a JSON object.
+--
+-- This functionality has been extracted into this separate function because we need to control whether or not the kind
+-- property will be included in the final output. If we didn't have this restriction, we could simply inline this
+-- function on the SingleContext.
+toJsonObject :: Bool -> SingleContext -> Value
+toJsonObject includeKind (SingleContext { key, kind, name, anonymous, attributes, privateAttributes }) = Object $ fromList $ filter ((/=) Null . snd)
+  (
+    fromMaybe [] (toList <$> attributes)
+    ++
+    [ ("key", toJSON $ key)
+    , ("kind", toJSON $ if includeKind then String kind else Null)
+    , ("name", toJSON $ name)
+    , ("anonymous", toJSON $ if anonymous then Bool True else Null)
+    , ("_meta", case privateAttributes of
+        Nothing -> Null
+        Just attrs -> toJSON $ singleton "privateAttributes" (Array $ V.fromList $ map toJSON attrs)
+      )
+    ]
+  )
+
+-- Internally used function to decode a JSON object using the legacy user scheme into a modern single-kind "user"
+-- context.
+parseLegacyUser :: Value -> Parser Context
+parseLegacyUser = withObject "LegacyUser" $ \o -> do
+  (key :: Text) <- o .: "key"
+  (secondary :: Maybe Text) <- o .:? "secondary"
+  (ip :: Maybe Text) <- o .:? "ip"
+  (country :: Maybe Text) <- o .:? "country"
+  (email :: Maybe Text) <- o .:? "email"
+  (firstName :: Maybe Text) <- o .:? "firstName"
+  (lastName :: Maybe Text) <- o .:? "lastName"
+  (avatar :: Maybe Text) <- o .:? "avatar"
+  (name :: Maybe Text) <- o .:? "name"
+  (anonymous :: Maybe Bool) <- o .:? "anonymous"
+  (custom :: Maybe (KeyMap Value)) <- o .:? "custom"
+  (privateAttributeNames :: Maybe [Text]) <- o .:? "privateAttributeNames"
+  let context = makeSingleContext key "user"
+               & withAttribute "secondary" (fromMaybe Null (String <$> secondary))
+               & withAttribute "ip" (fromMaybe Null (String <$> ip))
+               & withAttribute "country" (fromMaybe Null (String <$> country))
+               & withAttribute "email" (fromMaybe Null (String <$> email))
+               & withAttribute "firstName" (fromMaybe Null (String <$> firstName))
+               & withAttribute "lastName" (fromMaybe Null (String <$> lastName))
+               & withAttribute "avatar" (fromMaybe Null (String <$> avatar))
+               & withAttribute "name" (fromMaybe Null (String <$> name))
+               & withAttribute "anonymous" (fromMaybe Null (Bool <$> anonymous))
+               & withPrivateAttributes (fromMaybe [] privateAttributeNames)
+   in return $ foldrWithKey (\k v c -> withAttribute k v c) context (fromMaybe emptyObject custom)
+
+-- Internally used function to decode a JSON object using the new context scheme into a modern single-kind context.
+parseSingleContext :: Value -> Parser Context
+parseSingleContext = withObject "SingleContext" $ \o -> do
+    (key :: Text) <- o .: "key"
+    (kind :: Text) <- o .: "kind"
+    (meta :: Maybe (KeyMap Value)) <- o .:? "_meta"
+    (privateAttributes :: Maybe [Text]) <- (fromMaybe emptyObject meta) .:? "privateAttributes"
+    let context = makeContext key kind
+            & withPrivateAttributes (fromMaybe [] privateAttributes)
+     in return $ foldrWithKey (\k v c -> withAttribute k v c) context o
+
+-- Internally used function to decode a JSON object using the new context scheme into a modern multi-kind context.
+parseMultiContext :: Value -> Parser Context
+parseMultiContext = withObject "MultiContext" $ \o -> do
+    let contextLists = toList $ deleteKey "kind" o
+        contextObjectLists = mapMaybe (\(k, v) -> case (k, v) of { (_, Object obj) -> Just (k, obj); _ -> Nothing }) contextLists
+        results = map (\(kind, obj) -> fromJSON $ Object $ insertKey "kind" (String kind) obj) contextObjectLists
+        single = mapMaybe (\result -> case result of { Success r -> Just r; _ -> Nothing }) results
+     in case (length contextLists, length single) of
+        (a, b) | a /= b -> return $ Invalid { error = "multi-kind context JSON contains non-single-kind contexts" }
+        (_, _) -> return $ makeMultiContext single

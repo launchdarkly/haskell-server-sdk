@@ -63,8 +63,22 @@ module LaunchDarkly.Server
     , track
     , Status(..)
     , getStatus
+    -- Context related functions and types
+    , Context
+    , makeContext
+    , makeMultiContext
+    , withName
+    , withAnonymous
+    , withAttribute
+    , withPrivateAttributes
+    , isValid
+    , getError
+    , getIndividualContext
+    , getValue
+    , getValueForReference
     ) where
 
 import LaunchDarkly.Server.User
 import LaunchDarkly.Server.Config
 import LaunchDarkly.Server.Client
+import LaunchDarkly.Server.Context

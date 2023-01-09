@@ -64,7 +64,10 @@ mapMaybeValues :: (v1 -> Maybe v2) -> KeyMap.KeyMap v1 -> KeyMap.KeyMap v2
 mapMaybeValues = KeyMap.mapMaybe
 
 keyMapUnion :: KeyMap.KeyMap v -> KeyMap.KeyMap v -> KeyMap.KeyMap v
-keyMapUnion = KeyMap.union 
+keyMapUnion = KeyMap.union
+
+foldrWithKey :: (T.Text -> v -> a -> a) -> a -> KeyMap.KeyMap v -> a
+foldrWithKey f accum initial = KeyMap.foldrWithKey (\k v a -> f (keyToText k) v a) accum initial
 #else
 type KeyMap = HM.HashMap T.Text
 
@@ -117,5 +120,8 @@ mapMaybeValues :: (v1 -> Maybe v2) -> HM.HashMap T.Text v1 -> HM.HashMap T.Text 
 mapMaybeValues = HM.mapMaybe
 
 keyMapUnion :: HM.HashMap T.Text v -> HM.HashMap T.Text v -> HM.HashMap T.Text v
-keyMapUnion = HM.union 
+keyMapUnion = HM.union
+
+foldrWithKey :: (T.Text -> v -> a -> a) -> a -> HM.HashMap T.Text v -> a
+foldrWithKey = HM.foldrWithKey
 #endif

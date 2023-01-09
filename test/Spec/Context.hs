@@ -7,9 +7,10 @@ import qualified LaunchDarkly.Server.Reference as R
 import Control.Monad.Cont (liftIO)
 import Data.Text (Text)
 import qualified Data.Vector as V
-import Data.Aeson (Value(..))
+import Data.Aeson (Value(..), decode)
 import Data.Function ((&))
 import LaunchDarkly.AesonCompat (fromList)
+import Data.Maybe (fromJust)
 
 confirmInvalidContext :: Context -> Text -> Assertion
 confirmInvalidContext context expectedError = liftIO $ (do
@@ -25,8 +26,7 @@ invalidKinds = TestCase $ (do
   confirmInvalidContext (makeContext "user-key" "") "context kind must not be empty"
   confirmInvalidContext (makeContext "user-key" "kind") "context kind cannot be 'kind'"
   confirmInvalidContext (makeContext "user-key" "multi") "context kind cannot be 'multi'"
-  confirmInvalidContext (makeContext "user-key" "invalid*characters") "context kind contains disallowed characters"
-  confirmInvalidContext (makeContext "user-key" "NO-YELLING") "context kind contains disallowed characters")
+  confirmInvalidContext (makeContext "user-key" "invalid*characters") "context kind contains disallowed characters")
 
 multiKindRequiresOne :: Test
 multiKindRequiresOne = TestCase $
@@ -61,6 +61,23 @@ multiKindCanOnlyRetrieveKindAttribute = TestCase $
 
     assertEqual "" "multi" $ getValueForReference (R.makeReference "kind") multi
     assertEqual "" Null $ getValueForReference (R.makeReference "key") multi)
+
+canRetrievalIndividualContextsFromMultiKindContext :: Test
+canRetrievalIndividualContextsFromMultiKindContext = TestCase $
+  let user = makeContext "user-key" "user"
+      org = makeContext "org-key" "org"
+      multi = makeMultiContext [user, org]
+  in (do
+    assertEqual "" (Just user) $ getIndividualContext "user" multi
+    assertEqual "" (Just org) $ getIndividualContext "org" multi
+    assertEqual "" Nothing $ getIndividualContext "device" multi)
+
+canRetrievalIndividualContextsFromSingleKindContext :: Test
+canRetrievalIndividualContextsFromSingleKindContext = TestCase $
+  let context = makeContext "user-key" "user"
+  in (do
+    assertEqual "" (Just context) $ getIndividualContext "user" context
+    assertEqual "" Nothing $ getIndividualContext "org" context)
 
 singleContextSupportsValueRetrieval :: Test
 singleContextSupportsValueRetrieval = TestCase $
@@ -149,6 +166,56 @@ cannotUseWithAttributeToSetRestrictedAttributes = TestCase $
     setAndVerifyAttribute "_meta" "anything" Null invalid
     setAndVerifyAttribute "privateAttributeNames" (Array $ V.fromList ["name"]) Null invalid)
 
+canParseFromLegacyUserFormat :: Test
+canParseFromLegacyUserFormat = TestCase $
+    let jsonString = "{\"key\": \"user-key\", \"ip\": \"127.0.0.1\", \"custom\": {\"address\": {\"street\": \"123 Easy St\", \"city\": \"Anytown\"}, \"language\": \"Haskell\"}}"
+        context :: Context = fromJust $ decode jsonString
+    in (do
+        assertBool "" $ isValid context
+        assertEqual "" "user" $ getValue "kind" context
+        assertEqual "" "user-key" $ getValue "key" context
+        assertEqual "" "127.0.0.1" $ getValue "ip" context
+        assertEqual "" "Haskell" $ getValue "language" context
+        assertEqual "" "123 Easy St" $ getValueForReference (R.makeReference "/address/street") context
+        assertEqual "" "Anytown" $ getValueForReference (R.makeReference "/address/city") context
+    )
+
+canParseSingleKindFormat :: Test
+canParseSingleKindFormat = TestCase $
+    let jsonString = "{\"key\": \"org-key\", \"kind\": \"org\", \"ip\": \"127.0.0.1\", \"custom\": {\"address\": {\"street\": \"123 Easy St\", \"city\": \"Anytown\"}, \"language\": \"Haskell\"}}"
+        context :: Context = fromJust $ decode jsonString
+    in (do
+        assertBool "" $ isValid context
+        assertEqual "" "org" $ getValue "kind" context
+        assertEqual "" "org-key" $ getValue "key" context
+        assertEqual "" "127.0.0.1" $ getValue "ip" context
+        assertEqual "" Null $ getValue "language" context
+        assertEqual "" "Haskell" $ getValueForReference (R.makeReference "/custom/language") context
+        assertEqual "" Null $ getValueForReference (R.makeReference "/address/street") context
+        assertEqual "" Null $ getValueForReference (R.makeReference "/address/city") context
+        assertEqual "" "123 Easy St" $ getValueForReference (R.makeReference "/custom/address/street") context
+        assertEqual "" "Anytown" $ getValueForReference (R.makeReference "/custom/address/city") context
+    )
+
+canParseMultiKindFormat :: Test
+canParseMultiKindFormat = TestCase $
+    let jsonString = "{\"kind\": \"multi\", \"user\": {\"key\": \"user-key\", \"name\": \"Sandy\"}, \"org\": {\"key\": \"org-key\", \"name\": \"LaunchDarkly\"}}"
+        context :: Context = fromJust $ decode jsonString
+        userContext = fromJust $ getIndividualContext "user" context
+        orgContext = fromJust $ getIndividualContext "org" context
+    in (do
+        assertBool "" $ isValid context
+        assertEqual "" "multi" $ getValue "kind" context
+
+        assertEqual "" "user" $ getValue "kind" userContext
+        assertEqual "" "user-key" $ getValue "key" userContext
+        assertEqual "" "Sandy" $ getValue "name" userContext
+
+        assertEqual "" "org" $ getValue "kind" orgContext
+        assertEqual "" "org-key" $ getValue "key" orgContext
+        assertEqual "" "LaunchDarkly" $ getValue "name" orgContext
+    )
+
 allTests :: Test
 allTests = TestList
   [ invalidKey
@@ -158,7 +225,12 @@ allTests = TestList
   , multiKindRequiresSingleContextsOnly
   , multiKindWithSingleKindWillReturnSingleKind
   , multiKindCanOnlyRetrieveKindAttribute
+  , canRetrievalIndividualContextsFromMultiKindContext
+  , canRetrievalIndividualContextsFromSingleKindContext
   , singleContextSupportsValueRetrieval
   , invalidKindCannotRetrieveAnything
   , cannotUseWithAttributeToSetRestrictedAttributes
+  , canParseFromLegacyUserFormat
+  , canParseSingleKindFormat
+  , canParseMultiKindFormat
   ]

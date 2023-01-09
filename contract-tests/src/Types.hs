@@ -5,10 +5,11 @@ import Data.Text (Text)
 import qualified LaunchDarkly.Server as LD
 import Data.Aeson.Types (Value(..))
 import Data.HashMap.Strict (HashMap)
-import Data.Aeson (FromJSON, ToJSON, parseJSON, withObject, (.:), (.:?), (.!=))
+import Data.Aeson (FromJSON, ToJSON, toJSON, parseJSON, object, withObject, (.:), (.:?), (.!=))
 import GHC.Generics (Generic)
 import Data.Set (Set)
 import GHC.Natural (Natural)
+import Data.Maybe (fromMaybe)
 
 data CreateClientParams = CreateClientParams
     { tag :: !Text
@@ -44,6 +45,8 @@ data CommandParams = CommandParams
     , evaluateAll :: !(Maybe EvaluateAllFlagsParams)
     , customEvent :: !(Maybe CustomEventParams)
     , identifyEvent :: !(Maybe IdentifyEventParams)
+    , contextBuild :: !(Maybe ContextBuildParams)
+    , contextConvert :: !(Maybe ContextConvertParams)
     } deriving (FromJSON, Generic)
 
 data EvaluateFlagParams = EvaluateFlagParams
@@ -91,6 +94,34 @@ instance FromJSON CustomEventParams where
 data IdentifyEventParams = IdentifyEventParams
     { user :: !LD.User
     } deriving (FromJSON, Generic)
+
+data ContextBuildParams = ContextBuildParams
+    { single :: !(Maybe ContextBuildParam)
+    , multi :: !(Maybe [ContextBuildParam])
+    } deriving (FromJSON, Generic)
+
+data ContextBuildParam = ContextBuildParam
+    { kind :: !(Maybe Text)
+    , key :: !Text
+    , name :: !(Maybe Text)
+    , anonymous :: !(Maybe Bool)
+    , private :: !(Maybe [Text])
+    , custom :: !(Maybe (HashMap Text Value))
+    } deriving (FromJSON, Generic)
+
+data ContextConvertParams = ContextConvertParams
+    { input :: !Text
+    } deriving (FromJSON, Generic)
+
+data ContextResponse = ContextResponse
+    { output :: !(Maybe Text)
+    , errorMessage :: !(Maybe Text)
+    } deriving (Generic)
+
+instance ToJSON ContextResponse where
+    toJSON (ContextResponse { output = Just o, errorMessage = Nothing }) = object [ ("output", String o) ]
+    toJSON (ContextResponse { output = _, errorMessage = Just e }) = object [ ("error", String e) ]
+    toJSON _ = object [ ("error", String "Invalid context response was generated") ]
 
 instance FromJSON LD.User where
     parseJSON = withObject "User" $ \o -> do

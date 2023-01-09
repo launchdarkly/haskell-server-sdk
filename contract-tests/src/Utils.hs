@@ -1,11 +1,9 @@
 module Utils where
 
 import Control.Concurrent (threadDelay)
-import Data.Text (Text)
-import Data.Aeson (Value(..))
 import qualified LaunchDarkly.Server as LD
 import Types
-import Data.Generics.Product (getField, setField)
+import Data.Generics.Product (getField)
 
 createClient :: CreateClientParams -> IO LD.Client
 createClient p = LD.makeClient $ createConfig $ getField @"configuration" p
