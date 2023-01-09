@@ -2,6 +2,14 @@
 
 All notable changes to the LaunchDarkly Haskell Server-side SDK will be documented in this file. This project adheres to [Semantic Versioning](http://semver.org).
 
+## [3.0.4] - 2023-01-09
+### Changed:
+- Expanded upper version to allow `aeson-2.1`.  (Thanks, [vrom911](https://github.com/launchdarkly/haskell-server-sdk/pull/49))
+- Expanded upper version to allow `hashtables-1.3`. (Thanks, [vrom911](https://github.com/launchdarkly/haskell-server-sdk/pull/49))
+- Expanded upper version to allow `mtl-2.3`. (Thanks, [vrom911](https://github.com/launchdarkly/haskell-server-sdk/pull/49))
+- Expanded upper version to allow `text-2.0`. (Thanks, [vrom911](https://github.com/launchdarkly/haskell-server-sdk/pull/49))
+- Expanded upper version to allow `time-1.12`. (Thanks, [vrom911](https://github.com/launchdarkly/haskell-server-sdk/pull/49))
+
 ## [3.0.3] - 2022-11-08
 ### Added:
 - Commit generated Cabal file per the [stack recommendations](https://github.com/commercialhaskell/stack/issues/5210) (Thanks, [philderbeast](https://github.com/launchdarkly/haskell-server-sdk/pull/44))
