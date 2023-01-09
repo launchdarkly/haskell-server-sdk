@@ -83,7 +83,7 @@ runCommand appStateRef = do
 
 identifyCommand :: LD.Client -> Maybe IdentifyEventParams -> ActionM ()
 identifyCommand _ Nothing = error "Missing identify event params"
-identifyCommand c (Just p) = liftIO $ LD.identify c (getField @"user" p)
+identifyCommand c (Just p) = liftIO $ LD.identify c (getField @"context" p)
 
 contextBuildCommand :: Maybe ContextBuildParams -> ActionM ()
 contextBuildCommand Nothing = error "Missing context build params"
@@ -120,18 +120,18 @@ createContextResponse c = case getError c of
 
 customCommand :: LD.Client -> Maybe CustomEventParams -> ActionM ()
 customCommand _ Nothing = error "Missing custom event params"
-customCommand c (Just p) = liftIO $ LD.track c (getField @"user" p) (getField @"eventKey" p) (getField @"dataValue" p) (getField @"metricValue" p)
+customCommand c (Just p) = liftIO $ LD.track c (getField @"context" p) (getField @"eventKey" p) (getField @"dataValue" p) (getField @"metricValue" p)
 
 evaluateCommand :: LD.Client -> Maybe EvaluateFlagParams -> ActionM ()
 evaluateCommand _ Nothing = error "Missing evaluate params"
 evaluateCommand c (Just p)
     | (detail p) == True = do
-        d <- liftIO $ evaluateWithDetail c user flagKey valueType defaultValue
+        d <- liftIO $ evaluateWithDetail c context flagKey valueType defaultValue
         json d
     | otherwise = do
-        d <- liftIO $ evaluateWithoutDetail c user flagKey valueType defaultValue
+        d <- liftIO $ evaluateWithoutDetail c context flagKey valueType defaultValue
         json d
-        where user = (getField @"user" p)
+        where context = (getField @"context" p)
               flagKey = (getField @"flagKey" p)
               valueType = (getField @"valueType" p)
               defaultValue = (getField @"defaultValue" p)
@@ -150,30 +150,30 @@ toFlagResponseWithoutDetail v = EvaluateFlagResponse
     , reason = Nothing
     }
 
-evaluateWithDetail :: LD.Client -> LD.User -> Text -> Text -> Value -> IO EvaluateFlagResponse
-evaluateWithDetail c user flagKey "bool" (Bool v) = toFlagResponseWithDetail <$> LD.boolVariationDetail c flagKey user v
-evaluateWithDetail c user flagKey "int" (Number v) = case floatingOrInteger v of
+evaluateWithDetail :: LD.Client -> LD.Context -> Text -> Text -> Value -> IO EvaluateFlagResponse
+evaluateWithDetail c context flagKey "bool" (Bool v) = toFlagResponseWithDetail <$> LD.boolVariationDetail c flagKey context v
+evaluateWithDetail c context flagKey "int" (Number v) = case floatingOrInteger v of
       Left _ -> error("Invalid int format")
-      Right x -> toFlagResponseWithDetail <$> LD.intVariationDetail c flagKey user x
-evaluateWithDetail c user flagKey "double" (Number v) = toFlagResponseWithDetail <$> LD.doubleVariationDetail c flagKey user (toRealFloat v)
-evaluateWithDetail c user flagKey "string" (String v) = toFlagResponseWithDetail <$> LD.stringVariationDetail c flagKey user v
-evaluateWithDetail c user flagKey "any" v = toFlagResponseWithDetail <$> LD.jsonVariationDetail c flagKey user v
+      Right x -> toFlagResponseWithDetail <$> LD.intVariationDetail c flagKey context x
+evaluateWithDetail c context flagKey "double" (Number v) = toFlagResponseWithDetail <$> LD.doubleVariationDetail c flagKey context (toRealFloat v)
+evaluateWithDetail c context flagKey "string" (String v) = toFlagResponseWithDetail <$> LD.stringVariationDetail c flagKey context v
+evaluateWithDetail c context flagKey "any" v = toFlagResponseWithDetail <$> LD.jsonVariationDetail c flagKey context v
 evaluateWithDetail _ _ _ _ _ = error("Invalid type provided")
 
-evaluateWithoutDetail :: LD.Client -> LD.User -> Text -> Text -> Value -> IO EvaluateFlagResponse
-evaluateWithoutDetail c user flagKey "bool" (Bool v) = toFlagResponseWithoutDetail <$> LD.boolVariation c flagKey user v
-evaluateWithoutDetail c user flagKey "int" (Number v) = case floatingOrInteger v of
+evaluateWithoutDetail :: LD.Client -> LD.Context -> Text -> Text -> Value -> IO EvaluateFlagResponse
+evaluateWithoutDetail c context flagKey "bool" (Bool v) = toFlagResponseWithoutDetail <$> LD.boolVariation c flagKey context v
+evaluateWithoutDetail c context flagKey "int" (Number v) = case floatingOrInteger v of
         Left _ -> error("Invalid int format")
-        Right x -> toFlagResponseWithoutDetail <$> LD.intVariation c flagKey user x
-evaluateWithoutDetail c user flagKey "double" (Number v) = toFlagResponseWithoutDetail <$> LD.doubleVariation c flagKey user (toRealFloat v)
-evaluateWithoutDetail c user flagKey "string" (String v) = toFlagResponseWithoutDetail <$> LD.stringVariation c flagKey user v
-evaluateWithoutDetail c user flagKey "any" v = toFlagResponseWithoutDetail <$> LD.jsonVariation c flagKey user v
+        Right x -> toFlagResponseWithoutDetail <$> LD.intVariation c flagKey context x
+evaluateWithoutDetail c context flagKey "double" (Number v) = toFlagResponseWithoutDetail <$> LD.doubleVariation c flagKey context (toRealFloat v)
+evaluateWithoutDetail c context flagKey "string" (String v) = toFlagResponseWithoutDetail <$> LD.stringVariation c flagKey context v
+evaluateWithoutDetail c context flagKey "any" v = toFlagResponseWithoutDetail <$> LD.jsonVariation c flagKey context v
 evaluateWithoutDetail _ _ _ _ _ = error("Invalid type provided")
 
 evaluateAllCommand :: LD.Client -> Maybe EvaluateAllFlagsParams -> ActionM ()
 evaluateAllCommand _ Nothing = error "Missing evaluate all params"
 evaluateAllCommand c (Just p) = do
-    s <- liftIO $ LD.allFlagsState c (getField @"user" p) (getField @"clientSideOnly" p) (getField @"withReasons" p) (getField @"detailsOnlyForTrackedFlags" p)
+    s <- liftIO $ LD.allFlagsState c (getField @"context" p) (getField @"clientSideOnly" p) (getField @"withReasons" p) (getField @"detailsOnlyForTrackedFlags" p)
     json $ EvaluateAllFlagsResponse { state = s }
 
 stopClient :: IORef AppState -> ActionM ()

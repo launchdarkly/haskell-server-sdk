@@ -11,9 +11,10 @@ import LaunchDarkly.Server.User
 import LaunchDarkly.Server.User.Internal
 import LaunchDarkly.Server.Operators
 import LaunchDarkly.Server.Evaluate
+import LaunchDarkly.Server.Context (makeContext, withAttribute)
 
 testExplicitIncludeUser :: Test
-testExplicitIncludeUser = True ~=? (segmentContainsUser segment user) where
+testExplicitIncludeUser = True ~=? (segmentContainsContext segment user) where
     segment = Segment
         { key      = "test"
         , included = HS.fromList ["foo"]
@@ -24,10 +25,10 @@ testExplicitIncludeUser = True ~=? (segmentContainsUser segment user) where
         , deleted  = False
         }
 
-    user = unwrapUser $ makeUser "foo"
+    user = makeContext "foo" "user"
 
 testExplicitExcludeUser :: Test
-testExplicitExcludeUser = False ~=? (segmentContainsUser segment user) where
+testExplicitExcludeUser = False ~=? (segmentContainsContext segment user) where
     segment = Segment
         { key      = "test"
         , included = HS.empty
@@ -38,10 +39,10 @@ testExplicitExcludeUser = False ~=? (segmentContainsUser segment user) where
         , deleted  = False
         }
 
-    user = unwrapUser $ makeUser "foo"
+    user = makeContext "foo" "user"
 
 testExplicitIncludeHasPrecedence :: Test
-testExplicitIncludeHasPrecedence = True ~=? (segmentContainsUser segment user) where
+testExplicitIncludeHasPrecedence = True ~=? (segmentContainsContext segment user) where
     segment = Segment
         { key      = "test"
         , included = HS.fromList ["foo"]
@@ -52,10 +53,10 @@ testExplicitIncludeHasPrecedence = True ~=? (segmentContainsUser segment user) w
         , deleted  = False
         }
 
-    user = unwrapUser $ makeUser "foo"
+    user = makeContext "foo" "user"
 
 testNeitherIncludedNorExcluded :: Test
-testNeitherIncludedNorExcluded = False ~=? (segmentContainsUser segment user) where
+testNeitherIncludedNorExcluded = False ~=? (segmentContainsContext segment user) where
     segment = Segment
         { key      = "test"
         , included = HS.fromList [""]
@@ -66,10 +67,10 @@ testNeitherIncludedNorExcluded = False ~=? (segmentContainsUser segment user) wh
         , deleted  = False
         }
 
-    user = unwrapUser $ makeUser "foo"
+    user = makeContext "foo" "user"
 
 testMatchingRuleWithFullRollout :: Test
-testMatchingRuleWithFullRollout = True ~=? (segmentContainsUser segment user) where
+testMatchingRuleWithFullRollout = True ~=? (segmentContainsContext segment context) where
     segment = Segment
         { key      = "test"
         , included = HS.empty
@@ -94,10 +95,10 @@ testMatchingRuleWithFullRollout = True ~=? (segmentContainsUser segment user) wh
         , deleted  = False
         }
 
-    user = unwrapUser $ (makeUser "foo") & userSetEmail (pure "test@example.com")
+    context = makeContext "foo" "user" & withAttribute "email" "test@example.com"
 
 testMatchingRuleWithZeroRollout :: Test
-testMatchingRuleWithZeroRollout = False ~=? (segmentContainsUser segment user) where
+testMatchingRuleWithZeroRollout = False ~=? (segmentContainsContext segment context) where
     segment = Segment
         { key      = "test"
         , included = HS.empty
@@ -122,10 +123,10 @@ testMatchingRuleWithZeroRollout = False ~=? (segmentContainsUser segment user) w
         , deleted  = False
         }
 
-    user = unwrapUser $ (makeUser "foo") & userSetEmail (pure "test@example.com")
+    context = makeContext "foo" "user" & withAttribute "email" "test@example.com"
 
 testMatchingRuleWithMultipleClauses :: Test
-testMatchingRuleWithMultipleClauses = True ~=? (segmentContainsUser segment user) where
+testMatchingRuleWithMultipleClauses = True ~=? (segmentContainsContext segment context) where
     segment = Segment
         { key      = "test"
         , included = HS.empty
@@ -156,12 +157,12 @@ testMatchingRuleWithMultipleClauses = True ~=? (segmentContainsUser segment user
         , deleted  = False
         }
 
-    user = unwrapUser $ (makeUser "foo")
-        & userSetEmail (pure "test@example.com")
-        & userSetName  (pure "bob")
+    context = makeContext "foo" "user"
+        & withAttribute "email" "test@example.com"
+        & withAttribute "name" "bob"
 
 testNonMatchingRuleWithMultipleClauses :: Test
-testNonMatchingRuleWithMultipleClauses = False ~=? (segmentContainsUser segment user) where
+testNonMatchingRuleWithMultipleClauses = False ~=? (segmentContainsContext segment context) where
     segment = Segment
         { key      = "test"
         , included = HS.empty
@@ -192,9 +193,9 @@ testNonMatchingRuleWithMultipleClauses = False ~=? (segmentContainsUser segment 
         , deleted  = False
         }
 
-    user = unwrapUser $ (makeUser "foo")
-        & userSetEmail (pure "test@example.com")
-        & userSetName  (pure "bob")
+    context = makeContext "foo" "user"
+        & withAttribute "email" "test@example.com"
+        & withAttribute "name" "bob"
 
 allTests :: Test
 allTests = TestList

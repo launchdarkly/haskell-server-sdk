@@ -28,13 +28,13 @@ data Rule = Rule
 
 instance FromJSON Rule where
     parseJSON = withObject "Rule" $ \o -> do
-        id          <- o .:  "id"
+        id          <- o .:?  "id"
         clauses     <- o .:  "clauses"
         variation   <- o .:? "variation"
         rollout     <- o .:? "rollout"
         trackEvents <- o .:  "trackEvents"
         pure Rule
-            { id                 = id
+            { id                 = fromMaybe "" id
             , clauses            = clauses
             , variationOrRollout = VariationOrRollout
                 { variation = variation
@@ -184,7 +184,7 @@ isClientSideOnlyFlag flag = getField @"usingEnvironmentId" $ getField  @"clientS
 isInExperiment :: Flag -> EvaluationReason -> Bool
 isInExperiment _ reason
   | D.isInExperiment reason = True
-isInExperiment flag EvaluationReasonFallthrough {..} = getField @"trackEventsFallthrough" flag
+isInExperiment flag EvaluationReasonFallthrough {} = getField @"trackEventsFallthrough" flag
 isInExperiment flag (EvaluationReasonRuleMatch ruleIndex _ _) =
     let index = fromIntegral ruleIndex
         rules = getField @"rules" flag

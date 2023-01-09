@@ -15,6 +15,7 @@ import           LaunchDarkly.Server
 import           LaunchDarkly.Server.DataSource.Internal
 import qualified LaunchDarkly.Server.Integrations.TestData             as TestData
 import qualified LaunchDarkly.Server.Integrations.TestData.FlagBuilder as FlagBuilder
+import LaunchDarkly.Server.Context (toLegacyUser)
 
 allTests :: Test
 allTests = TestList
@@ -42,8 +43,8 @@ testVariationForAllUsers = TestCase $ do
           <&> TestData.variationForAllUsers True)
   let config = testConfig (TestData.dataSourceFactory td)
   client <- makeClient config
-  let user1 = makeUser "user1"
-      user2 = makeUser "user2"
+  let user1 = makeContext "user1" "user"
+      user2 = makeContext "user2" "user"
   assertEqual "user1 set" True =<< boolVariation client "flag-key-1" user1 False
   assertEqual "user2 set" True =<< boolVariation client "flag-key-1" user2 False
   assertEqual "user not set for another flag" False =<< boolVariation client "another-key" user1 False
@@ -61,7 +62,7 @@ testModifyFlags = TestCase $ do
           <&> TestData.variationForAllUsers (0 :: TestData.VariationIndex))
   let config = testConfig (TestData.dataSourceFactory td)
   client <- makeClient config
-  let user = makeUser "user"
+  let user = makeContext "user" "user"
   assertEqual "user set" "blue" =<< stringVariation client "flag-key-1" user "none"
 
   TestData.update td =<<
@@ -86,7 +87,7 @@ testMultipleFlags = TestCase $ do
           <&> TestData.variationForAllUsers True)
   let config = testConfig (TestData.dataSourceFactory td)
   client <- makeClient config
-  let user = makeUser "user"
+  let user = makeContext "user" "user"
   assertEqual "flag 1" "blue" =<< stringVariation client "flag-key-1" user "none"
   assertEqual "flag 2" True =<< boolVariation client "flag-key-2" user False
   close client
@@ -97,7 +98,7 @@ testMultipleClients = TestCase $ do
   let config = testConfig (TestData.dataSourceFactory td)
   client1 <- makeClient config
   client2 <- makeClient config
-  let user = makeUser "user"
+  let user = makeContext "user" "user"
   TestData.update td =<<
       (TestData.flag td "flag-key-1"
           <&> TestData.variations [ toJSON ("blue" :: Text)
@@ -130,22 +131,22 @@ testTargeting = TestCase $ do
           <&> TestData.offVariation (1 :: TestData.VariationIndex)
           <&> TestData.fallthroughVariation (2 :: TestData.VariationIndex))
   let config = testConfig (TestData.dataSourceFactory td)
-      ben = makeUser "ben"
-      todd = makeUser "todd"
-      evelyn = makeUser "evelyn"
+      ben = makeContext "ben" "user"
+      todd = makeContext "todd" "user"
+      evelyn = makeContext "evelyn" "user"
 
   client <- makeClient config
 
-  assertEqual "ben recieves blue" "blue" =<< stringVariation client "flag-key-1" ben "none"
-  assertEqual "todd recieves blue" "blue" =<< stringVariation client "flag-key-1" todd "none"
-  assertEqual "evelyn recieves green" "green" =<< stringVariation client "flag-key-1" evelyn "none"
+  assertEqual "ben receives blue" "blue" =<< stringVariation client "flag-key-1" ben "none"
+  assertEqual "todd receives blue" "blue" =<< stringVariation client "flag-key-1" todd "none"
+  assertEqual "evelyn receives green" "green" =<< stringVariation client "flag-key-1" evelyn "none"
   TestData.update td =<<
       (TestData.flag td "flag-key-1"
           <&> TestData.on False)
 
-  assertEqual "targeting off ben recieves red" "red" =<< stringVariation client "flag-key-1" ben "none"
-  assertEqual "targeting off todd recieves red" "red" =<< stringVariation client "flag-key-1" todd "none"
-  assertEqual "targeting off evelyn recieves red" "red" =<< stringVariation client "flag-key-1" evelyn "none"
+  assertEqual "targeting off ben receives red" "red" =<< stringVariation client "flag-key-1" ben "none"
+  assertEqual "targeting off todd receives red" "red" =<< stringVariation client "flag-key-1" todd "none"
+  assertEqual "targeting off evelyn receives red" "red" =<< stringVariation client "flag-key-1" evelyn "none"
 
   close client
 
@@ -167,19 +168,19 @@ testRules = TestCase $ do
           <&> TestData.thenReturn (2 :: TestData.VariationIndex)
           <&> TestData.fallthroughVariation (0 :: TestData.VariationIndex))
   let config = testConfig (TestData.dataSourceFactory td)
-      ben = makeUser "ben"
-                & userSetCountry (Just "usa")
-                & userSetName (Just "Ben")
-      todd = makeUser "todd"
-                & userSetCountry (Just "gb")
-                & userSetName (Just "Todd")
-      evelyn = makeUser "evelyn"
+      ben = makeContext "ben" "user"
+                & withAttribute "country" "usa"
+                & withAttribute "name" "Ben"
+      todd = makeContext "todd" "user"
+                & withAttribute "country" "gb"
+                & withAttribute "name" "Todd"
+      evelyn = makeContext "evelyn" "user"
 
   client <- makeClient config
 
-  assertEqual "ben recieves green" "green" =<< stringVariation client "flag-key-1" ben "none"
-  assertEqual "todd recieves red" "red" =<< stringVariation client "flag-key-1" todd "none"
-  assertEqual "evelyn recieves blue" "blue" =<< stringVariation client "flag-key-1" evelyn "none"
+  assertEqual "ben receives green" "green" =<< stringVariation client "flag-key-1" ben "none"
+  assertEqual "todd receives red" "red" =<< stringVariation client "flag-key-1" todd "none"
+  assertEqual "evelyn receives blue" "blue" =<< stringVariation client "flag-key-1" evelyn "none"
 
   close client
 
@@ -195,13 +196,12 @@ testValueForAllUsers = TestCase $ do
       (TestData.flag td "flag-key-1"
         <&> TestData.valueForAllUsers CustomType1)
   let config = testConfig (TestData.dataSourceFactory td)
-      ben = makeUser "ben"
-      todd = makeUser "todd"
+      ben = makeContext "ben" "user"
+      todd = makeContext "todd" "user"
 
   client <- makeClient config
 
-  assertEqual "ben recieves CustomType1" "CustomType1" =<< stringVariation client "flag-key-1" ben "CustomType2"
-  assertEqual "todd recieves CustomType1" "CustomType1" =<< stringVariation client "flag-key-1" todd "CustomType2"
+  assertEqual "ben receives CustomType1" "CustomType1" =<< stringVariation client "flag-key-1" ben "CustomType2"
+  assertEqual "todd receives CustomType1" "CustomType1" =<< stringVariation client "flag-key-1" todd "CustomType2"
 
   close client
-

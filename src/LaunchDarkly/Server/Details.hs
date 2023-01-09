@@ -105,6 +105,9 @@ data EvalErrorKind
     | EvalErrorClientNotReady
       -- ^ Indicates that the caller tried to evaluate a flag before the client
       -- had successfully initialized.
+    | EvalErrorInvalidContext
+      -- ^ Indicates that the caller tried to evaluate a flag with an invalid
+      -- context
     | EvalErrorExternalStore !Text
       -- ^ Indicates that some error was returned by the external feature store.
     deriving (Generic, Eq, Show)
@@ -116,3 +119,4 @@ instance ToJSON EvalErrorKind where
         EvalErrorWrongType         -> "WRONG_TYPE"
         EvalErrorClientNotReady    -> "CLIENT_NOT_READY"
         EvalErrorExternalStore _   -> "EXTERNAL_STORE_ERROR"
+        EvalErrorInvalidContext    -> "ERROR_INVALID_CONTEXT"

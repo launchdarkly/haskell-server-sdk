@@ -35,9 +35,8 @@ import           Control.Monad.IO.Class                (liftIO)
 import           Control.Monad.Logger                  (LoggingT, logDebug, logWarn)
 import           Control.Monad.Fix                     (mfix)
 import           Data.IORef                            (newIORef, writeIORef, readIORef)
-import           Data.Maybe                            (fromMaybe)
+import           Data.Maybe                            (fromMaybe, fromJust)
 import           Data.Text                             (Text)
-import qualified Data.Text as                          T
 import           Data.Text.Encoding                    (encodeUtf8)
 import           Data.Aeson                            (Value(..), toJSON, ToJSON, (.=), object)
 import           Data.Generics.Product                 (getField)
@@ -51,6 +50,7 @@ import           System.Clock                          (TimeSpec(..))
 
 import           LaunchDarkly.Server.Client.Internal          (Client(..), ClientI(..), getStatusI, clientVersion)
 import           LaunchDarkly.Server.Client.Status            (Status(..))
+import           LaunchDarkly.Server.Context                  (Context(..), toLegacyUser, getValue)
 import           LaunchDarkly.Server.Config.ClientContext     (ClientContext(..))
 import           LaunchDarkly.Server.Config.HttpConfiguration (HttpConfiguration(..))
 import           LaunchDarkly.Server.Config.Internal          (ConfigI, Config(..), shouldSendEvents)
@@ -188,7 +188,7 @@ instance ToJSON FlagState where
         ]
 
 -- | Returns an object that encapsulates the state of all feature flags for a
--- given user. This includes the flag values, and also metadata that can be
+-- given context. This includes the flag values, and also metadata that can be
 -- used on the front end.
 --
 -- The most common use case for this method is to bootstrap a set of
@@ -205,14 +205,14 @@ instance ToJSON FlagState where
 --
 -- For more information, see the Reference Guide:
 -- https://docs.launchdarkly.com/sdk/features/all-flags#haskell
-allFlagsState :: Client -> User -> Bool -> Bool -> Bool -> IO (AllFlagsState)
-allFlagsState (Client client) (User user) client_side_only with_reasons details_only_for_tracked_flags  = do
+allFlagsState :: Client -> Context -> Bool -> Bool -> Bool -> IO (AllFlagsState)
+allFlagsState (Client client) context client_side_only with_reasons details_only_for_tracked_flags  = do
     status <- getAllFlagsC $ getField @"store" client
     case status of
         Left _      -> pure AllFlagsState { evaluations = emptyObject, state = emptyObject, valid = False }
         Right flags -> do
             filtered <- pure $ (filterObject (\flag -> (not client_side_only) || isClientSideOnlyFlag flag) flags)
-            details <- mapM (\flag -> (\detail -> (flag, fst detail)) <$> (evaluateDetail flag user $ getField @"store" client)) filtered
+            details <- mapM (\flag -> (\detail -> (flag, fst detail)) <$> (evaluateDetail flag context $ getField @"store" client)) filtered
             evaluations <- pure $ mapValues (getField @"value" . snd) details
             now <- unixMilliseconds
             state <- pure $ mapValues (\(flag, detail) -> do
@@ -232,37 +232,42 @@ allFlagsState (Client client) (User user) client_side_only with_reasons details_
                     }) details
             pure $ AllFlagsState { evaluations = evaluations, state = state, valid = True }
 
--- | Returns a map from feature flag keys to values for a given user. If the
+-- | Returns a map from feature flag keys to values for a given context. If the
 -- result of the flag's evaluation would result in the default value, `Null`
 -- will be returned. This method does not send analytics events back to
 -- LaunchDarkly.
-allFlags :: Client -> User -> IO (KeyMap Value)
-allFlags (Client client) (User user) = do
+allFlags :: Client -> Context -> IO (KeyMap Value)
+allFlags (Client client) context = do
     status <- getAllFlagsC $ getField @"store" client
     case status of
         Left _      -> pure emptyObject
         Right flags -> do
-            evals <- mapM (\flag -> evaluateDetail flag user $ getField @"store" client) flags
+            evals <- mapM (\flag -> evaluateDetail flag context $ getField @"store" client) flags
             pure $ mapValues (getField @"value" . fst) evals
 
--- | Identify reports details about a user.
-identify :: Client -> User -> IO ()
-identify (Client client) (User user)
-    | T.null (getField @"key" user) = clientRunLogger client $ $(logWarn) "identify called with empty user key!"
-    | otherwise = do
-        let user' = userSerializeRedacted (getField @"config" client) user
-        x <- makeBaseEvent $ IdentifyEvent { key = getField @"key" user, user = user' }
-        _ <- noticeUser (getField @"events" client) user
-        queueEvent (getField @"config" client) (getField @"events" client) (EventTypeIdentify x)
+-- | Identify reports details about a context.
+identify :: Client -> Context -> IO ()
+identify (Client client) (Invalid err) = clientRunLogger client $ $(logWarn) $ "identify called with an invalid context: " <> err
+identify (Client client) context = case (getValue "key" context) of
+        (String "") -> clientRunLogger client $ $(logWarn) "identify called with empty key"
+        _ -> do
+            let (User user) = fromJust $ toLegacyUser context
+                user' = userSerializeRedacted (getField @"config" client) user
+            x <- makeBaseEvent $ IdentifyEvent { key = getField @"key" user, user = user' }
+            _ <- noticeUser (getField @"events" client) user
+            queueEvent (getField @"config" client) (getField @"events" client) (EventTypeIdentify x)
 
--- | Track reports that a user has performed an event. Custom data can be
+-- | Track reports that a context has performed an event. Custom data can be
 -- attached to the event, and / or a numeric value.
 --
 -- The numeric value is used by the LaunchDarkly experimentation feature in
 -- numeric custom metrics, and will also be returned as part of the custom event
 -- for Data Export.
-track :: Client -> User -> Text -> Maybe Value -> Maybe Double -> IO ()
-track (Client client) (User user) key value metric = do
+track :: Client -> Context -> Text -> Maybe Value -> Maybe Double -> IO ()
+track (Client client) (Invalid err) _ _ _ = clientRunLogger client $ $(logWarn) $ "track called with invalid context: " <> err
+track (Client client) context key value metric =
+    let (User user) = fromJust $ toLegacyUser context
+    in do
     x <- makeBaseEvent $ addUserToEvent (getField @"config" client) user CustomEvent
         { key         = key
         , user        = Nothing
@@ -300,10 +305,10 @@ close outer@(Client client) = clientRunLogger client $ do
 
 type ValueConverter a = (a -> Value, Value -> Maybe a)
 
-reorderStuff :: ValueConverter a -> Bool -> Client -> Text -> User -> a -> IO (EvaluationDetail a)
-reorderStuff converter includeReason (Client client) key (User user) fallback = evaluateTyped client key user fallback (fst converter) includeReason (snd converter)
+reorderStuff :: ValueConverter a -> Bool -> Client -> Text -> Context -> a -> IO (EvaluationDetail a)
+reorderStuff converter includeReason (Client client) key context fallback = evaluateTyped client key context fallback (fst converter) includeReason (snd converter)
 
-dropReason :: (Text -> User -> a -> IO (EvaluationDetail a)) -> Text -> User -> a -> IO a
+dropReason :: (Text -> Context -> a -> IO (EvaluationDetail a)) -> Text -> Context -> a -> IO a
 dropReason = (((fmap (getField @"value") .) .) .)
 
 boolConverter :: ValueConverter Bool
@@ -322,42 +327,42 @@ jsonConverter :: ValueConverter Value
 jsonConverter = (,) id pure
 
 -- | Evaluate a Boolean typed flag.
-boolVariation :: Client -> Text -> User -> Bool -> IO Bool
+boolVariation :: Client -> Text -> Context -> Bool -> IO Bool
 boolVariation = dropReason . reorderStuff boolConverter False
 
 -- | Evaluate a Boolean typed flag, and return an explanation.
-boolVariationDetail :: Client -> Text -> User -> Bool -> IO (EvaluationDetail Bool)
+boolVariationDetail :: Client -> Text -> Context -> Bool -> IO (EvaluationDetail Bool)
 boolVariationDetail = reorderStuff boolConverter True
 
 -- | Evaluate a String typed flag.
-stringVariation :: Client -> Text -> User -> Text -> IO Text
+stringVariation :: Client -> Text -> Context -> Text -> IO Text
 stringVariation = dropReason . reorderStuff stringConverter False
 
 -- | Evaluate a String typed flag, and return an explanation.
-stringVariationDetail :: Client -> Text -> User -> Text -> IO (EvaluationDetail Text)
+stringVariationDetail :: Client -> Text -> Context -> Text -> IO (EvaluationDetail Text)
 stringVariationDetail = reorderStuff stringConverter True
 
 -- | Evaluate a Number typed flag, and truncate the result.
-intVariation :: Client -> Text -> User -> Int -> IO Int
+intVariation :: Client -> Text -> Context -> Int -> IO Int
 intVariation = dropReason . reorderStuff intConverter False
 
 -- | Evaluate a Number typed flag, truncate the result, and return an
 -- explanation.
-intVariationDetail :: Client -> Text -> User -> Int -> IO (EvaluationDetail Int)
+intVariationDetail :: Client -> Text -> Context -> Int -> IO (EvaluationDetail Int)
 intVariationDetail = reorderStuff intConverter True
 
 -- | Evaluate a Number typed flag.
-doubleVariation :: Client -> Text -> User -> Double -> IO Double
+doubleVariation :: Client -> Text -> Context -> Double -> IO Double
 doubleVariation = dropReason . reorderStuff doubleConverter False
 
 -- | Evaluate a Number typed flag, and return an explanation.
-doubleVariationDetail :: Client -> Text -> User -> Double -> IO (EvaluationDetail Double)
+doubleVariationDetail :: Client -> Text -> Context -> Double -> IO (EvaluationDetail Double)
 doubleVariationDetail = reorderStuff doubleConverter True
 
 -- | Evaluate a JSON typed flag.
-jsonVariation :: Client -> Text -> User -> Value -> IO Value
+jsonVariation :: Client -> Text -> Context -> Value -> IO Value
 jsonVariation = dropReason . reorderStuff jsonConverter False
 
 -- | Evaluate a JSON typed flag, and return an explanation.
-jsonVariationDetail :: Client -> Text -> User -> Value -> IO (EvaluationDetail Value)
+jsonVariationDetail :: Client -> Text -> Context -> Value -> IO (EvaluationDetail Value)
 jsonVariationDetail = reorderStuff jsonConverter True

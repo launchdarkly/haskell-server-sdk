@@ -14,7 +14,7 @@
 {-# LANGUAGE BlockArguments #-}
 
 module LaunchDarkly.Server.Context
-  ( Context
+  ( Context(Single, Multi, Invalid)
   , makeContext
   , makeMultiContext
   , withName
@@ -24,26 +24,28 @@ module LaunchDarkly.Server.Context
   , isValid
   , getError
   , getIndividualContext
-  , getValue
   , getValueForReference
+  , getValue
+  , getKey
+  , toLegacyUser
   )
 
 where
 
 import Data.Aeson (Value(..), ToJSON, toJSON, FromJSON, parseJSON, withObject, (.:?), (.:), fromJSON, Result (Success))
-import Data.Text (Text, unpack, replace)
+import Data.Text (Text, unpack, replace, intercalate)
 import Data.Maybe (mapMaybe, fromMaybe)
 import LaunchDarkly.Server.Reference (Reference)
 import qualified LaunchDarkly.Server.Reference as R
 import qualified Data.HashSet as HS
 import qualified Data.Vector as V
 import Data.List (sortBy)
-import Data.Text (intercalate)
 import LaunchDarkly.AesonCompat (KeyMap, singleton, insertKey, lookupKey, toList, emptyObject, deleteKey, foldrWithKey, mapValues, fromList)
 import Data.Generics.Product (setField)
 import GHC.Generics (Generic)
 import Data.Function ((&))
 import Data.Aeson.Types (Parser, prependFailure, typeMismatch)
+import qualified LaunchDarkly.Server.User as U
 
 -- | data record for the Context type
 data Context =
@@ -199,9 +201,9 @@ withAttribute "anonymous" _ c = c
 withAttribute "_meta" _ c = c
 withAttribute "privateAttributeNames" _ c = c
 withAttribute attr value (Single c@(SingleContext { attributes = Nothing })) =
-  Single $ c { attributes = (Just $ singleton attr value) }
+  Single $ c { attributes = Just $ singleton attr value }
 withAttribute attr value (Single c@(SingleContext { attributes = Just attrs })) =
-  Single $ c { attributes = (Just $ insertKey attr value attrs) }
+  Single $ c { attributes = Just $ insertKey attr value attrs }
 withAttribute _ _ c = c
 
 -- | Sets the private attributes for a a single-kind context.
@@ -237,6 +239,10 @@ getIndividualContext kind c@(Single (SingleContext { kind = k }))
     | kind == k = Just c
     | otherwise = Nothing
 getIndividualContext _ _ = Nothing
+
+getKey :: Context -> Text
+getKey (Single c) = key c
+getKey _ = ""
 
 -- | Looks up the value of any attribute of the Context by name. This includes only attributes that are addressable in
 -- evaluations-- not metadata such as private attributes.
@@ -382,3 +388,29 @@ parseMultiContext = withObject "MultiContext" $ \o -> do
      in case (length contextLists, length single) of
         (a, b) | a /= b -> return $ Invalid { error = "multi-kind context JSON contains non-single-kind contexts" }
         (_, _) -> return $ makeMultiContext single
+
+
+-- Temporarily helper method to ease conversion of SDK to context-only types
+--
+-- TODO: Remove before u2c release
+toLegacyUser :: Context -> Maybe U.User
+toLegacyUser (Invalid _) = Nothing
+toLegacyUser (Multi _) = Nothing
+toLegacyUser (Single (SingleContext { key, name, anonymous, attributes = attrs })) =
+    let attributes = fromMaybe emptyObject attrs
+        user = U.makeUser key
+                & U.userSetName name
+                & U.userSetAnonymous anonymous
+                & U.userSetSecondary (textFromValue <$> lookupKey "secondary" attributes)
+                & U.userSetIP (textFromValue <$> lookupKey "ip" attributes)
+                & U.userSetCountry (textFromValue <$> lookupKey "country" attributes)
+                & U.userSetEmail (textFromValue <$> lookupKey "email" attributes)
+                & U.userSetFirstName (textFromValue <$> lookupKey "firstName" attributes)
+                & U.userSetLastName (textFromValue <$> lookupKey "lastName" attributes)
+                & U.userSetAvatar (textFromValue <$> lookupKey "avatar" attributes)
+                & U.userSetCustom (fromMaybe emptyObject attrs)
+    in Just user
+
+textFromValue :: Value -> Text
+textFromValue (String s) = s
+textFromValue _ = ""

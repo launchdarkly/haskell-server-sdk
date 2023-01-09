@@ -9,15 +9,13 @@ module LaunchDarkly.Server.User.Internal
 import           Data.Aeson                          (FromJSON, ToJSON, Value(..), (.:), (.:?), withObject, object, parseJSON, toJSON)
 import           Data.Foldable                       (fold)
 import           Data.Generics.Product               (getField)
-import qualified Data.HashMap.Strict as              HM
-import           Data.HashMap.Strict                 (HashMap)
 import qualified Data.Set as                         S
 import           Data.Set                            (Set)
 import           Data.Text                           (Text)
 import           Data.Vector                         ()
 import           GHC.Generics                        (Generic)
 
-import           LaunchDarkly.AesonCompat            (KeyMap, adjustKey, keyToText, deleteKey, filterKeys, insertKey, objectKeys)
+import           LaunchDarkly.AesonCompat            (KeyMap, adjustKey, keyToText, deleteKey, filterKeys, insertKey, objectKeys, lookupKey)
 import           LaunchDarkly.Server.Config.Internal (ConfigI)
 
 mapUser :: (UserI -> UserI) -> User -> User
@@ -28,7 +26,7 @@ mapUser f (User c) = User $ f c
 -- The only mandatory property is the Key, which must uniquely identify
 -- each user. For authenticated users, this may be a username or e-mail address.
 -- For anonymous users, this could be an IP address or session ID.
-newtype User = User { unwrapUser :: UserI }
+newtype User = User { unwrapUser :: UserI } deriving (Show)
 
 data UserI = UserI
     { key                   :: !Text
@@ -41,9 +39,9 @@ data UserI = UserI
     , avatar                :: !(Maybe Text)
     , name                  :: !(Maybe Text)
     , anonymous             :: !Bool
-    , custom                :: !(HashMap Text Value)
+    , custom                :: !(KeyMap Value)
     , privateAttributeNames :: !(Set Text)
-    } deriving (Generic)
+    } deriving (Generic, Show)
 
 falseToNothing :: Bool -> Maybe Bool
 falseToNothing x = if x then pure x else Nothing
@@ -94,7 +92,7 @@ valueOf user attribute = case attribute of
     "avatar"    -> String <$> getField @"avatar" user
     "name"      -> String <$> getField @"name" user
     "anonymous" -> pure $ Bool $ getField @"anonymous" user
-    x           -> HM.lookup x $ getField @"custom" user
+    x           -> lookupKey x $ getField @"custom" user
 
 userSerializeRedacted :: ConfigI -> UserI -> Value
 userSerializeRedacted config user = if getField @"allAttributesPrivate" config
@@ -118,7 +116,7 @@ redact private = filterKeys (\k -> S.notMember (keyToText k) private)
 userSerializeAllPrivate :: UserI -> Value
 userSerializeAllPrivate user = setPrivateAttrs private (redact private raw) where
     raw     = deleteKey "custom" $ deleteKey "privateAttributeNames" $ fromObject $ toJSON user
-    private = S.delete "anonymous" $ S.delete "key" $ S.union (keysToSet raw) (S.fromList $ HM.keys $ getField @"custom" user)
+    private = S.delete "anonymous" $ S.delete "key" $ S.union (keysToSet raw) (S.fromList $ objectKeys $ getField @"custom" user)
 
 userSerializeRedactedNotAllPrivate :: Set Text -> UserI -> Value
 userSerializeRedactedNotAllPrivate globalPrivate user = setPrivateAttrs private redacted where

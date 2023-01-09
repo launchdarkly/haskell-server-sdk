@@ -19,11 +19,11 @@ module LaunchDarkly.Server.User
 
 import Data.Aeson                        (Value)
 import Data.Generics.Product             (setField)
-import Data.HashMap.Strict               (HashMap)
 import Data.Set                          (Set)
 import Data.Text                         (Text)
 
 import LaunchDarkly.Server.User.Internal (User(..), mapUser, UserI(..))
+import LaunchDarkly.AesonCompat (KeyMap)
 
 -- | Creates a new user identified by the given key.
 makeUser :: Text -> User
@@ -83,7 +83,7 @@ userSetAnonymous :: Bool -> User -> User
 userSetAnonymous = mapUser . setField @"anonymous"
 
 -- | Set custom fields for a user.
-userSetCustom :: HashMap Text Value -> User -> User
+userSetCustom :: KeyMap Value -> User -> User
 userSetCustom = mapUser . setField @"custom"
 
 -- | This contains list of attributes to keep private, whether they appear at

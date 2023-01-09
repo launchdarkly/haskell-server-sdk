@@ -40,8 +40,8 @@ testAllProperties :: Test
 testAllProperties = TestCase $ do
     let factory = dataSourceFactory ["test-data/filesource/all-properties.json"]
         config = testConfig factory
-        user1 = makeUser "user1"
-        user2 = makeUser "user2"
+        user1 = makeContext "user1" "user"
+        user2 = makeContext "user2" "user"
     withClient config $ \client -> do
         status <- getStatus client
         assertEqual "status initialized" Initialized status
@@ -58,7 +58,7 @@ testMultiFileFlagDuplicate = TestCase $ do
                                     , "test-data/filesource/flag-with-duplicate-key.json"
                                     ]
         config = testConfig factory
-        user1 = makeUser "user1"
+        user1 = makeContext "user1" "user"
     withClient config $ \client -> do
         status <- getStatus client
         assertEqual "status initialized" Initialized status
@@ -73,7 +73,7 @@ testMalformedFile :: Test
 testMalformedFile = TestCase $ do
     let factory = dataSourceFactory [ "test-data/filesource/malformed.json" ]
         config = testConfig factory
-        user1 = makeUser "user1"
+        user1 = makeContext "user1" "user"
     withClient config $ \client -> do
         assertEqual "No Flags set" mempty =<< allFlags client user1
 
@@ -81,7 +81,7 @@ testNoDataFile :: Test
 testNoDataFile = TestCase $ do
     let factory = dataSourceFactory [ "test-data/filesource/no-data.json" ]
         config = testConfig factory
-        user1 = makeUser "user1"
+        user1 = makeContext "user1" "user"
     withClient config $ \client -> do
         assertEqual "No Flags set" mempty =<< allFlags client user1
 
@@ -104,8 +104,8 @@ testAllPropertiesYaml :: Test
 testAllPropertiesYaml = TestCase $ do
     let factory = dataSourceFactory ["test-data/filesource/all-properties.yml"]
         config = testConfig factory
-        user1 = makeUser "user1"
-        user2 = makeUser "user2"
+        user1 = makeContext "user1" "user"
+        user2 = makeContext "user2" "user"
     withClient config $ \client -> do
         status <- getStatus client
         assertEqual "status initialized" Initialized status
@@ -115,4 +115,3 @@ testAllPropertiesYaml = TestCase $ do
 
         flag2 <- stringVariation client "flag2" user1 "fallback"
         assertEqual "flag2 value" "value2" flag2
-
