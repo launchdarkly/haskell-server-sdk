@@ -120,9 +120,9 @@ getError _ = Nothing
 --
 -- Invalid references will return an empty list.
 --
--- @makeReference "" & getComponents     -- returns []@
--- @makeReference "a" & getComponents    -- returns ["a"]@
--- @makeReference "/a/b" & getComponents -- returns ["a", "b"]@
+-- > makeReference "" & getComponents     -- returns []
+-- > makeReference "a" & getComponents    -- returns ["a"]
+-- > makeReference "/a/b" & getComponents -- returns ["a", "b"]
 getComponents :: Reference -> [Text]
 getComponents (Valid { components }) = components
 getComponents _ = []
@@ -133,10 +133,10 @@ getComponents _ = []
 -- with 'makeLiteral', the value may be different due to unescaping (for instance, an attribute whose name is "/a" would
 -- be represented as "~1a").
 getRawPath :: Reference -> Text
-getRawPath (Invalid { rawPath }) = rawPath
-getRawPath (Valid { rawPath }) = rawPath
+getRawPath = rawPath
 
--- Method intended to be used with a foldr.
+-- Method intended to be used with a foldr. If you do not use this with a foldr, the components will be in the wrong
+-- order as this method does prepending.
 --
 -- This function helps assist in the construction of a Valid reference by incrementally adding a new component to the
 -- Reference. If the component cannot be added, or if the Reference is already invalid, we return an Invalid reference
@@ -160,7 +160,7 @@ unescapePath :: Text -> Either Text Text
 unescapePath value@(T.isInfixOf "~" -> False) = Left value
 unescapePath (T.stripSuffix "~" -> Just _) = Right "invalid escape sequence"
 unescapePath value =
-  let component = T.foldl unescapeComponent (ComponentState { acc = [], valid = True, in_escape = False }) value
+  let component = T.foldl unescapeComponent (ComponentState { acc = [], valid = True, inEscape = False }) value
   in case component of
     ComponentState { acc = acc, valid = True } -> Left $ T.pack $ reverse acc
     _ -> Right "invalid escape sequence"
@@ -172,7 +172,7 @@ unescapePath value =
 data ComponentState = ComponentState
   { acc :: ![Char] -- Container to hold the piece of the input that has been successfully parsed.
   , valid :: !Bool -- Is the state currently valid?
-  , in_escape :: !Bool -- Was the last character seen a tilde?
+  , inEscape :: !Bool -- Was the last character seen a tilde?
   }
 
 -- Intended to be used in a foldl operation to apply unescaping rules as defined in 'unescapePath'.
@@ -183,11 +183,11 @@ unescapeComponent :: ComponentState -> Char -> ComponentState
 -- Short circuit if we are already invalid
 unescapeComponent component@(ComponentState { valid = False }) _ = component
 -- Escape mode with a 0 or 1 means a valid escape sequence. We can append this to the state's accumulator.
-unescapeComponent component@(ComponentState { acc, in_escape = True }) '0' = component { acc = '~':acc, valid = True, in_escape = False }
-unescapeComponent component@(ComponentState { acc, in_escape = True }) '1' = component { acc = '/':acc, valid = True, in_escape = False }
+unescapeComponent component@(ComponentState { acc, inEscape = True }) '0' = component { acc = '~':acc, valid = True, inEscape = False }
+unescapeComponent component@(ComponentState { acc, inEscape = True }) '1' = component { acc = '/':acc, valid = True, inEscape = False }
 -- Any other character during an escape sequence isn't valid
-unescapeComponent component@(ComponentState { in_escape = True }) _ = component { valid = False }
+unescapeComponent component@(ComponentState { inEscape = True }) _ = component { valid = False }
 -- ~ means we should start escaping
-unescapeComponent component '~' = component { in_escape = True }
+unescapeComponent component '~' = component { inEscape = True }
 -- Regular characters can be added without issue
 unescapeComponent component@(ComponentState { acc }) c = component { acc = c:acc }

@@ -53,7 +53,6 @@ library
       LaunchDarkly.Server.Config.ClientContext
       LaunchDarkly.Server.Config.HttpConfiguration
       LaunchDarkly.Server.Config.Internal
-      LaunchDarkly.Server.Context.Internal
       LaunchDarkly.Server.DataSource.Internal
       LaunchDarkly.Server.Details
       LaunchDarkly.Server.Evaluate
@@ -159,7 +158,6 @@ test-suite haskell-server-sdk-test
       LaunchDarkly.Server.Config.HttpConfiguration
       LaunchDarkly.Server.Config.Internal
       LaunchDarkly.Server.Context
-      LaunchDarkly.Server.Context.Internal
       LaunchDarkly.Server.DataSource.Internal
       LaunchDarkly.Server.Details
       LaunchDarkly.Server.Evaluate
