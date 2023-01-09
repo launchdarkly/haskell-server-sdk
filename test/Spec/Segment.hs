@@ -14,11 +14,57 @@ import LaunchDarkly.Server.Evaluate
 import LaunchDarkly.Server.Context (makeContext, withAttribute)
 
 testExplicitIncludeUser :: Test
-testExplicitIncludeUser = True ~=? (segmentContainsContext segment user) where
+testExplicitIncludeUser = TestCase $ do
+    assertEqual "" True (segmentContainsContext segment user)
+    assertEqual "" False (segmentContainsContext segment org)
+
+    where
+
     segment = Segment
         { key      = "test"
         , included = HS.fromList ["foo"]
+        , includedContexts = mempty
         , excluded = HS.empty
+        , excludedContexts = mempty
+        , salt     = "abcdef"
+        , rules    = []
+        , version  = 1
+        , deleted  = False
+        }
+
+    user = makeContext "foo" "user"
+    org = makeContext "foo" "org"
+
+testExplicitIncludeContextKind :: Test
+testExplicitIncludeContextKind = TestCase $ do
+    assertEqual "" True $ (segmentContainsContext segment user)
+    assertEqual "" False $ (segmentContainsContext segment org)
+
+    where
+
+    segment = Segment
+        { key      = "test"
+        , included = HS.empty
+        , includedContexts = [SegmentTarget { values = HS.fromList ["foo"] , contextKind = "user" }]
+        , excluded = HS.empty
+        , excludedContexts = mempty
+        , salt     = "abcdef"
+        , rules    = []
+        , version  = 1
+        , deleted  = False
+        }
+
+    user = makeContext "foo" "user"
+    org = makeContext "foo" "org"
+
+testExplicitExcludeUser :: Test
+testExplicitExcludeUser = False ~=? (segmentContainsContext segment user) where
+    segment = Segment
+        { key      = "test"
+        , included = HS.empty
+        , includedContexts = mempty
+        , excluded = HS.fromList ["foo"]
+        , excludedContexts = mempty
         , salt     = "abcdef"
         , rules    = []
         , version  = 1
@@ -27,12 +73,14 @@ testExplicitIncludeUser = True ~=? (segmentContainsContext segment user) where
 
     user = makeContext "foo" "user"
 
-testExplicitExcludeUser :: Test
-testExplicitExcludeUser = False ~=? (segmentContainsContext segment user) where
+testExplicitExcludeContextKind :: Test
+testExplicitExcludeContextKind = False ~=? (segmentContainsContext segment user) where
     segment = Segment
         { key      = "test"
         , included = HS.empty
-        , excluded = HS.fromList ["foo"]
+        , includedContexts = mempty
+        , excluded = HS.empty
+        , excludedContexts = [SegmentTarget { values = HS.fromList ["foo"] , contextKind = "user" }]
         , salt     = "abcdef"
         , rules    = []
         , version  = 1
@@ -46,7 +94,25 @@ testExplicitIncludeHasPrecedence = True ~=? (segmentContainsContext segment user
     segment = Segment
         { key      = "test"
         , included = HS.fromList ["foo"]
+        , includedContexts = mempty
         , excluded = HS.fromList ["foo"]
+        , excludedContexts = mempty
+        , salt     = "abcdef"
+        , rules    = []
+        , version  = 1
+        , deleted  = False
+        }
+
+    user = makeContext "foo" "user"
+
+testExplicitIncludeContextsHasPrecedence :: Test
+testExplicitIncludeContextsHasPrecedence = True ~=? (segmentContainsContext segment user) where
+    segment = Segment
+        { key      = "test"
+        , included = HS.empty
+        , includedContexts = [SegmentTarget { values = HS.fromList ["foo"] , contextKind = "user" }]
+        , excluded = HS.fromList ["foo"]
+        , excludedContexts = [SegmentTarget { values = HS.fromList ["foo"] , contextKind = "user" }]
         , salt     = "abcdef"
         , rules    = []
         , version  = 1
@@ -60,7 +126,9 @@ testNeitherIncludedNorExcluded = False ~=? (segmentContainsContext segment user)
     segment = Segment
         { key      = "test"
         , included = HS.fromList [""]
+        , includedContexts = mempty
         , excluded = HS.fromList [""]
+        , excludedContexts = mempty
         , salt     = "abcdef"
         , rules    = []
         , version  = 1
@@ -74,7 +142,9 @@ testMatchingRuleWithFullRollout = True ~=? (segmentContainsContext segment conte
     segment = Segment
         { key      = "test"
         , included = HS.empty
+        , includedContexts = mempty
         , excluded = HS.empty
+        , excludedContexts = mempty
         , salt     = "abcdef"
         , rules    =
             [ SegmentRule
@@ -103,7 +173,9 @@ testMatchingRuleWithZeroRollout = False ~=? (segmentContainsContext segment cont
     segment = Segment
         { key      = "test"
         , included = HS.empty
+        , includedContexts = mempty
         , excluded = HS.empty
+        , excludedContexts = mempty
         , salt     = "abcdef"
         , rules    =
             [ SegmentRule
@@ -132,7 +204,9 @@ testMatchingRuleWithMultipleClauses = True ~=? (segmentContainsContext segment c
     segment = Segment
         { key      = "test"
         , included = HS.empty
+        , includedContexts = mempty
         , excluded = HS.empty
+        , excludedContexts = mempty
         , salt     = "abcdef"
         , rules    =
             [ SegmentRule
@@ -170,7 +244,9 @@ testNonMatchingRuleWithMultipleClauses = False ~=? (segmentContainsContext segme
     segment = Segment
         { key      = "test"
         , included = HS.empty
+        , includedContexts = mempty
         , excluded = HS.empty
+        , excludedContexts = mempty
         , salt     = "abcdef"
         , rules    =
             [ SegmentRule
@@ -206,8 +282,11 @@ testNonMatchingRuleWithMultipleClauses = False ~=? (segmentContainsContext segme
 allTests :: Test
 allTests = TestList
     [ testExplicitIncludeUser
+    , testExplicitIncludeContextKind
     , testExplicitExcludeUser
+    , testExplicitExcludeContextKind
     , testExplicitIncludeHasPrecedence
+    , testExplicitIncludeContextsHasPrecedence
     , testNeitherIncludedNorExcluded
     , testMatchingRuleWithFullRollout
     , testMatchingRuleWithZeroRollout

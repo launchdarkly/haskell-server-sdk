@@ -77,7 +77,9 @@ noFallthrough =
 
 data FileSegment = FileSegment
     { included :: Maybe (HashSet Text)
+    , includedContexts :: Maybe [F.SegmentTarget]
     , excluded :: Maybe (HashSet Text)
+    , excludedContexts :: Maybe [F.SegmentTarget]
     , rules    :: Maybe [F.SegmentRule]
     , version  :: Maybe Natural
     } deriving (Generic, FromJSON, Show, Eq)
@@ -87,7 +89,9 @@ fromFileSegment key fileSegment =
     F.Segment{ F.key = key
              , F.version = fromMaybe 1 $ getField @"version" fileSegment
              , F.included = fromMaybe mempty $ included fileSegment
+             , F.includedContexts = fromMaybe mempty $ includedContexts fileSegment
              , F.excluded = fromMaybe mempty $ excluded fileSegment
+             , F.excludedContexts = fromMaybe mempty $ excludedContexts fileSegment
              , F.salt = ""
              , F.rules = fromMaybe [] $ getField @"rules" fileSegment
              , F.deleted = False

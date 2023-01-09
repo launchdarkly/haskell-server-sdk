@@ -1,3 +1,5 @@
+{-# LANGUAGE NamedFieldPuns #-}
+
 module LaunchDarkly.Server.Evaluate where
 
 import           Control.Lens                        ((%~))
@@ -20,11 +22,12 @@ import           Data.Text.Encoding                  (encodeUtf8)
 import           GHC.Natural                         (Natural)
 import           Data.Word                           (Word8)
 import           Data.ByteString                     (ByteString)
+import           Data.HashSet (HashSet)
 
 import           LaunchDarkly.Server.Context         (Context(..), toLegacyUser, getKey, getValue, getKinds, getIndividualContext)
 import           LaunchDarkly.Server.Client.Internal (ClientI, Status(Initialized), getStatusI)
 import           LaunchDarkly.Server.User.Internal   (User(..), valueOf)
-import           LaunchDarkly.Server.Features        (Flag, Segment, Prerequisite, SegmentRule, Clause, VariationOrRollout, Rule, RolloutKind(RolloutKindExperiment))
+import           LaunchDarkly.Server.Features        (Flag, Segment(..), SegmentTarget(..), Prerequisite, SegmentRule, Clause, VariationOrRollout, Rule, RolloutKind(RolloutKindExperiment))
 import           LaunchDarkly.Server.Store.Internal  (LaunchDarklyStoreRead, getFlagC, getSegmentC)
 import           LaunchDarkly.Server.Operators       (Op(OpSegmentMatch), getOperation)
 import           LaunchDarkly.Server.Events          (EvalEvent, newUnknownFlagEvent, newSuccessfulEvalEvent, processEvalEvents)
@@ -247,10 +250,18 @@ segmentRuleMatchesContext rule context key salt = (&&)
         bucketContext context key (fromMaybe "key" $ getField @"bucketBy" rule) salt Nothing < weight / 100000.0)
 
 segmentContainsContext :: Segment -> Context -> Bool
-segmentContainsContext segment context
-    | elem (getKey context) (getField @"included" segment) = True
-    | elem (getKey context) (getField @"excluded" segment) = False
-    | Just _ <- find
-        (\r -> segmentRuleMatchesContext r context (getField @"key" segment) (getField @"salt" segment))
-        (getField @"rules" segment) = True
+segmentContainsContext (Segment { included, includedContexts, excluded, excludedContexts, key, salt, rules }) context
+    | contextKeyInTargetList included "user" context = True
+    | (any (flip contextKeyInSegmentTarget context) includedContexts) = True
+    | contextKeyInTargetList excluded "user" context = False
+    | (any (flip contextKeyInSegmentTarget context) excludedContexts) = False
+    | Just _ <- find (\r -> segmentRuleMatchesContext r context key salt) rules = True
     | otherwise = False
+
+contextKeyInSegmentTarget :: SegmentTarget -> Context -> Bool
+contextKeyInSegmentTarget (SegmentTarget { values, contextKind }) = contextKeyInTargetList values contextKind
+
+contextKeyInTargetList :: (HashSet Text) -> Text -> Context -> Bool
+contextKeyInTargetList targets kind context = case getIndividualContext kind context of
+    Just ctx -> elem (getKey ctx) targets
+    Nothing -> False

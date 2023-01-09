@@ -207,13 +207,20 @@ data SegmentRule = SegmentRule
     } deriving (Generic, FromJSON, ToJSON, Show, Eq)
 
 data Segment = Segment
-    { key      :: !Text
-    , included :: !(HashSet Text)
-    , excluded :: !(HashSet Text)
-    , salt     :: !Text
-    , rules    :: ![SegmentRule]
-    , version  :: !Natural
-    , deleted  :: !Bool
+    { key              :: !Text
+    , included         :: !(HashSet Text)
+    , includedContexts :: ![SegmentTarget]
+    , excluded         :: !(HashSet Text)
+    , excludedContexts :: ![SegmentTarget]
+    , salt             :: !Text
+    , rules            :: ![SegmentRule]
+    , version          :: !Natural
+    , deleted          :: !Bool
+    } deriving (Generic, FromJSON, ToJSON, Show, Eq)
+
+data SegmentTarget = SegmentTarget
+    { values      :: !(HashSet Text)
+    , contextKind :: !Text
     } deriving (Generic, FromJSON, ToJSON, Show, Eq)
 
 data Clause = Clause

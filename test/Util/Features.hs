@@ -29,11 +29,13 @@ makeTestFlag key version = Flag
 
 makeTestSegment :: Text -> Natural -> Segment
 makeTestSegment key version = Segment
-    { key      = key
-    , included = mempty
-    , excluded = mempty
-    , salt     = ""
-    , rules    = mempty
-    , version  = version
-    , deleted  = False
+    { key              = key
+    , included         = mempty
+    , includedContexts = mempty
+    , excluded         = mempty
+    , excludedContexts = mempty
+    , salt             = ""
+    , rules            = mempty
+    , version          = version
+    , deleted          = False
     }
