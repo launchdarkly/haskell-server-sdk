@@ -181,11 +181,10 @@ hexStringToNumber bytes = B.foldl' step (Just 0) bytes where
 bucketContext :: Context -> Text -> Text -> Text -> Maybe Int -> Float
 bucketContext context key attribute salt seed = fromMaybe 0 $ do
     let (User user) = fromJust $ toLegacyUser context
-        secondarySuffix = maybe "" (T.append ".") $ getField @"secondary" user
     i <- valueOf user attribute >>= bucketableStringValue >>= \x -> pure $ B.take 15 $ B16.encode $ hash $ encodeUtf8 $
         case seed of
-            Nothing    -> T.concat [key, ".", salt, ".", x, secondarySuffix]
-            Just seed' -> T.concat [T.pack $ show seed', ".", x, secondarySuffix]
+            Nothing    -> T.concat [key, ".", salt, ".", x]
+            Just seed' -> T.concat [T.pack $ show seed', ".", x]
     pure $ ((fromIntegral $ fromJust $ hexStringToNumber i) :: Float) / (0xFFFFFFFFFFFFFFF)
 
 floatingOrInteger' :: Scientific -> Either Double Integer
