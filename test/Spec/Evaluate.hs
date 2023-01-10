@@ -4,6 +4,7 @@ import           Test.HUnit
 import           Data.Aeson                        (Value(..))
 import qualified Data.HashMap.Strict as            HM
 import           Data.HashMap.Strict               (HashMap)
+import qualified Data.HashSet as                   HS
 import           Data.Function                     ((&))
 import           Data.Generics.Product             (getField)
 
@@ -33,7 +34,7 @@ makeEmptyStore = do
 testFlagReturnsOffVariationIfFlagIsOff :: Test
 testFlagReturnsOffVariationIfFlagIsOff = TestCase $ do
     store <- makeEmptyStore
-    x <- evaluateDetail flag context store
+    x <- evaluateDetail flag context HS.empty store
     assertEqual "test" expected x
 
     where
@@ -70,7 +71,7 @@ testFlagReturnsOffVariationIfFlagIsOff = TestCase $ do
 testFlagReturnsFallthroughIfFlagIsOnAndThereAreNoRules :: Test
 testFlagReturnsFallthroughIfFlagIsOnAndThereAreNoRules = TestCase $ do
     store <- makeEmptyStore
-    x <- evaluateDetail flag context store
+    x <- evaluateDetail flag context HS.empty store
     assertEqual "test" expected x
 
     where
@@ -172,6 +173,49 @@ testFlagReturnsErrorIfFallthroughHasEmptyRolloutVariationList = TestCase $ do
                     }
                 }
             , variations   = [String "abc"]
+            }
+        expected = EvaluationDetail
+            { value          = "default"
+            , variationIndex = Nothing
+            , reason         = EvaluationReasonError EvalErrorKindMalformedFlag
+            }
+
+testFlagReturnsErrorIfThereIsAPrerequisiteCycle :: Test
+testFlagReturnsErrorIfThereIsAPrerequisiteCycle = TestCase $ do
+    client@(Client clientI) <- makeTestClient
+    insertFlag (getField @"store" clientI) flag0                     >>= (pure () @=?)
+    insertFlag (getField @"store" clientI) flag1                     >>= (pure () @=?)
+    stringVariationDetail client "feature0" (makeContext "b" "user") "default" >>= (expected @=?)
+    where
+        flag0 = (makeTestFlag "feature0" 52)
+            { on            = True
+            , offVariation  = pure 1
+            , fallthrough   = VariationOrRollout
+                { variation = pure 0
+                , rollout   = Nothing
+                }
+            , variations    = [String "fall", String "off", String "on"]
+            , prerequisites =
+                [ Prerequisite
+                    { key       = "feature1"
+                    , variation = 1
+                    }
+                ]
+            }
+        flag1 = (makeTestFlag "feature1" 52)
+            { on            = True
+            , offVariation  = pure 1
+            , fallthrough   = VariationOrRollout
+                { variation = pure 0
+                , rollout   = Nothing
+                }
+            , variations    = [String "nogo", String "go"]
+            , prerequisites =
+                [ Prerequisite
+                    { key       = "feature0"
+                    , variation = 1
+                    }
+                ]
             }
         expected = EvaluationDetail
             { value          = "default"
@@ -322,9 +366,9 @@ testFlagReturnsFallthroughVariationIfPrerequisiteIsMetAndThereAreNoRules = TestC
 testClauseCanMatchOnKind :: Test
 testClauseCanMatchOnKind = TestCase $ do
     store <- makeStoreIO Nothing 0
-    orgDetail <- evaluateDetail flag orgContext store
-    userDetail <- evaluateDetail flag userContext store
-    multiDetail <- evaluateDetail flag multiContext store
+    orgDetail <- evaluateDetail flag orgContext HS.empty store
+    userDetail <- evaluateDetail flag userContext HS.empty store
+    multiDetail <- evaluateDetail flag multiContext HS.empty store
 
     assertEqual "test" expectedMatch orgDetail
     assertEqual "test" expectedFailure userDetail
@@ -394,8 +438,8 @@ testClauseCanMatchOnKind = TestCase $ do
 testClauseCanMatchCustomAttribute :: Test
 testClauseCanMatchCustomAttribute = TestCase $ do
     store <- makeStoreIO Nothing 0
-    userDetail <- evaluateDetail flag userContext store
-    orgDetail <- evaluateDetail flag orgContext store
+    userDetail <- evaluateDetail flag userContext HS.empty store
+    orgDetail <- evaluateDetail flag orgContext HS.empty store
     assertEqual "test" expectedMatch userDetail
     assertEqual "test" expectedFailure orgDetail
 
@@ -515,6 +559,7 @@ allTests = TestList
     , testFlagReturnsErrorIfFallthroughHasTooHighVariation
     , testFlagReturnsErrorIfFallthroughHasNeitherVariationNorRollout
     , testFlagReturnsErrorIfFallthroughHasEmptyRolloutVariationList
+    , testFlagReturnsErrorIfThereIsAPrerequisiteCycle
     , testFlagReturnsOffVariationIfPrerequisiteIsNotFound
     , testFlagReturnsOffVariationIfPrerequisiteIsOff
     , testFlagReturnsOffVariationIfPrerequisiteIsNotMet

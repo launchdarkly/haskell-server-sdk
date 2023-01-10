@@ -40,6 +40,7 @@ import           Data.Text.Encoding                    (encodeUtf8)
 import           Data.Aeson                            (Value(..), toJSON, ToJSON, (.=), object)
 import           Data.Generics.Product                 (getField)
 import           Data.Scientific                       (toRealFloat, fromFloatDigits)
+import qualified Data.HashSet as                       HS
 import qualified Network.HTTP.Client as                Http
 import           GHC.Generics                          (Generic)
 import           GHC.Natural                           (Natural)
@@ -211,7 +212,7 @@ allFlagsState (Client client) context client_side_only with_reasons details_only
         Left _      -> pure AllFlagsState { evaluations = emptyObject, state = emptyObject, valid = False }
         Right flags -> do
             filtered <- pure $ (filterObject (\flag -> (not client_side_only) || isClientSideOnlyFlag flag) flags)
-            details <- mapM (\flag -> (\detail -> (flag, fst detail)) <$> (evaluateDetail flag context $ getField @"store" client)) filtered
+            details <- mapM (\flag -> (\detail -> (flag, fst detail)) <$> (evaluateDetail flag context HS.empty $ getField @"store" client)) filtered
             evaluations <- pure $ mapValues (getField @"value" . snd) details
             now <- unixMilliseconds
             state <- pure $ mapValues (\(flag, detail) -> do
