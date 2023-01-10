@@ -24,9 +24,8 @@ import           Data.Word                           (Word8)
 import           Data.ByteString                     (ByteString)
 import           Data.HashSet (HashSet)
 
-import           LaunchDarkly.Server.Context         (Context(..), toLegacyUser, getKey, getValue, getKinds, getIndividualContext)
+import           LaunchDarkly.Server.Context         (Context(..), getKey, getValue, getKinds, getIndividualContext)
 import           LaunchDarkly.Server.Client.Internal (ClientI, Status(Initialized), getStatusI)
-import           LaunchDarkly.Server.User.Internal   (User(..), valueOf)
 import           LaunchDarkly.Server.Features        (Flag, Segment(..), SegmentTarget(..), Prerequisite, SegmentRule, Clause, VariationOrRollout, Rule, RolloutKind(RolloutKindExperiment))
 import           LaunchDarkly.Server.Store.Internal  (LaunchDarklyStoreRead, getFlagC, getSegmentC)
 import           LaunchDarkly.Server.Operators       (Op(OpSegmentMatch), getOperation)
@@ -156,11 +155,15 @@ variationIndexForContext :: VariationOrRollout -> Context -> Text -> Text -> (Ma
 variationIndexForContext vor context key salt
     | (Just variation) <- getField @"variation" vor = (pure variation, False)
     | (Just rollout) <- getField @"rollout" vor = let
-        isExperiment = (getField @"kind" rollout) == RolloutKindExperiment
+        isRolloutExperiment = (getField @"kind" rollout) == RolloutKindExperiment
+        bucketBy = fromMaybe "key" $ if isRolloutExperiment then Nothing else getField @"bucketBy" rollout
         variations = getField @"variations" rollout
-        bucket = bucketContext context key (fromMaybe "key" $ getField @"bucketBy" rollout) salt (getField @"seed" rollout)
+        bucket = bucketContext context (getField @"contextKind" rollout) key bucketBy salt (getField @"seed" rollout)
+        isExperiment = isRolloutExperiment && (isJust bucket)
         c acc i = acc >>= \acc -> let t = acc + ((getField @"weight" i) / 100000.0) in
-            if bucket < t then Left (Just $ getField @"variation" i, (not $ getField @"untracked" i) && isExperiment) else Right t
+            case bucket of
+                Just v | v >= t -> Right t
+                _ -> Left (Just $ getField @"variation" i, (not $ getField @"untracked" i) && isExperiment)
         in if null variations then (Nothing, False) else fromLeft
             (Just $ getField @"variation" $ last variations, (not $ getField @"untracked" $ last variations) && isExperiment) $
             foldl c (Right (0.0 :: Float)) variations
@@ -179,14 +182,21 @@ hexStringToNumber :: ByteString -> Maybe Natural
 hexStringToNumber bytes = B.foldl' step (Just 0) bytes where
     step acc x = acc >>= \acc' -> hexCharToNumber x >>= pure . (+) (acc' * 16)
 
-bucketContext :: Context -> Text -> Text -> Text -> Maybe Int -> Float
-bucketContext context key attribute salt seed = fromMaybe 0 $ do
-    let (User user) = fromJust $ toLegacyUser context
-    i <- valueOf user attribute >>= bucketableStringValue >>= \x -> pure $ B.take 15 $ B16.encode $ hash $ encodeUtf8 $
-        case seed of
-            Nothing    -> T.concat [key, ".", salt, ".", x]
-            Just seed' -> T.concat [T.pack $ show seed', ".", x]
-    pure $ ((fromIntegral $ fromJust $ hexStringToNumber i) :: Float) / (0xFFFFFFFFFFFFFFF)
+bucketContext :: Context -> Text -> Text -> Text -> Text -> Maybe Int -> Maybe Float
+bucketContext context kind key attribute salt seed =
+    case getIndividualContext kind context of
+        Nothing -> Nothing
+        Just ctx -> let bucketableString = bucketableStringValue $ getValue attribute ctx
+                    in Just $ calculateBucketValue bucketableString key salt seed
+
+calculateBucketValue :: (Maybe Text) -> Text -> Text -> Maybe Int -> Float
+calculateBucketValue Nothing  _ _ _ = 0
+calculateBucketValue (Just text) key salt seed =
+    let seed' = case seed of
+            Nothing    -> T.concat [key, ".", salt, ".", text]
+            Just seed' -> T.concat [T.pack $ show seed', ".", text]
+        byteString = B.take 15 $ B16.encode $ hash $ encodeUtf8 $ seed'
+    in ((fromIntegral $ fromJust $ hexStringToNumber byteString) :: Float) / 0xFFFFFFFFFFFFFFF
 
 floatingOrInteger' :: Scientific -> Either Double Integer
 floatingOrInteger' = floatingOrInteger
@@ -247,7 +257,10 @@ segmentRuleMatchesContext :: SegmentRule -> Context -> Text -> Text -> Bool
 segmentRuleMatchesContext rule context key salt = (&&)
     (all (flip clauseMatchesContextNoSegments context) (getField @"clauses" rule))
     (flip (maybe True) (getField @"weight" rule) $ \weight ->
-        bucketContext context key (fromMaybe "key" $ getField @"bucketBy" rule) salt Nothing < weight / 100000.0)
+        let bucket = bucketContext context (getField @"rolloutContextKind" rule) key (fromMaybe "key" $ getField @"bucketBy" rule) salt Nothing
+        in case bucket of
+            Just v | v >= (weight / 100000.0) -> False
+            _ -> True)
 
 segmentContainsContext :: Segment -> Context -> Bool
 segmentContainsContext (Segment { included, includedContexts, excluded, excludedContexts, key, salt, rules }) context

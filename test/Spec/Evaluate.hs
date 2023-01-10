@@ -164,10 +164,11 @@ testFlagReturnsErrorIfFallthroughHasEmptyRolloutVariationList = TestCase $ do
             , fallthrough  = VariationOrRollout
                 { variation = Nothing
                 , rollout   = pure Rollout
-                    { variations = []
-                    , seed       = Nothing
-                    , kind       = RolloutKindRollout
-                    , bucketBy   = pure "key"
+                    { variations  = []
+                    , seed        = Nothing
+                    , kind        = RolloutKindRollout
+                    , bucketBy    = pure "key"
+                    , contextKind = "user"
                     }
                 }
             , variations   = [String "abc"]

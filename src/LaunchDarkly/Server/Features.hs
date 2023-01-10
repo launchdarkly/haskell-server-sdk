@@ -1,5 +1,3 @@
-{-# LANGUAGE NamedFieldPuns #-}
-
 module LaunchDarkly.Server.Features where
 
 import Control.Lens                  (element, (^?))
@@ -82,18 +80,20 @@ instance FromJSON RolloutKind where
         _                     -> mzero
 
 data Rollout = Rollout
-    { variations :: ![WeightedVariation]
-    , bucketBy   :: !(Maybe Text)
-    , kind       :: !RolloutKind
-    , seed       :: !(Maybe Int)
+    { variations  :: ![WeightedVariation]
+    , bucketBy    :: !(Maybe Text)
+    , kind        :: !RolloutKind
+    , contextKind :: !Text
+    , seed        :: !(Maybe Int)
     } deriving (Generic, ToJSON, Show, Eq)
 
 instance FromJSON Rollout where
     parseJSON = withObject "rollout" $ \o -> do
-        variations <- o .:  "variations"
-        bucketBy   <- o .:? "bucketBy"
-        kind       <- o .:? "kind" .!= RolloutKindRollout
-        seed       <- o .:? "seed"
+        variations  <- o .:  "variations"
+        bucketBy    <- o .:? "bucketBy"
+        kind        <- o .:? "kind" .!= RolloutKindRollout
+        contextKind <- o .:? "contextKind" .!= "user"
+        seed        <- o .:? "seed"
         pure Rollout { .. }
 
 data VariationOrRollout = VariationOrRollout
@@ -200,11 +200,21 @@ data Prerequisite = Prerequisite
     } deriving (Generic, FromJSON, ToJSON, Show, Eq)
 
 data SegmentRule = SegmentRule
-    { id       :: !Text
-    , clauses  :: ![Clause]
-    , weight   :: !(Maybe Float)
-    , bucketBy :: !(Maybe Text)
-    } deriving (Generic, FromJSON, ToJSON, Show, Eq)
+    { id                 :: !Text
+    , clauses            :: ![Clause]
+    , weight             :: !(Maybe Float)
+    , bucketBy           :: !(Maybe Text)
+    , rolloutContextKind :: !Text
+    } deriving (Generic, ToJSON, Show, Eq)
+
+instance FromJSON SegmentRule where
+    parseJSON = withObject "SegmentRule" $ \o -> do
+        id <- o .: "id"
+        clauses <- o .: "clauses"
+        weight <- o .:? "weight"
+        bucketBy <- o .:? "bucketBy"
+        rolloutContextKind <- o .:? "rolloutContextKind" .!= "user"
+        return $ SegmentRule { .. }
 
 data Segment = Segment
     { key              :: !Text
@@ -234,8 +244,8 @@ data Clause = Clause
 instance FromJSON Clause where
     parseJSON = withObject "Clause" $ \o -> do
         attribute <- o .: "attribute"
-        contextKind <- o .:? "contextKind"
+        contextKind <- o .:? "contextKind" .!= "user"
         negate <- o .: "negate"
         op <- o .: "op"
         values <- o .: "values"
-        return $ Clause { attribute, contextKind = fromMaybe "user" contextKind, negate, op, values }
+        return $ Clause { .. }

@@ -160,6 +160,7 @@ testMatchingRuleWithFullRollout = True ~=? (segmentContainsContext segment conte
                     ]
                 , weight   = Just 100000
                 , bucketBy = Nothing
+                , rolloutContextKind = "user"
                 }
             ]
         , version  = 1
@@ -191,6 +192,7 @@ testMatchingRuleWithZeroRollout = False ~=? (segmentContainsContext segment cont
                     ]
                 , weight   = Just 0
                 , bucketBy = Nothing
+                , rolloutContextKind = "user"
                 }
             ]
         , version  = 1
@@ -229,6 +231,7 @@ testMatchingRuleWithMultipleClauses = True ~=? (segmentContainsContext segment c
                     ]
                 , weight   = Nothing
                 , bucketBy = Nothing
+                , rolloutContextKind = "user"
                 }
             ]
         , version  = 1
@@ -269,6 +272,7 @@ testNonMatchingRuleWithMultipleClauses = False ~=? (segmentContainsContext segme
                     ]
                 , weight   = Nothing
                 , bucketBy = Nothing
+                , rolloutContextKind = "user"
                 }
             ]
         , version  = 1
