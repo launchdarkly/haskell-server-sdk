@@ -221,9 +221,9 @@ isValid (Invalid _) = False
 isValid _ = True
 
 -- | Returns the error associated with the context if it is invalid.
-getError :: Context -> Maybe Text
-getError (Invalid e) = Just e
-getError _ = Nothing
+getError :: Context -> Text
+getError (Invalid e) = e
+getError _ = ""
 
 -- | Returns the single-kind Context corresponding to one of the kinds in this context.
 --

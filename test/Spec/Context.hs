@@ -15,7 +15,7 @@ import Data.Maybe (fromJust)
 confirmInvalidContext :: Context -> Text -> Assertion
 confirmInvalidContext context expectedError = liftIO $ (do
     assertEqual "" False $ isValid context
-    assertEqual "" (Just expectedError) $ getError context)
+    assertEqual "" expectedError $ getError context)
 
 invalidKey :: Test
 invalidKey = TestCase $

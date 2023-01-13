@@ -114,9 +114,9 @@ contextConvertCommand (Just ContextConvertParams { input }) =
     Nothing -> json $ ContextResponse { output = Nothing, errorMessage = Just "Error decoding input string" }
 
 createContextResponse :: Context -> ContextResponse
-createContextResponse c = case getError c of
-  Nothing -> ContextResponse { output = Just $ (toStrict (decodeUtf8 (encode c))), errorMessage = Nothing }
-  Just e -> ContextResponse { output = Nothing, errorMessage = Just e }
+createContextResponse c = case LD.isValid c of
+  True -> ContextResponse { output = Just $ (toStrict (decodeUtf8 (encode c))), errorMessage = Nothing }
+  False -> ContextResponse { output = Nothing, errorMessage = Just $ getError c }
 
 customCommand :: LD.Client -> Maybe CustomEventParams -> ActionM ()
 customCommand _ Nothing = error "Missing custom event params"

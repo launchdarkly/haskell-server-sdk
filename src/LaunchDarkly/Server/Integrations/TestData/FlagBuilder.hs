@@ -32,6 +32,7 @@ import           GHC.Natural (Natural)
 import qualified LaunchDarkly.Server.Features as F
 import qualified LaunchDarkly.Server.Operators as Op
 import           Data.Function ((&))
+import LaunchDarkly.Server.Reference (makeLiteral)
 
 type UserKey = Text
 type VariationIndex = Integer
@@ -341,7 +342,7 @@ convertFlagRule idx flagRule =
 convertClause :: Clause -> F.Clause
 convertClause clause =
     F.Clause
-        { F.attribute = clauseAttribute clause
+        { F.attribute = makeLiteral $ clauseAttribute clause
         , F.contextKind = contextKind clause
         , F.negate = clauseNegate clause
         , F.values = clauseValues clause

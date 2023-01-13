@@ -13,6 +13,7 @@ import GHC.Generics                  (Generic)
 import LaunchDarkly.Server.Operators (Op)
 import LaunchDarkly.Server.Details (EvaluationReason (..))
 import qualified LaunchDarkly.Server.Details as D
+import LaunchDarkly.Server.Reference (Reference, makeLiteral, makeReference)
 
 data Target = Target
     { values    :: ![Text]
@@ -234,7 +235,7 @@ data SegmentTarget = SegmentTarget
     } deriving (Generic, FromJSON, ToJSON, Show, Eq)
 
 data Clause = Clause
-    { attribute   :: !Text
+    { attribute   :: !Reference
     , contextKind :: !Text
     , negate      :: !Bool
     , op          :: !Op
@@ -243,9 +244,12 @@ data Clause = Clause
 
 instance FromJSON Clause where
     parseJSON = withObject "Clause" $ \o -> do
-        attribute <- o .: "attribute"
-        contextKind <- o .:? "contextKind" .!= "user"
+        attr <- o .: "attribute"
+        kind <- o .:? "contextKind"
         negate <- o .: "negate"
         op <- o .: "op"
         values <- o .: "values"
+
+        let contextKind = fromMaybe "user" kind
+            attribute = case kind of Nothing -> makeLiteral(attr); _ -> makeReference(attr)
         return $ Clause { .. }

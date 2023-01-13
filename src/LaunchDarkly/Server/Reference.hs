@@ -63,11 +63,15 @@ where
 
 import Data.Text (Text)
 import qualified Data.Text as T
+import Data.Aeson (ToJSON, toJSON, Value (String))
 
 -- | data record for the Reference type.
 data Reference =
   Valid { rawPath :: !Text, components :: ![Text] }
-  | Invalid { rawPath :: !Text, error :: !Text }
+  | Invalid { rawPath :: !Text, error :: !Text } deriving (Show, Eq)
+
+instance ToJSON Reference where
+  toJSON = String . rawPath
 
 -- | Creates a Reference from a string. For the supported syntax and examples, see comments on the
 -- "LaunchDarkly.Server.Reference" module.
@@ -109,12 +113,12 @@ isValid :: Reference -> Bool
 isValid (Invalid _ _) = False
 isValid _ = True
 
--- | Returns 'Nothing' for a valid Reference, or a 'Just Text' error description for an invalid Reference.
+-- | Returns an empty string for a valid Reference, or a Text error description for an invalid Reference.
 --
 -- See comments on the "LaunchDarkly.Server.Reference" module for more details of the attribute reference syntax.
-getError :: Reference -> Maybe Text
-getError (Invalid { error = e }) = Just e
-getError _ = Nothing
+getError :: Reference -> Text
+getError (Invalid { error = e }) = e
+getError _ = ""
 
 -- | Retrieves path components from the attribute reference.
 --

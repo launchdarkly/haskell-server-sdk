@@ -5,7 +5,7 @@ module LaunchDarkly.Server.Evaluate where
 
 import           Control.Lens                        ((%~))
 import           Control.Monad                       (mzero, msum)
-import           Control.Monad.Extra                 (ifM, anyM, allM, firstJustM)
+import           Control.Monad.Extra                 (firstJustM)
 import           Crypto.Hash.SHA1                    (hash)
 import           Data.Scientific                     (Scientific, floatingOrInteger)
 import           Data.Either                         (fromLeft)
@@ -14,7 +14,7 @@ import           Data.Aeson.Types                    (Value(..))
 import           Data.Maybe                          (fromJust, isJust, fromMaybe)
 import           Data.Text                           (Text)
 import           Data.Generics.Product               (getField, field)
-import           Data.List                           (genericIndex, find)
+import           Data.List                           (genericIndex)
 import qualified Data.HashSet as                     HS
 import qualified Data.Vector as                      V
 import qualified Data.Text as                        T
@@ -26,13 +26,17 @@ import           Data.Word                           (Word8)
 import           Data.ByteString                     (ByteString)
 import           Data.HashSet (HashSet)
 
-import           LaunchDarkly.Server.Context         (Context(..), getKey, getValue, getKinds, getIndividualContext)
+import           LaunchDarkly.Server.Context         (Context(..), getKey, getValue, getKinds, getIndividualContext, getValueForReference)
 import           LaunchDarkly.Server.Client.Internal (ClientI, Status(Initialized), getStatusI)
 import           LaunchDarkly.Server.Features        (Flag, Segment(..), SegmentTarget(..), Prerequisite, SegmentRule, Clause, VariationOrRollout, Rule, RolloutKind(RolloutKindExperiment))
 import           LaunchDarkly.Server.Store.Internal  (LaunchDarklyStoreRead, getFlagC, getSegmentC)
 import           LaunchDarkly.Server.Operators       (Op(OpSegmentMatch), getOperation)
 import           LaunchDarkly.Server.Events          (EvalEvent, newUnknownFlagEvent, newSuccessfulEvalEvent, processEvalEvents)
 import           LaunchDarkly.Server.Details         (EvaluationDetail(..), EvaluationReason(..), EvalErrorKind(..))
+import Data.Foldable (foldlM)
+import LaunchDarkly.Server.Reference (isValid, getComponents)
+import LaunchDarkly.Server.Reference (getError)
+import Data.Either.Extra (mapRight)
 
 setFallback :: EvaluationDetail Value -> Value -> EvaluationDetail Value
 setFallback detail fallback = case getField @"variationIndex" detail of
@@ -121,18 +125,19 @@ checkPrerequisite store context flag seenFlags prereq =
                                 else pure (pure $ getOffValue flag $ EvaluationReasonPrerequisiteFailed (getField @"key" prereq), event : events)
 
 evaluateInternal :: (Monad m, LaunchDarklyStoreRead store m) => Flag -> Context -> store -> m (EvaluationDetail Value)
-evaluateInternal flag context store = result where
-    checkTarget target = if elem (getKey context) (getField @"values" target)
-        then Just $ getVariation flag (getField @"variation" target) EvaluationReasonTargetMatch else Nothing
-    checkRule (ruleIndex, rule) = ifM (ruleMatchesContext rule context store)
-        (pure $ Just $ getValueForVariationOrRollout flag (getField @"variationOrRollout" rule) context
-            EvaluationReasonRuleMatch { ruleIndex = ruleIndex, ruleId = getField @"id" rule, inExperiment = False })
-        (pure Nothing)
-    fallthrough = getValueForVariationOrRollout flag (getField @"fallthrough" flag) context (EvaluationReasonFallthrough False)
-    result = let
-        ruleMatch   = checkRule <$> zip [0..] (getField @"rules" flag)
-        targetMatch = return . checkTarget <$> getField @"targets" flag
-        in fromMaybe fallthrough <$> firstJustM Prelude.id (ruleMatch ++ targetMatch)
+evaluateInternal flag context store = result
+    where
+        checkTarget target =
+            if elem (getKey context) (getField @"values" target) then Just $ getVariation flag (getField @"variation" target) EvaluationReasonTargetMatch else Nothing
+        checkRule (ruleIndex, rule) = ruleMatchesContext rule context store >>= pure . \case
+            Left _ -> Just $ errorDetail EvalErrorKindMalformedFlag
+            Right True -> Just $ getValueForVariationOrRollout flag (getField @"variationOrRollout" rule) context EvaluationReasonRuleMatch { ruleIndex = ruleIndex, ruleId = getField @"id" rule, inExperiment = False }
+            Right False -> Nothing
+        fallthrough = getValueForVariationOrRollout flag (getField @"fallthrough" flag) context (EvaluationReasonFallthrough False)
+        result = let
+            ruleMatch   = checkRule <$> zip [0..] (getField @"rules" flag)
+            targetMatch = return . checkTarget <$> getField @"targets" flag
+            in fromMaybe fallthrough <$> firstJustM Prelude.id (ruleMatch ++ targetMatch)
 
 errorDefault :: EvalErrorKind -> Value -> EvaluationDetail Value
 errorDefault kind v = EvaluationDetail { value = v, variationIndex = mzero, reason = EvaluationReasonError kind }
@@ -152,9 +157,13 @@ setInExperiment inExperiment reason = case reason of
     EvaluationReasonRuleMatch index idx _ -> EvaluationReasonRuleMatch index idx inExperiment
     x                                     -> x
 
-ruleMatchesContext :: Monad m => LaunchDarklyStoreRead store m => Rule -> Context -> store -> m Bool
-ruleMatchesContext rule context store =
-    allM (\clause -> clauseMatchesContext store clause context) (getField @"clauses" rule)
+ruleMatchesContext :: Monad m => LaunchDarklyStoreRead store m => Rule -> Context -> store -> m (Either Text Bool)
+ruleMatchesContext rule context store = foldlM (checkRule store context) (Right True) clauses
+    where clauses = getField @"clauses" rule
+          checkRule :: Monad m => LaunchDarklyStoreRead store m => store -> Context -> Either Text Bool -> Clause -> m (Either Text Bool)
+          checkRule _ _ (Left e) _ = pure $ Left e
+          checkRule _ _ (Right False) _ = pure $ Right False
+          checkRule store context _ clause = clauseMatchesContext store clause context
 
 variationIndexForContext :: VariationOrRollout -> Context -> Text -> Text -> (Maybe Integer, Bool)
 variationIndexForContext vor context key salt
@@ -233,48 +242,62 @@ clauseMatchesByKind clause context  = foldr f False (getKinds context)
           | result == True = True
           | otherwise = matchAnyClauseValue clause (String kind)
 
-clauseMatchesContextNoSegments :: Clause -> Context -> Bool
-clauseMatchesContextNoSegments clause context =
-  if attr == "kind" then maybeNegate clause $ clauseMatchesByKind clause context
-  else case getIndividualContext (getField @"contextKind" clause) context of
-    Nothing -> False
-    Just ctx -> case getValue attr ctx of
-        Null    -> False
-        Array a -> maybeNegate clause $ V.any (matchAnyClauseValue clause) a
-        x       -> maybeNegate clause $ matchAnyClauseValue clause x
-  where attr = getField @"attribute" clause
+clauseMatchesContextNoSegments :: Clause -> Context -> Either Text Bool
+clauseMatchesContextNoSegments clause context
+    | isValid (getField @"attribute" clause) == False = Left $ getError $ getField @"attribute" clause
+    | ["kind"] == getComponents (getField @"attribute" clause) = Right $ maybeNegate clause $ clauseMatchesByKind clause context
+    | otherwise = case getIndividualContext (getField @"contextKind" clause) context of
+                    Nothing -> Right False
+                    Just ctx -> case getValueForReference (getField @"attribute" clause) ctx of
+                        Null    -> Right False
+                        Array a -> Right $ maybeNegate clause $ V.any (matchAnyClauseValue clause) a
+                        x       -> Right $ maybeNegate clause $ matchAnyClauseValue clause x
 
-clauseMatchesContext :: (Monad m, LaunchDarklyStoreRead store m) => store -> Clause -> Context -> m Bool
+clauseMatchesContext :: (Monad m, LaunchDarklyStoreRead store m) => store -> Clause -> Context -> m (Either Text Bool)
 clauseMatchesContext store clause context
-    | getField @"op" clause == OpSegmentMatch = do
+    | getField @"op" clause == OpSegmentMatch =
         let values = [ x | String x <- getField @"values" clause]
-        x <- anyM (\k -> getSegmentC store k >>= pure . checkSegment) values
-        pure $ maybeNegate clause x
+        in foldlM (checkSegment store context) (Right False) values >>= pure . mapRight (maybeNegate clause)
     | otherwise = pure $ clauseMatchesContextNoSegments clause context
-    where
-        checkSegment :: Either Text (Maybe Segment) -> Bool
-        checkSegment (Right (Just segment)) = segmentContainsContext segment context
-        checkSegment _                      = False
+
+checkSegment :: (Monad m, LaunchDarklyStoreRead store m) => store -> Context -> Either Text Bool -> Text -> m (Either Text Bool)
+checkSegment _ _ (Left e) _ = pure $ Left e
+checkSegment _ _ (Right True) _ = pure $ Right True
+checkSegment store context _ value = getSegmentC store value >>= pure . \case
+    Right (Just segment) -> segmentContainsContext segment context
+    _ -> Right False
 
 -- Segment ---------------------------------------------------------------------
 
-segmentRuleMatchesContext :: SegmentRule -> Context -> Text -> Text -> Bool
-segmentRuleMatchesContext rule context key salt = (&&)
-    (all (flip clauseMatchesContextNoSegments context) (getField @"clauses" rule))
-    (flip (maybe True) (getField @"weight" rule) $ \weight ->
-        let bucket = bucketContext context (getField @"rolloutContextKind" rule) key (fromMaybe "key" $ getField @"bucketBy" rule) salt Nothing
-        in case bucket of
-            Just v | v >= (weight / 100000.0) -> False
-            _ -> True)
+segmentRuleMatchesContext :: SegmentRule -> Context -> Text -> Text -> Either Text Bool
+segmentRuleMatchesContext rule context key salt = do
+    let result = foldl checkClause (Right True) (getField @"clauses" rule)
+    case result of
+        Left _ -> result
+        Right False -> result
+        _ -> Right $ (flip (maybe True) (getField @"weight" rule) $ \weight ->
+            let bucket = bucketContext context (getField @"rolloutContextKind" rule) key (fromMaybe "key" $ getField @"bucketBy" rule) salt Nothing
+            in case bucket of
+                Just v | v >= (weight / 100000.0) -> False
+                _ -> True)
+    where
+        checkClause :: Either Text Bool -> Clause -> Either Text Bool
+        checkClause (Left e) _ = Left e
+        checkClause (Right False) _ = Right False
+        checkClause _ clause = clauseMatchesContextNoSegments clause context
 
-segmentContainsContext :: Segment -> Context -> Bool
+segmentContainsContext :: Segment -> Context -> Either Text Bool
 segmentContainsContext (Segment { included, includedContexts, excluded, excludedContexts, key, salt, rules }) context
-    | contextKeyInTargetList included "user" context = True
-    | (any (flip contextKeyInSegmentTarget context) includedContexts) = True
-    | contextKeyInTargetList excluded "user" context = False
-    | (any (flip contextKeyInSegmentTarget context) excludedContexts) = False
-    | Just _ <- find (\r -> segmentRuleMatchesContext r context key salt) rules = True
-    | otherwise = False
+    | contextKeyInTargetList included "user" context = Right True
+    | (any (flip contextKeyInSegmentTarget context) includedContexts) = Right True
+    | contextKeyInTargetList excluded "user" context = Right False
+    | (any (flip contextKeyInSegmentTarget context) excludedContexts) = Right False
+    | otherwise = foldl checkRules (Right False) rules
+    where
+        checkRules :: Either Text Bool -> SegmentRule -> Either Text Bool
+        checkRules (Left e) _ = Left e
+        checkRules (Right True) _ = Right True
+        checkRules _ rule = segmentRuleMatchesContext rule context key salt
 
 contextKeyInSegmentTarget :: SegmentTarget -> Context -> Bool
 contextKeyInSegmentTarget (SegmentTarget { values, contextKind }) = contextKeyInTargetList values contextKind

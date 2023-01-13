@@ -24,6 +24,7 @@ import           LaunchDarkly.Server.Config
 
 import           Util.Features
 import LaunchDarkly.AesonCompat (fromList)
+import LaunchDarkly.Server.Reference (makeReference, makeLiteral)
 
 makeEmptyStore :: IO (StoreHandle IO)
 makeEmptyStore = do
@@ -410,7 +411,7 @@ testClauseCanMatchOnKind = TestCase $ do
             [ Rule
                 { clauses            =
                     [ Clause
-                        { attribute   = "kind"
+                        { attribute   = makeLiteral "kind"
                         , contextKind = "user"
                         , op          = OpIn
                         , values      = [String "org"]
@@ -478,10 +479,78 @@ testClauseCanMatchCustomAttribute = TestCase $ do
             [ Rule
                 { clauses            =
                     [ Clause
-                        { attribute   = "legs"
+                        { attribute   = makeLiteral "legs"
                         , contextKind = "user"
                         , op          = OpIn
                         , values      = [Number 4]
+                        , negate      = False
+                        }
+                    ]
+                , variationOrRollout = VariationOrRollout
+                    { variation = Just 1
+                    , rollout   = Nothing
+                    }
+                , id                 = "clause"
+                , trackEvents        = False
+                }
+            ]
+        , fallthrough            = VariationOrRollout
+            { variation = Just 0
+            , rollout   = Nothing
+            }
+        , offVariation           = Just 0
+        , variations             = [Bool False, Bool True]
+        , debugEventsUntilDate   = Nothing
+        , clientSideAvailability  = ClientSideAvailability { usingEnvironmentId = True, usingMobileKey = False, explicit = True }
+        }
+
+testClauseCanMatchCustomAttributeReference :: Test
+testClauseCanMatchCustomAttributeReference = TestCase $ do
+    store <- makeStoreIO Nothing 0
+    userDetail <- evaluateDetail flag userContext HS.empty store
+    orgDetail <- evaluateDetail flag orgContext HS.empty store
+    assertEqual "test" expectedMatch userDetail
+    -- assertEqual "test" expectedFailure orgDetail
+
+    where
+
+    expectedMatch = (EvaluationDetail
+        { value          = Bool True
+        , variationIndex = pure 1
+        , reason         = EvaluationReasonRuleMatch
+            { ruleIndex    = 0
+            , ruleId       = "clause"
+            , inExperiment = False
+            }
+        }, [])
+
+    expectedFailure = (EvaluationDetail
+        { value          = Bool False
+        , variationIndex = pure 0
+        , reason         = EvaluationReasonFallthrough { inExperiment = False }
+        }, [])
+
+    userContext = makeContext "x" "user" & withAttribute "attr~1a" (String "right")
+    orgContext = makeContext "x" "org" & withAttribute "attr~1a" (String "right")
+
+    flag = Flag
+        { key                    = "feature"
+        , version                = 1
+        , on                     = True
+        , trackEvents            = False
+        , trackEventsFallthrough = False
+        , deleted                = False
+        , prerequisites          = []
+        , salt                   = ""
+        , targets                = []
+        , rules                  =
+            [ Rule
+                { clauses            =
+                    [ Clause
+                        { attribute   = makeReference "/attr~01a"
+                        , contextKind = "user"
+                        , op          = OpIn
+                        , values      = [String "right"]
                         , negate      = False
                         }
                     ]
@@ -565,6 +634,7 @@ allTests = TestList
     , testFlagReturnsOffVariationIfPrerequisiteIsNotMet
     , testFlagReturnsFallthroughVariationIfPrerequisiteIsMetAndThereAreNoRules
     , testClauseCanMatchCustomAttribute
+    , testClauseCanMatchCustomAttributeReference
     , testClauseCanMatchOnKind
     , testEvaluatingUnknownFlagReturnsDefault
     , testEvaluatingUnknownFlagReturnsDefaultWithDetail

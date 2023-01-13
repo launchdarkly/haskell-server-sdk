@@ -12,11 +12,12 @@ import LaunchDarkly.Server.User.Internal
 import LaunchDarkly.Server.Operators
 import LaunchDarkly.Server.Evaluate
 import LaunchDarkly.Server.Context (makeContext, withAttribute)
+import LaunchDarkly.Server.Reference (makeLiteral)
 
 testExplicitIncludeUser :: Test
 testExplicitIncludeUser = TestCase $ do
-    assertEqual "" True (segmentContainsContext segment user)
-    assertEqual "" False (segmentContainsContext segment org)
+    assertEqual "" (Right True) (segmentContainsContext segment user)
+    assertEqual "" (Right False) (segmentContainsContext segment org)
 
     where
 
@@ -37,8 +38,8 @@ testExplicitIncludeUser = TestCase $ do
 
 testExplicitIncludeContextKind :: Test
 testExplicitIncludeContextKind = TestCase $ do
-    assertEqual "" True $ (segmentContainsContext segment user)
-    assertEqual "" False $ (segmentContainsContext segment org)
+    assertEqual "" (Right True) $ (segmentContainsContext segment user)
+    assertEqual "" (Right False) $ (segmentContainsContext segment org)
 
     where
 
@@ -58,7 +59,7 @@ testExplicitIncludeContextKind = TestCase $ do
     org = makeContext "foo" "org"
 
 testExplicitExcludeUser :: Test
-testExplicitExcludeUser = False ~=? (segmentContainsContext segment user) where
+testExplicitExcludeUser = (Right False) ~=? (segmentContainsContext segment user) where
     segment = Segment
         { key      = "test"
         , included = HS.empty
@@ -74,7 +75,7 @@ testExplicitExcludeUser = False ~=? (segmentContainsContext segment user) where
     user = makeContext "foo" "user"
 
 testExplicitExcludeContextKind :: Test
-testExplicitExcludeContextKind = False ~=? (segmentContainsContext segment user) where
+testExplicitExcludeContextKind = (Right False) ~=? (segmentContainsContext segment user) where
     segment = Segment
         { key      = "test"
         , included = HS.empty
@@ -90,7 +91,7 @@ testExplicitExcludeContextKind = False ~=? (segmentContainsContext segment user)
     user = makeContext "foo" "user"
 
 testExplicitIncludeHasPrecedence :: Test
-testExplicitIncludeHasPrecedence = True ~=? (segmentContainsContext segment user) where
+testExplicitIncludeHasPrecedence = (Right True) ~=? (segmentContainsContext segment user) where
     segment = Segment
         { key      = "test"
         , included = HS.fromList ["foo"]
@@ -106,7 +107,7 @@ testExplicitIncludeHasPrecedence = True ~=? (segmentContainsContext segment user
     user = makeContext "foo" "user"
 
 testExplicitIncludeContextsHasPrecedence :: Test
-testExplicitIncludeContextsHasPrecedence = True ~=? (segmentContainsContext segment user) where
+testExplicitIncludeContextsHasPrecedence = (Right True) ~=? (segmentContainsContext segment user) where
     segment = Segment
         { key      = "test"
         , included = HS.empty
@@ -122,7 +123,7 @@ testExplicitIncludeContextsHasPrecedence = True ~=? (segmentContainsContext segm
     user = makeContext "foo" "user"
 
 testNeitherIncludedNorExcluded :: Test
-testNeitherIncludedNorExcluded = False ~=? (segmentContainsContext segment user) where
+testNeitherIncludedNorExcluded = (Right False) ~=? (segmentContainsContext segment user) where
     segment = Segment
         { key      = "test"
         , included = HS.fromList [""]
@@ -138,7 +139,7 @@ testNeitherIncludedNorExcluded = False ~=? (segmentContainsContext segment user)
     user = makeContext "foo" "user"
 
 testMatchingRuleWithFullRollout :: Test
-testMatchingRuleWithFullRollout = True ~=? (segmentContainsContext segment context) where
+testMatchingRuleWithFullRollout = (Right True) ~=? (segmentContainsContext segment context) where
     segment = Segment
         { key      = "test"
         , included = HS.empty
@@ -151,7 +152,7 @@ testMatchingRuleWithFullRollout = True ~=? (segmentContainsContext segment conte
                 { id       = "rule"
                 , clauses  =
                     [ Clause
-                        { attribute   = "email"
+                        { attribute   = makeLiteral "email"
                         , contextKind = "user"
                         , negate      = False
                         , op          = OpIn
@@ -170,7 +171,7 @@ testMatchingRuleWithFullRollout = True ~=? (segmentContainsContext segment conte
     context = makeContext "foo" "user" & withAttribute "email" "test@example.com"
 
 testMatchingRuleWithZeroRollout :: Test
-testMatchingRuleWithZeroRollout = False ~=? (segmentContainsContext segment context) where
+testMatchingRuleWithZeroRollout = (Right False) ~=? (segmentContainsContext segment context) where
     segment = Segment
         { key      = "test"
         , included = HS.empty
@@ -183,7 +184,7 @@ testMatchingRuleWithZeroRollout = False ~=? (segmentContainsContext segment cont
                 { id       = "rule"
                 , clauses  =
                     [ Clause
-                        { attribute   = "email"
+                        { attribute   = makeLiteral "email"
                         , contextKind = "user"
                         , negate      = False
                         , op          = OpIn
@@ -202,7 +203,7 @@ testMatchingRuleWithZeroRollout = False ~=? (segmentContainsContext segment cont
     context = makeContext "foo" "user" & withAttribute "email" "test@example.com"
 
 testMatchingRuleWithMultipleClauses :: Test
-testMatchingRuleWithMultipleClauses = True ~=? (segmentContainsContext segment context) where
+testMatchingRuleWithMultipleClauses = (Right True) ~=? (segmentContainsContext segment context) where
     segment = Segment
         { key      = "test"
         , included = HS.empty
@@ -215,14 +216,14 @@ testMatchingRuleWithMultipleClauses = True ~=? (segmentContainsContext segment c
                 { id       = "rule"
                 , clauses  =
                     [ Clause
-                        { attribute   = "email"
+                        { attribute   = makeLiteral "email"
                         , contextKind = "user"
                         , negate      = False
                         , op          = OpIn
                         , values      = [String "test@example.com"]
                         }
                     , Clause
-                        { attribute   = "name"
+                        { attribute   = makeLiteral "name"
                         , contextKind = "user"
                         , negate      = False
                         , op          = OpIn
@@ -243,7 +244,7 @@ testMatchingRuleWithMultipleClauses = True ~=? (segmentContainsContext segment c
         & withAttribute "name" "bob"
 
 testNonMatchingRuleWithMultipleClauses :: Test
-testNonMatchingRuleWithMultipleClauses = False ~=? (segmentContainsContext segment context) where
+testNonMatchingRuleWithMultipleClauses = (Right False) ~=? (segmentContainsContext segment context) where
     segment = Segment
         { key      = "test"
         , included = HS.empty
@@ -256,14 +257,14 @@ testNonMatchingRuleWithMultipleClauses = False ~=? (segmentContainsContext segme
                 { id       = "rule"
                 , clauses  =
                     [ Clause
-                        { attribute   = "email"
+                        { attribute   = makeLiteral "email"
                         , contextKind = "user"
                         , negate      = False
                         , op          = OpIn
                         , values      = [String "test@example.com"]
                         }
                     , Clause
-                        { attribute   = "name"
+                        { attribute   = makeLiteral "name"
                         , contextKind = "user"
                         , negate      = False
                         , op          = OpIn

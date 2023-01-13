@@ -16,7 +16,7 @@ invalidReferences = TestCase $ (do
   confirm "invalid escape sequence" "/a~"
   confirm "invalid escape sequence" "/a/b~x"
   confirm "invalid escape sequence" "/a/b~")
-  where confirm err reference = assertEqual "" (Just err) $ getError $ makeReference reference
+  where confirm err reference = assertEqual "" err $ getError $ makeReference reference
 
 validReferencesWithoutLeadingSlash :: Test
 validReferencesWithoutLeadingSlash = TestCase $ (do
@@ -27,7 +27,7 @@ validReferencesWithoutLeadingSlash = TestCase $ (do
   confirm "name~0~1with-what-looks-like-escape-sequences")
   where confirm ref = let reference = makeReference ref
                       in (do
-                        assertEqual "" Nothing $ getError reference
+                        assertEqual "" "" $ getError reference
                         assertEqual "" ref $ getRawPath reference
                         assertEqual "" [ref] $ getComponents reference)
 
@@ -40,7 +40,7 @@ validReferencesWithLeadingSlash = TestCase $ (do
     confirm ref component =
       let reference = makeReference ref
       in (do
-        assertEqual "" Nothing $ getError reference
+        assertEqual "" "" $ getError reference
         assertEqual "" [component] $ getComponents reference
         assertEqual "" ref $ getRawPath reference)
 
@@ -72,7 +72,7 @@ validLiteralReferences = TestCase $ (do
                             in assertEqual "" (getRawPath literal) (getRawPath reference)
 
 invalidLiteralReferences :: Test
-invalidLiteralReferences = TestCase $ assertEqual "" (Just "empty reference") $ getError $ makeLiteral ""
+invalidLiteralReferences = TestCase $ assertEqual "" "empty reference" $ getError $ makeLiteral ""
 
 allTests :: Test
 allTests = TestList
