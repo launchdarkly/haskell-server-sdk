@@ -27,7 +27,14 @@ getAppStatus :: ActionM ()
 getAppStatus = json AppStatus
     { name = "haskell-server-sdk"
     , clientVersion = LD.clientVersion
-    , capabilities = ["server-side", "strongly-typed", "all-flags-with-reasons", "all-flags-client-side-only", "all-flags-details-only-for-tracked-flags"]
+    , capabilities =
+        ["server-side"
+        , "strongly-typed"
+        , "all-flags-with-reasons"
+        , "all-flags-client-side-only"
+        , "all-flags-details-only-for-tracked-flags"
+        , "tags"
+        ]
     }
 
 shutdownService :: MVar () -> ActionM ()

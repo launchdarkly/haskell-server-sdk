@@ -21,6 +21,7 @@ data ConfigurationParams = ConfigurationParams
     , initCanFail :: !(Maybe Bool)
     , streaming :: !(Maybe StreamingParams)
     , events :: !(Maybe EventParams)
+    , tags :: !(Maybe TagParams)
     } deriving (FromJSON, ToJSON, Show, Generic)
 
 data StreamingParams = StreamingParams
@@ -36,6 +37,11 @@ data EventParams = EventParams
     , globalPrivateAttributes :: !(Maybe (Set Text))
     , flushIntervalMs :: !(Maybe Natural)
     , inlineUsers :: !(Maybe Bool)
+    } deriving (FromJSON, ToJSON, Show, Generic)
+
+data TagParams = TagParams
+    { applicationId :: !(Maybe Text)
+    , applicationVersion :: !(Maybe Text)
     } deriving (FromJSON, ToJSON, Show, Generic)
 
 data CommandParams = CommandParams

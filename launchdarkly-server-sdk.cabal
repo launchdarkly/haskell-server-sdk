@@ -131,6 +131,7 @@ test-suite haskell-server-sdk-test
   main-is: Spec.hs
   other-modules:
       Spec.Bucket
+      Spec.Config
       Spec.DataSource
       Spec.Evaluate
       Spec.Features

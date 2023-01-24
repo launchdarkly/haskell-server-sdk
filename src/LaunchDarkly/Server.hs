@@ -24,6 +24,10 @@ module LaunchDarkly.Server
     , configSetStoreTTL
     , configSetUseLdd
     , configSetDataSourceFactory
+    , configSetApplicationInfo
+    , ApplicationInfo
+    , makeApplicationInfo
+    , withApplicationValue
     , User
     , makeUser
     , userSetKey
