@@ -163,7 +163,7 @@ ruleMatchesContext rule context store = foldlM (checkRule store context) (Right 
           checkRule :: Monad m => LaunchDarklyStoreRead store m => store -> Context -> Either Text Bool -> Clause -> m (Either Text Bool)
           checkRule _ _ (Left e) _ = pure $ Left e
           checkRule _ _ (Right False) _ = pure $ Right False
-          checkRule store context _ clause = clauseMatchesContext store clause context
+          checkRule store context _ clause = clauseMatchesContext store clause context HS.empty
 
 variationIndexForContext :: VariationOrRollout -> Context -> Text -> Text -> (Maybe Integer, Bool)
 variationIndexForContext vor context key salt
@@ -253,26 +253,25 @@ clauseMatchesContextNoSegments clause context
                         Array a -> Right $ maybeNegate clause $ V.any (matchAnyClauseValue clause) a
                         x       -> Right $ maybeNegate clause $ matchAnyClauseValue clause x
 
-clauseMatchesContext :: (Monad m, LaunchDarklyStoreRead store m) => store -> Clause -> Context -> m (Either Text Bool)
-clauseMatchesContext store clause context
+clauseMatchesContext :: (Monad m, LaunchDarklyStoreRead store m) => store -> Clause -> Context -> HS.HashSet Text -> m (Either Text Bool)
+clauseMatchesContext store clause context seenSegments
     | getField @"op" clause == OpSegmentMatch =
         let values = [ x | String x <- getField @"values" clause]
-        in foldlM (checkSegment store context) (Right False) values >>= pure . mapRight (maybeNegate clause)
+        in foldlM (checkSegment store context seenSegments) (Right False) values >>= pure . mapRight (maybeNegate clause)
     | otherwise = pure $ clauseMatchesContextNoSegments clause context
 
-checkSegment :: (Monad m, LaunchDarklyStoreRead store m) => store -> Context -> Either Text Bool -> Text -> m (Either Text Bool)
-checkSegment _ _ (Left e) _ = pure $ Left e
-checkSegment _ _ (Right True) _ = pure $ Right True
-checkSegment store context _ value = getSegmentC store value >>= pure . \case
-    Right (Just segment) -> segmentContainsContext segment context
-    _ -> Right False
+checkSegment :: (Monad m, LaunchDarklyStoreRead store m) => store -> Context -> HS.HashSet Text -> Either Text Bool -> Text -> m (Either Text Bool)
+checkSegment _ _ _ (Left e) _ = pure $ Left e
+checkSegment _ _ _ (Right True) _ = pure $ Right True
+checkSegment store context seenSegments _ value = getSegmentC store value >>= \case
+    Right (Just segment) -> segmentContainsContext store segment context seenSegments
+    _ -> pure $ Right False
 
 -- Segment ---------------------------------------------------------------------
 
-segmentRuleMatchesContext :: SegmentRule -> Context -> Text -> Text -> Either Text Bool
-segmentRuleMatchesContext rule context key salt = do
-    let result = foldl checkClause (Right True) (getField @"clauses" rule)
-    case result of
+segmentRuleMatchesContext :: (Monad m, LaunchDarklyStoreRead store m) => store -> SegmentRule -> Context -> Text -> Text -> HS.HashSet Text -> m (Either Text Bool)
+segmentRuleMatchesContext store rule context key salt seenSegments = foldlM (checkClause store) (Right True) (getField @"clauses" rule) >>= \result ->
+    pure $ case result of
         Left _ -> result
         Right False -> result
         _ -> Right $ (flip (maybe True) (getField @"weight" rule) $ \weight ->
@@ -281,23 +280,24 @@ segmentRuleMatchesContext rule context key salt = do
                 Just v | v >= (weight / 100000.0) -> False
                 _ -> True)
     where
-        checkClause :: Either Text Bool -> Clause -> Either Text Bool
-        checkClause (Left e) _ = Left e
-        checkClause (Right False) _ = Right False
-        checkClause _ clause = clauseMatchesContextNoSegments clause context
+        checkClause :: (Monad m, LaunchDarklyStoreRead store m) => store -> Either Text Bool -> Clause -> m (Either Text Bool)
+        checkClause _ (Left e) _ = pure $ Left e
+        checkClause _ (Right False) _ = pure $ Right False
+        checkClause store _ clause = clauseMatchesContext store clause context seenSegments
 
-segmentContainsContext :: Segment -> Context -> Either Text Bool
-segmentContainsContext (Segment { included, includedContexts, excluded, excludedContexts, key, salt, rules }) context
-    | contextKeyInTargetList included "user" context = Right True
-    | (any (flip contextKeyInSegmentTarget context) includedContexts) = Right True
-    | contextKeyInTargetList excluded "user" context = Right False
-    | (any (flip contextKeyInSegmentTarget context) excludedContexts) = Right False
-    | otherwise = foldl checkRules (Right False) rules
+segmentContainsContext :: (Monad m, LaunchDarklyStoreRead store m) => store -> Segment -> Context -> HS.HashSet Text -> m (Either Text Bool)
+segmentContainsContext  store (Segment { included, includedContexts, excluded, excludedContexts, key, salt, rules }) context seenSegments
+    | HS.member key seenSegments = pure $ Left "segment rule caused a circular reference; this is probably a temporary condition"
+    | contextKeyInTargetList included "user" context = pure $ Right True
+    | (any (flip contextKeyInSegmentTarget context) includedContexts) = pure $ Right True
+    | contextKeyInTargetList excluded "user" context = pure $ Right False
+    | (any (flip contextKeyInSegmentTarget context) excludedContexts) = pure $ Right False
+    | otherwise = foldlM (checkRules store) (Right False) rules
     where
-        checkRules :: Either Text Bool -> SegmentRule -> Either Text Bool
-        checkRules (Left e) _ = Left e
-        checkRules (Right True) _ = Right True
-        checkRules _ rule = segmentRuleMatchesContext rule context key salt
+        checkRules :: (Monad m, LaunchDarklyStoreRead store m) => store -> Either Text Bool -> SegmentRule -> m (Either Text Bool)
+        checkRules _ (Left e) _ = pure $ Left e
+        checkRules _ (Right True) _ = pure $ Right True
+        checkRules store _ rule = segmentRuleMatchesContext store rule context key salt (HS.insert key seenSegments)
 
 contextKeyInSegmentTarget :: SegmentTarget -> Context -> Bool
 contextKeyInSegmentTarget (SegmentTarget { values, contextKind }) = contextKeyInTargetList values contextKind

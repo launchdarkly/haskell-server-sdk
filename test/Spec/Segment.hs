@@ -3,21 +3,39 @@ module Spec.Segment (allTests) where
 import           Test.HUnit
 import           Data.Aeson.Types        (Value(..))
 import           Data.Function           ((&))
+import           Data.Generics.Product   (getField)
 import qualified Data.HashSet as         HS
+import           Util.Features
 
+import LaunchDarkly.Server.Config
 import LaunchDarkly.Server.Client
+import LaunchDarkly.Server.Client.Internal
 import LaunchDarkly.Server.Features
 import LaunchDarkly.Server.User
 import LaunchDarkly.Server.User.Internal
 import LaunchDarkly.Server.Operators
 import LaunchDarkly.Server.Evaluate
+import LaunchDarkly.Server.Store
+import LaunchDarkly.Server.Store.Internal
 import LaunchDarkly.Server.Context (makeContext, withAttribute)
 import LaunchDarkly.Server.Reference (makeLiteral)
 
+makeEmptyStore = do
+    handle <- makeStoreIO Nothing 0
+    initializeStore handle mempty mempty
+    pure handle
+
+makeTestClient :: IO Client
+makeTestClient = do
+    (Client client) <- makeClient $ (makeConfig "") & configSetOffline True
+    initializeStore (getField @"store" client) mempty mempty
+    pure (Client client)
+
 testExplicitIncludeUser :: Test
 testExplicitIncludeUser = TestCase $ do
-    assertEqual "" (Right True) (segmentContainsContext segment user)
-    assertEqual "" (Right False) (segmentContainsContext segment org)
+    store <- makeEmptyStore
+    segmentContainsContext store segment user HS.empty >>= assertEqual "" (Right True)
+    segmentContainsContext store segment org HS.empty >>= assertEqual "" (Right False)
 
     where
 
@@ -38,8 +56,9 @@ testExplicitIncludeUser = TestCase $ do
 
 testExplicitIncludeContextKind :: Test
 testExplicitIncludeContextKind = TestCase $ do
-    assertEqual "" (Right True) $ (segmentContainsContext segment user)
-    assertEqual "" (Right False) $ (segmentContainsContext segment org)
+    store <- makeEmptyStore
+    segmentContainsContext store segment user HS.empty >>= assertEqual "" (Right True)
+    segmentContainsContext store segment org HS.empty >>= assertEqual "" (Right False)
 
     where
 
@@ -59,7 +78,12 @@ testExplicitIncludeContextKind = TestCase $ do
     org = makeContext "foo" "org"
 
 testExplicitExcludeUser :: Test
-testExplicitExcludeUser = (Right False) ~=? (segmentContainsContext segment user) where
+testExplicitExcludeUser = TestCase $ do
+    store <- makeEmptyStore
+    segmentContainsContext store segment user HS.empty >>= assertEqual "" (Right False)
+
+    where
+
     segment = Segment
         { key      = "test"
         , included = HS.empty
@@ -75,7 +99,12 @@ testExplicitExcludeUser = (Right False) ~=? (segmentContainsContext segment user
     user = makeContext "foo" "user"
 
 testExplicitExcludeContextKind :: Test
-testExplicitExcludeContextKind = (Right False) ~=? (segmentContainsContext segment user) where
+testExplicitExcludeContextKind = TestCase $ do
+    store <- makeEmptyStore
+    segmentContainsContext store segment user HS.empty >>= assertEqual "" (Right False)
+
+    where
+
     segment = Segment
         { key      = "test"
         , included = HS.empty
@@ -91,7 +120,12 @@ testExplicitExcludeContextKind = (Right False) ~=? (segmentContainsContext segme
     user = makeContext "foo" "user"
 
 testExplicitIncludeHasPrecedence :: Test
-testExplicitIncludeHasPrecedence = (Right True) ~=? (segmentContainsContext segment user) where
+testExplicitIncludeHasPrecedence = TestCase $ do
+    store <- makeEmptyStore
+    segmentContainsContext store segment user HS.empty >>= assertEqual "" (Right True)
+
+    where
+
     segment = Segment
         { key      = "test"
         , included = HS.fromList ["foo"]
@@ -107,7 +141,12 @@ testExplicitIncludeHasPrecedence = (Right True) ~=? (segmentContainsContext segm
     user = makeContext "foo" "user"
 
 testExplicitIncludeContextsHasPrecedence :: Test
-testExplicitIncludeContextsHasPrecedence = (Right True) ~=? (segmentContainsContext segment user) where
+testExplicitIncludeContextsHasPrecedence = TestCase $ do
+    store <- makeEmptyStore
+    segmentContainsContext store segment user HS.empty >>= assertEqual "" (Right True)
+
+    where
+
     segment = Segment
         { key      = "test"
         , included = HS.empty
@@ -123,7 +162,12 @@ testExplicitIncludeContextsHasPrecedence = (Right True) ~=? (segmentContainsCont
     user = makeContext "foo" "user"
 
 testNeitherIncludedNorExcluded :: Test
-testNeitherIncludedNorExcluded = (Right False) ~=? (segmentContainsContext segment user) where
+testNeitherIncludedNorExcluded = TestCase $ do
+    store <- makeEmptyStore
+    segmentContainsContext store segment user HS.empty >>= assertEqual "" (Right False)
+
+    where
+
     segment = Segment
         { key      = "test"
         , included = HS.fromList [""]
@@ -139,7 +183,12 @@ testNeitherIncludedNorExcluded = (Right False) ~=? (segmentContainsContext segme
     user = makeContext "foo" "user"
 
 testMatchingRuleWithFullRollout :: Test
-testMatchingRuleWithFullRollout = (Right True) ~=? (segmentContainsContext segment context) where
+testMatchingRuleWithFullRollout = TestCase $ do
+    store <- makeEmptyStore
+    segmentContainsContext store segment context HS.empty >>= assertEqual "" (Right True)
+
+    where
+
     segment = Segment
         { key      = "test"
         , included = HS.empty
@@ -171,7 +220,12 @@ testMatchingRuleWithFullRollout = (Right True) ~=? (segmentContainsContext segme
     context = makeContext "foo" "user" & withAttribute "email" "test@example.com"
 
 testMatchingRuleWithZeroRollout :: Test
-testMatchingRuleWithZeroRollout = (Right False) ~=? (segmentContainsContext segment context) where
+testMatchingRuleWithZeroRollout = TestCase $ do
+    store <- makeEmptyStore
+    segmentContainsContext store segment context HS.empty >>= assertEqual "" (Right False)
+
+    where
+
     segment = Segment
         { key      = "test"
         , included = HS.empty
@@ -203,7 +257,12 @@ testMatchingRuleWithZeroRollout = (Right False) ~=? (segmentContainsContext segm
     context = makeContext "foo" "user" & withAttribute "email" "test@example.com"
 
 testMatchingRuleWithMultipleClauses :: Test
-testMatchingRuleWithMultipleClauses = (Right True) ~=? (segmentContainsContext segment context) where
+testMatchingRuleWithMultipleClauses = TestCase $ do
+    store <- makeEmptyStore
+    segmentContainsContext store segment context HS.empty >>= assertEqual "" (Right True)
+
+    where
+
     segment = Segment
         { key      = "test"
         , included = HS.empty
@@ -244,7 +303,12 @@ testMatchingRuleWithMultipleClauses = (Right True) ~=? (segmentContainsContext s
         & withAttribute "name" "bob"
 
 testNonMatchingRuleWithMultipleClauses :: Test
-testNonMatchingRuleWithMultipleClauses = (Right False) ~=? (segmentContainsContext segment context) where
+testNonMatchingRuleWithMultipleClauses = TestCase $ do
+    store <- makeEmptyStore
+    segmentContainsContext store segment context HS.empty >>= assertEqual "" (Right False)
+
+    where
+
     segment = Segment
         { key      = "test"
         , included = HS.empty
@@ -284,6 +348,97 @@ testNonMatchingRuleWithMultipleClauses = (Right False) ~=? (segmentContainsConte
         & withAttribute "email" "test@example.com"
         & withAttribute "name" "bob"
 
+testCanDetectRecursiveSegments :: Test
+testCanDetectRecursiveSegments = TestCase $ do
+    client@(Client clientI) <- makeTestClient
+    insertFlag (getField @"store" clientI) flag >>= (pure () @=?)
+    insertSegment (getField @"store" clientI) segmentA >>= (pure () @=?)
+    insertSegment (getField @"store" clientI) segmentB >>= (pure () @=?)
+    boolVariationDetail client "a" (makeContext "b" "user") False >>= (expected @=?)
+    where
+        flag = (makeTestFlag "a" 1)
+            { on           = True
+            , rules        =
+                [ Rule
+                    { clauses  =
+                        [ Clause
+                            { attribute   = makeLiteral "key"
+                            , contextKind = "user"
+                            , op          = OpSegmentMatch
+                            , values      = [String "segmentA"]
+                            , negate      = False
+                            }
+                        ]
+                    , variationOrRollout = VariationOrRollout
+                        { variation = Just 0
+                        , rollout   = Nothing
+                        }
+                    , id                 = "rule-1"
+                    , trackEvents        = False
+                    }
+                ]
+            , offVariation = Nothing
+            }
+        segmentA = Segment
+            { key = "segmentA"
+            , version = 1
+            , deleted = False
+            , included = mempty
+            , includedContexts = mempty
+            , excluded = mempty
+            , excludedContexts = mempty
+            , salt = ""
+            , rules =
+                [ SegmentRule
+                    { clauses  =
+                        [ Clause
+                            { attribute   = makeLiteral "rule-1"
+                            , contextKind = "user"
+                            , op          = OpSegmentMatch
+                            , values      = [String "segmentB"]
+                            , negate      = False
+                            }
+                        ]
+                    , id = "rule-1"
+                    , weight = Nothing
+                    , bucketBy = Nothing
+                    , rolloutContextKind = "user"
+                    }
+                ]
+            }
+        segmentB = Segment
+            { key = "segmentB"
+            , version = 1
+            , deleted = False
+            , included = mempty
+            , includedContexts = mempty
+            , excluded = mempty
+            , excludedContexts = mempty
+            , salt = ""
+            , rules =
+                [ SegmentRule
+                    { clauses  =
+                        [ Clause
+                            { attribute   = makeLiteral "rule-1"
+                            , contextKind = "user"
+                            , op          = OpSegmentMatch
+                            , values      = [String "segmentA"]
+                            , negate      = False
+                            }
+                        ]
+                    , id = "rule-1"
+                    , weight = Nothing
+                    , bucketBy = Nothing
+                    , rolloutContextKind = "user"
+                    }
+                ]
+            }
+        expected = EvaluationDetail
+            { value          = False
+            , variationIndex = Nothing
+            , reason         = EvaluationReasonError { errorKind = EvalErrorKindMalformedFlag }
+            }
+
 allTests :: Test
 allTests = TestList
     [ testExplicitIncludeUser
@@ -297,4 +452,5 @@ allTests = TestList
     , testMatchingRuleWithZeroRollout
     , testMatchingRuleWithMultipleClauses
     , testNonMatchingRuleWithMultipleClauses
+    , testCanDetectRecursiveSegments
     ]
