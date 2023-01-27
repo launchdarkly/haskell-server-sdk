@@ -15,6 +15,9 @@ import qualified Data.Text                  as T
 #if MIN_VERSION_aeson(2,0,0)
 type KeyMap = KeyMap.KeyMap
 
+null :: KeyMap v -> Bool
+null = KeyMap.null
+
 emptyObject :: KeyMap v
 emptyObject = KeyMap.empty
 
@@ -70,6 +73,9 @@ foldrWithKey :: (T.Text -> v -> a -> a) -> a -> KeyMap.KeyMap v -> a
 foldrWithKey f accum initial = KeyMap.foldrWithKey (\k v a -> f (keyToText k) v a) accum initial
 #else
 type KeyMap = HM.HashMap T.Text
+
+null :: KeyMap v -> Bool
+null = HM.null
 
 emptyObject :: KeyMap v
 emptyObject = HM.empty

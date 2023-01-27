@@ -7,7 +7,7 @@ import           Data.IORef                          (newIORef, readIORef, atomi
 import qualified Data.UUID as                        UUID
 import           Control.Monad.Logger                (MonadLogger, logDebug, logWarn, logError)
 import           Control.Monad.IO.Class              (MonadIO, liftIO)
-import           Network.HTTP.Client                 (Manager, Request(..), RequestBody(..), httpLbs, parseRequest, responseStatus)
+import           Network.HTTP.Client                 (Manager, Request(..), RequestBody(..), httpLbs, responseStatus)
 import           Data.Generics.Product               (getField)
 import qualified Data.Text as                        T
 import           Control.Concurrent                  (killThread, myThreadId)
@@ -21,8 +21,10 @@ import qualified Data.ByteString.Lazy as             L
 import           Network.HTTP.Types.Status           (status400, status408, status429, status500)
 
 import           LaunchDarkly.Server.Client.Internal (ClientI, Status(ShuttingDown))
-import           LaunchDarkly.Server.Network.Common  (tryAuthorized, checkAuthorization, getServerTime, prepareRequest, tryHTTP, addToAL)
+import           LaunchDarkly.Server.Network.Common  (tryAuthorized, checkAuthorization, getServerTime, tryHTTP, addToAL)
 import           LaunchDarkly.Server.Events          (processSummary, EventState)
+import LaunchDarkly.Server.Config.ClientContext
+import LaunchDarkly.Server.Config.HttpConfiguration (prepareRequest)
 
 -- A true result indicates a retry does not need to be attempted
 processSend :: (MonadIO m, MonadLogger m, MonadMask m, MonadThrow m) => Manager -> Request -> m (Bool, Integer)
@@ -50,11 +52,11 @@ setEventHeaders request = request
 updateLastKnownServerTime :: EventState -> Integer -> IO ()
 updateLastKnownServerTime state serverTime = modifyMVar_ (getField @"lastKnownServerTime" state) (\lastKnown -> pure $ max serverTime lastKnown)
 
-eventThread :: (MonadIO m, MonadLogger m, MonadMask m) => Manager -> ClientI -> m ()
-eventThread manager client = do
-    let state = getField @"events" client; config = getField @"config" client;
+eventThread :: (MonadIO m, MonadLogger m, MonadMask m) => Manager -> ClientI -> ClientContext -> m ()
+eventThread manager client clientContext = do
+    let state = getField @"events" client; config = getField @"config" client; httpConfig = httpConfiguration clientContext
     rngRef <- liftIO $ newStdGen >>= newIORef
-    req <- (liftIO $ parseRequest $ (T.unpack $ getField @"eventsURI" config) ++ "/bulk") >>= pure . setEventHeaders . prepareRequest config
+    req <- (liftIO $ prepareRequest httpConfig $ (T.unpack $ getField @"eventsURI" config) ++ "/bulk") >>= pure . setEventHeaders
     void $ tryAuthorized client $ forever $ do
         liftIO $ processSummary config state
         events' <- liftIO $ swapMVar (getField @"events" state) []

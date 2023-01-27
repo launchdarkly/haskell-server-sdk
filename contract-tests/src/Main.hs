@@ -44,6 +44,7 @@ getAppStatus = json AppStatus
         , "all-flags-details-only-for-tracked-flags"
         , "context-type"
         , "secure-mode-hash"
+        , "tags"
         ]
     }
 

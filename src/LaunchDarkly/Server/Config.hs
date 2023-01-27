@@ -24,6 +24,10 @@ module LaunchDarkly.Server.Config
     , configSetStoreTTL
     , configSetUseLdd
     , configSetDataSourceFactory
+    , configSetApplicationInfo
+    , ApplicationInfo
+    , makeApplicationInfo
+    , withApplicationValue
     ) where
 
 import Control.Monad.Logger                (LoggingT, runStdoutLoggingT)
@@ -33,7 +37,7 @@ import Data.Text                           (Text, dropWhileEnd)
 import GHC.Natural                         (Natural)
 import Network.HTTP.Client                 (Manager)
 
-import LaunchDarkly.Server.Config.Internal (Config(..), mapConfig, ConfigI(..))
+import LaunchDarkly.Server.Config.Internal (Config(..), mapConfig, ConfigI(..), ApplicationInfo, makeApplicationInfo, withApplicationValue)
 import LaunchDarkly.Server.Store           (StoreInterface)
 import LaunchDarkly.Server.DataSource.Internal (DataSourceFactory)
 import LaunchDarkly.Server.Reference (Reference)
@@ -62,6 +66,7 @@ makeConfig key =
     , useLdd                = False
     , dataSourceFactory     = Nothing
     , manager               = Nothing
+    , applicationInfo       = Nothing
     }
 
 -- | Set the SDK key used to authenticate with LaunchDarkly.
@@ -169,3 +174,13 @@ configSetDataSourceFactory = mapConfig . setField @"dataSourceFactory"
 -- 'Manager' will be created when creating the client.
 configSetManager :: Manager -> Config -> Config
 configSetManager = mapConfig . setField @"manager" . Just
+
+-- | An object that allows configuration of application metadata.
+--
+-- Application metadata may be used in LaunchDarkly analytics or other product
+-- features, but does not affect feature flag evaluations.
+--
+-- If you want to set non-default values for any of these fields, provide the
+-- appropriately configured dict to the 'Config' object.
+configSetApplicationInfo :: ApplicationInfo -> Config -> Config
+configSetApplicationInfo = mapConfig . setField @"applicationInfo" . Just
