@@ -13,7 +13,6 @@ module LaunchDarkly.Server.Config
     , configSetFlushIntervalSeconds
     , configSetPollIntervalSeconds
     , configSetUserKeyLRUCapacity
-    , configSetInlineUsersInEvents
     , configSetEventsCapacity
     , configSetLogger
     , configSetManager
@@ -54,7 +53,6 @@ makeConfig key =
     , flushIntervalSeconds  = 5
     , pollIntervalSeconds   = 30
     , userKeyLRUCapacity    = 1000
-    , inlineUsersInEvents   = False
     , eventsCapacity        = 10000
     , logger                = runStdoutLoggingT
     , sendEvents            = True
@@ -122,11 +120,6 @@ configSetPollIntervalSeconds = mapConfig . setField @"pollIntervalSeconds"
 -- time, so that duplicate user details will not be sent in analytics events.
 configSetUserKeyLRUCapacity :: Natural -> Config -> Config
 configSetUserKeyLRUCapacity = mapConfig . setField @"userKeyLRUCapacity"
-
--- | Set to true if you need to see the full user details in every analytics
--- event.
-configSetInlineUsersInEvents :: Bool -> Config -> Config
-configSetInlineUsersInEvents = mapConfig . setField @"inlineUsersInEvents"
 
 -- | The capacity of the events buffer. The client buffers up to this many
 -- events in memory before flushing. If the capacity is exceeded before the

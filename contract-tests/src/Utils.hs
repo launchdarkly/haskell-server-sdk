@@ -38,5 +38,4 @@ eventConfig c (Just p) = updateConfig LD.configSetEventsURI (getField @"baseUri"
     $ updateConfig LD.configSetEventsCapacity (getField @"capacity" p)
     $ updateConfig LD.configSetAllAttributesPrivate (getField @"allAttributesPrivate" p)
     $ updateConfig LD.configSetPrivateAttributeNames ((S.map R.makeReference) <$> getField @"globalPrivateAttributes" p)
-    $ updateConfig LD.configSetFlushIntervalSeconds (getField @"flushIntervalMs" p)
-    $ updateConfig LD.configSetInlineUsersInEvents (getField @"inlineUsers" p) c
+    $ updateConfig LD.configSetFlushIntervalSeconds (getField @"flushIntervalMs" p) c

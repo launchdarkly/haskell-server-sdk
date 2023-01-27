@@ -36,7 +36,6 @@ data EventParams = EventParams
     , allAttributesPrivate :: !(Maybe Bool)
     , globalPrivateAttributes :: !(Maybe (Set Text))
     , flushIntervalMs :: !(Maybe Natural)
-    , inlineUsers :: !(Maybe Bool)
     } deriving (FromJSON, ToJSON, Show, Generic)
 
 data CommandParams = CommandParams

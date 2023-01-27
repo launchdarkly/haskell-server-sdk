@@ -12,7 +12,7 @@ import           Data.Time.Clock.POSIX               (getPOSIXTime)
 import           Control.Lens                        ((&), (%~))
 import           Data.Maybe                          (fromMaybe)
 import           Data.Cache.LRU                      (LRU, newLRU)
-import           Control.Monad                       (when, unless)
+import           Control.Monad                       (when)
 import qualified Data.Cache.LRU as                   LRU
 import qualified Data.HashSet as HS
 
@@ -317,7 +317,6 @@ processEvalEvent :: Natural -> ConfigI -> EventState -> Context -> Bool -> Bool 
 processEvalEvent now config state context includeReason unknown event = do
     let featureEvent = makeFeatureEvent config context includeReason event
         trackEvents = getField @"trackEvents" event
-        inlineUsers = getField @"inlineUsersInEvents" config
         debugEventsUntilDate = fromMaybe 0 (getField @"debugEventsUntilDate" event)
     lastKnownServerTime <- naturalFromInteger <$> (* 1000) <$> readMVar (getField @"lastKnownServerTime" state)
     when trackEvents $
@@ -325,8 +324,7 @@ processEvalEvent now config state context includeReason unknown event = do
     when (now < debugEventsUntilDate && lastKnownServerTime < debugEventsUntilDate) $
         queueEvent config state $ EventTypeDebug $ BaseEvent now $ DebugEvent $ contextOrContextKeys True config context featureEvent
     runSummary now state event unknown
-    unless (trackEvents && inlineUsers) $
-        maybeIndexUser now config context state
+    maybeIndexUser now config context state
 
 processEvalEvents :: ConfigI -> EventState -> Context -> Bool -> [EvalEvent] -> Bool -> IO ()
 processEvalEvents config state context includeReason events unknown =

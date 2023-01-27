@@ -29,7 +29,7 @@ module LaunchDarkly.Server.Client
 
 import           Control.Concurrent                    (forkFinally, killThread)
 import           Control.Concurrent.MVar               (putMVar, takeMVar, newEmptyMVar)
-import           Control.Monad                         (void, forM_, unless)
+import           Control.Monad                         (void, forM_)
 import           Control.Monad.IO.Class                (liftIO)
 import           Control.Monad.Logger                  (LoggingT, logDebug, logWarn)
 import           Control.Monad.Fix                     (mfix)
@@ -260,8 +260,7 @@ track (Client client) context key value metric = do
     let config = (getField @"config" client)
         events = (getField @"events" client)
     queueEvent config events (EventTypeCustom x)
-    unless (getField @"inlineUsersInEvents" config) $
-        unixMilliseconds >>= \now -> maybeIndexUser now config context events
+    unixMilliseconds >>= \now -> maybeIndexUser now config context events
 
 -- | Flush tells the client that all pending analytics events (if any) should be
 -- delivered as soon as possible. Flushing is asynchronous, so this method will

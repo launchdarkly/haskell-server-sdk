@@ -43,7 +43,6 @@ data ConfigI = ConfigI
     , flushIntervalSeconds  :: !Natural
     , pollIntervalSeconds   :: !Natural
     , userKeyLRUCapacity    :: !Natural
-    , inlineUsersInEvents   :: !Bool
     , eventsCapacity        :: !Natural
     , logger                :: !(LoggingT IO () -> IO ())
     , sendEvents            :: !Bool
