@@ -105,7 +105,7 @@ data ContextBuildParam = ContextBuildParam
     , key :: !Text
     , name :: !(Maybe Text)
     , anonymous :: !(Maybe Bool)
-    , private :: !(Maybe [Text])
+    , private :: !(Maybe (Set Text))
     , custom :: !(Maybe (HashMap Text Value))
     } deriving (FromJSON, Generic)
 

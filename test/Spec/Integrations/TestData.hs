@@ -15,7 +15,6 @@ import           LaunchDarkly.Server
 import           LaunchDarkly.Server.DataSource.Internal
 import qualified LaunchDarkly.Server.Integrations.TestData             as TestData
 import qualified LaunchDarkly.Server.Integrations.TestData.FlagBuilder as FlagBuilder
-import LaunchDarkly.Server.Context (toLegacyUser)
 
 allTests :: Test
 allTests = TestList

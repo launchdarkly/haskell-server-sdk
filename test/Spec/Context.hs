@@ -2,12 +2,15 @@ module Spec.Context (allTests) where
 
 import Test.HUnit
 
+import LaunchDarkly.Server.Config (makeConfig, configSetAllAttributesPrivate)
+import LaunchDarkly.Server.Config.Internal
 import LaunchDarkly.Server.Context
 import qualified LaunchDarkly.Server.Reference as R
 import Control.Monad.Cont (liftIO)
 import Data.Text (Text)
 import qualified Data.Vector as V
-import Data.Aeson (Value(..), decode)
+import qualified Data.Set as S
+import Data.Aeson (Value(..), encode, decode, toJSON)
 import Data.Function ((&))
 import LaunchDarkly.AesonCompat (fromList)
 import Data.Maybe (fromJust)
@@ -216,6 +219,45 @@ canParseMultiKindFormat = TestCase $
         assertEqual "" "LaunchDarkly" $ getValue "name" orgContext
     )
 
+canRedactAttributesCorrectly :: Test
+canRedactAttributesCorrectly = TestCase $ do
+    assertEqual "" expectedString (encode $ redactContext config context)
+
+    where
+
+    config = unpackConfig $ makeConfig "sdk-key"
+
+    address = Object $ fromList [("city", "Chicago"), ("state", "IL")]
+
+    context = makeContext "user-key" "user"
+        & withAttribute "name" "Sandy"
+        & withAttribute "firstName" "Sandy"
+        & withAttribute "lastName" "Beaches"
+        & withAttribute "address" address
+        & withAttribute "hobbies" (Array $ V.fromList ["coding", "reading"])
+        & withPrivateAttributes (S.fromList [R.makeLiteral "key", R.makeLiteral "kind", R.makeLiteral "anonymous", R.makeLiteral "name", R.makeReference "/address/city", R.makeReference "/hobbies/0"])
+
+    expectedString = "{\"_meta\":{\"redactedAttributes\":[\"/address/city\",\"name\"]},\"address\":{\"state\":\"IL\"},\"firstName\":\"Sandy\",\"hobbies\":[\"coding\",\"reading\"],\"key\":\"user-key\",\"kind\":\"user\",\"lastName\":\"Beaches\"}"
+
+canRedactAllAttributesCorrectly :: Test
+canRedactAllAttributesCorrectly = TestCase $ do
+    assertEqual "" expectedString (encode $ redactContext config context)
+
+    where
+
+    config = makeConfig "sdk-key" & configSetAllAttributesPrivate True & unpackConfig
+
+    address = Object $ fromList [("city", "Chicago"), ("state", "IL")]
+
+    context = makeContext "user-key" "user"
+        & withAttribute "name" "Sandy"
+        & withAttribute "firstName" "Sandy"
+        & withAttribute "lastName" "Beaches"
+        & withAttribute "address" address
+        & withAttribute "hobbies" (Array $ V.fromList ["coding", "reading"])
+
+    expectedString = "{\"_meta\":{\"redactedAttributes\":[\"address\",\"firstName\",\"hobbies\",\"lastName\",\"name\"]},\"key\":\"user-key\",\"kind\":\"user\"}"
+
 allTests :: Test
 allTests = TestList
   [ invalidKey
@@ -233,4 +275,6 @@ allTests = TestList
   , canParseFromLegacyUserFormat
   , canParseSingleKindFormat
   , canParseMultiKindFormat
+  , canRedactAttributesCorrectly
+  , canRedactAllAttributesCorrectly
   ]

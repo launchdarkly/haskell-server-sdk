@@ -2,6 +2,8 @@ module Utils where
 
 import Control.Concurrent (threadDelay)
 import qualified LaunchDarkly.Server as LD
+import qualified LaunchDarkly.Server.Reference as R
+import qualified Data.Set as S
 import Types
 import Data.Generics.Product (getField)
 
@@ -35,6 +37,6 @@ eventConfig c Nothing = updateConfig LD.configSetSendEvents (Just False) c
 eventConfig c (Just p) = updateConfig LD.configSetEventsURI (getField @"baseUri" p)
     $ updateConfig LD.configSetEventsCapacity (getField @"capacity" p)
     $ updateConfig LD.configSetAllAttributesPrivate (getField @"allAttributesPrivate" p)
-    $ updateConfig LD.configSetPrivateAttributeNames (getField @"globalPrivateAttributes" p)
+    $ updateConfig LD.configSetPrivateAttributeNames ((S.map R.makeReference) <$> getField @"globalPrivateAttributes" p)
     $ updateConfig LD.configSetFlushIntervalSeconds (getField @"flushIntervalMs" p)
     $ updateConfig LD.configSetInlineUsersInEvents (getField @"inlineUsers" p) c

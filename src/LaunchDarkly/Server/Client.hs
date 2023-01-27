@@ -34,7 +34,7 @@ import           Control.Monad.IO.Class                (liftIO)
 import           Control.Monad.Logger                  (LoggingT, logDebug, logWarn)
 import           Control.Monad.Fix                     (mfix)
 import           Data.IORef                            (newIORef, writeIORef, readIORef)
-import           Data.Maybe                            (fromMaybe, fromJust)
+import           Data.Maybe                            (fromMaybe)
 import           Data.Text                             (Text)
 import           Data.Text.Encoding                    (encodeUtf8)
 import           Data.Aeson                            (Value(..), toJSON, ToJSON, (.=), object)
@@ -50,20 +50,19 @@ import           System.Clock                          (TimeSpec(..))
 
 import           LaunchDarkly.Server.Client.Internal          (Client(..), ClientI(..), getStatusI, clientVersion)
 import           LaunchDarkly.Server.Client.Status            (Status(..))
-import           LaunchDarkly.Server.Context                  (Context(..), toLegacyUser, getValue)
+import           LaunchDarkly.Server.Context                  (Context(..), getValue, redactContext, getKey, getKeys)
 import           LaunchDarkly.Server.Config.ClientContext     (ClientContext(..))
 import           LaunchDarkly.Server.Config.HttpConfiguration (HttpConfiguration(..))
 import           LaunchDarkly.Server.Config.Internal          (ConfigI, Config(..), shouldSendEvents)
 import           LaunchDarkly.Server.DataSource.Internal      (DataSource(..), DataSourceFactory, DataSourceUpdates(..), defaultDataSourceUpdates, nullDataSourceFactory)
 import           LaunchDarkly.Server.Details                  (EvaluationDetail(..), EvaluationReason(..), EvalErrorKind(..))
 import           LaunchDarkly.Server.Evaluate                 (evaluateTyped, evaluateDetail)
-import           LaunchDarkly.Server.Events                   (IdentifyEvent(..), CustomEvent(..), EventType(..), makeBaseEvent, queueEvent, makeEventState, addUserToEvent, userGetContextKind, maybeIndexUser, unixMilliseconds, noticeUser)
+import           LaunchDarkly.Server.Events                   (IdentifyEvent(..), CustomEvent(..), EventType(..), makeBaseEvent, queueEvent, makeEventState, maybeIndexUser, unixMilliseconds, noticeUser)
 import           LaunchDarkly.Server.Features                 (isClientSideOnlyFlag, isInExperiment)
 import           LaunchDarkly.Server.Network.Eventing         (eventThread)
 import           LaunchDarkly.Server.Network.Polling          (pollingThread)
 import           LaunchDarkly.Server.Network.Streaming        (streamingThread)
 import           LaunchDarkly.Server.Store.Internal           (makeStoreIO, getAllFlagsC)
-import           LaunchDarkly.Server.User.Internal            (User(..), userSerializeRedacted)
 import           LaunchDarkly.AesonCompat                     (KeyMap, insertKey, emptyObject, mapValues, filterObject)
 
 
@@ -238,10 +237,9 @@ identify (Client client) (Invalid err) = clientRunLogger client $ $(logWarn) $ "
 identify (Client client) context = case (getValue "key" context) of
         (String "") -> clientRunLogger client $ $(logWarn) "identify called with empty key"
         _ -> do
-            let (User user) = fromJust $ toLegacyUser context
-                user' = userSerializeRedacted (getField @"config" client) user
-            x <- makeBaseEvent $ IdentifyEvent { key = getField @"key" user, user = user' }
-            _ <- noticeUser (getField @"events" client) user
+            let redacted = redactContext (getField @"config" client) context
+            x <- makeBaseEvent $ IdentifyEvent { key = getKey context, context = redacted }
+            _ <- noticeUser (getField @"events" client) context
             queueEvent (getField @"config" client) (getField @"events" client) (EventTypeIdentify x)
 
 -- | Track reports that a context has performed an event. Custom data can be
@@ -252,22 +250,18 @@ identify (Client client) context = case (getValue "key" context) of
 -- for Data Export.
 track :: Client -> Context -> Text -> Maybe Value -> Maybe Double -> IO ()
 track (Client client) (Invalid err) _ _ _ = clientRunLogger client $ $(logWarn) $ "track called with invalid context: " <> err
-track (Client client) context key value metric =
-    let (User user) = fromJust $ toLegacyUser context
-    in do
-    x <- makeBaseEvent $ addUserToEvent (getField @"config" client) user CustomEvent
+track (Client client) context key value metric = do
+    x <- makeBaseEvent $ CustomEvent
         { key         = key
-        , user        = Nothing
-        , userKey     = Nothing
+        , contextKeys = getKeys context
         , metricValue = metric
         , value       = value
-        , contextKind = userGetContextKind user
         }
     let config = (getField @"config" client)
         events = (getField @"events" client)
     queueEvent config events (EventTypeCustom x)
     unless (getField @"inlineUsersInEvents" config) $
-        unixMilliseconds >>= \now -> maybeIndexUser now config user events
+        unixMilliseconds >>= \now -> maybeIndexUser now config context events
 
 -- | Flush tells the client that all pending analytics events (if any) should be
 -- delivered as soon as possible. Flushing is asynchronous, so this method will

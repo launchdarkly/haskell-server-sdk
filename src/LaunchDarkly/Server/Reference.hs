@@ -70,6 +70,16 @@ data Reference =
   Valid { rawPath :: !Text, components :: ![Text] }
   | Invalid { rawPath :: !Text, error :: !Text } deriving (Show, Eq)
 
+instance Ord Reference where
+    compare (Invalid _ _) (Valid _ _) = LT
+    compare (Valid _ _) (Invalid _ _) = GT
+    compare (Valid lhsRaw lhsComponents) (Valid rhsRaw rhsComponents)
+        | lhsComponents == rhsComponents = compare lhsRaw rhsRaw
+        | otherwise = compare lhsComponents rhsComponents
+    compare (Invalid lhsRaw lhsError) (Invalid rhsRaw rhsError)
+        | lhsRaw == rhsRaw = compare lhsError rhsError
+        | otherwise = compare lhsRaw rhsRaw
+
 instance ToJSON Reference where
   toJSON = String . rawPath
 

@@ -5,8 +5,7 @@ TEMP_TEST_OUTPUT=/tmp/contract-test-service.log
 TEST_HARNESS_PARAMS := $(TEST_HARNESS_PARAMS) \
 	-skip 'evaluation/bucketing/bucket by non-key attribute' \
 	-skip 'evaluation/parameterized/target match/context targets' \
-	-skip 'evaluation/parameterized/target match/multi-kind' \
-	-skip 'events'
+	-skip 'evaluation/parameterized/target match/multi-kind'
 
 build-contract-tests:
 	@cd contract-tests && stack build

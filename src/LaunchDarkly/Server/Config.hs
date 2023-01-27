@@ -30,17 +30,17 @@ import Control.Monad.Logger                (LoggingT, runStdoutLoggingT)
 import Data.Generics.Product               (setField)
 import Data.Set                            (Set)
 import Data.Text                           (Text, dropWhileEnd)
-import Data.Monoid                         (mempty)
 import GHC.Natural                         (Natural)
 import Network.HTTP.Client                 (Manager)
 
 import LaunchDarkly.Server.Config.Internal (Config(..), mapConfig, ConfigI(..))
 import LaunchDarkly.Server.Store           (StoreInterface)
 import LaunchDarkly.Server.DataSource.Internal (DataSourceFactory)
+import LaunchDarkly.Server.Reference (Reference)
 
 -- | Create a default configuration from a given SDK key.
 makeConfig :: Text -> Config
-makeConfig key = 
+makeConfig key =
     Config $ ConfigI
     { key                   = key
     , baseURI               = "https://app.launchdarkly.com"
@@ -61,7 +61,7 @@ makeConfig key =
     , offline               = False
     , requestTimeoutSeconds = 30
     , useLdd                = False
-    , dataSourceFactory     = Nothing 
+    , dataSourceFactory     = Nothing
     , manager               = Nothing
     }
 
@@ -106,7 +106,7 @@ configSetAllAttributesPrivate = mapConfig . setField @"allAttributesPrivate"
 
 -- | Marks a set of user attribute names private. Any users sent to LaunchDarkly
 -- with this configuration active will have attributes with these names removed.
-configSetPrivateAttributeNames :: Set Text -> Config -> Config
+configSetPrivateAttributeNames :: Set Reference -> Config -> Config
 configSetPrivateAttributeNames = mapConfig . setField @"privateAttributeNames"
 
 -- | The time between flushes of the event buffer. Decreasing the flush interval
@@ -161,7 +161,7 @@ configSetRequestTimeoutSeconds = mapConfig . setField @"requestTimeoutSeconds"
 configSetUseLdd :: Bool -> Config -> Config
 configSetUseLdd = mapConfig . setField @"useLdd"
 
--- | Sets a data source to use instead of the default network based data source 
+-- | Sets a data source to use instead of the default network based data source
 -- see "LaunchDarkly.Server.Integrations.FileData"
 configSetDataSourceFactory :: Maybe DataSourceFactory -> Config -> Config
 configSetDataSourceFactory = mapConfig . setField @"dataSourceFactory"

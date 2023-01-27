@@ -27,8 +27,10 @@ module LaunchDarkly.Server.Context
   , getValueForReference
   , getValue
   , getKey
+  , getKeys
+  , getCanonicalKey
   , getKinds
-  , toLegacyUser
+  , redactContext
   )
 
 where
@@ -36,17 +38,19 @@ where
 import Data.Aeson (Value(..), ToJSON, toJSON, FromJSON, parseJSON, withObject, (.:?), (.:), fromJSON, Result (Success))
 import Data.Text (Text, unpack, replace, intercalate)
 import Data.Maybe (mapMaybe, fromMaybe)
-import LaunchDarkly.Server.Reference (Reference)
+import LaunchDarkly.Server.Reference (Reference, getComponents, getRawPath)
 import qualified LaunchDarkly.Server.Reference as R
 import qualified Data.HashSet as HS
 import qualified Data.Vector as V
 import Data.List (sortBy)
-import LaunchDarkly.AesonCompat (KeyMap, singleton, insertKey, lookupKey, toList, emptyObject, deleteKey, foldrWithKey, mapValues, fromList, objectKeys)
-import Data.Generics.Product (setField)
+import LaunchDarkly.AesonCompat (KeyMap, singleton, insertKey, lookupKey, toList, emptyObject, deleteKey, foldrWithKey, mapValues, fromList, objectKeys, keyMapUnion)
+import LaunchDarkly.Server.Config.Internal (ConfigI)
+import Data.Generics.Product (getField, setField)
 import GHC.Generics (Generic)
 import Data.Function ((&))
 import Data.Aeson.Types (Parser, prependFailure, typeMismatch)
-import qualified LaunchDarkly.Server.User as U
+import qualified Data.Set as S
+import Data.Set (Set)
 
 -- | data record for the Context type
 data Context =
@@ -75,7 +79,7 @@ data SingleContext = SingleContext
   , name :: !(Maybe Text)
   , anonymous :: !Bool
   , attributes :: !(Maybe (KeyMap Value))
-  , privateAttributes :: !(Maybe [Text])
+  , privateAttributes :: !(Maybe (Set Reference))
   } deriving (Generic, Show, Eq)
 
 instance ToJSON SingleContext where
@@ -201,18 +205,22 @@ withAttribute "anonymous" (Bool value) c = withAnonymous value c
 withAttribute "anonymous" _ c = c
 withAttribute "_meta" _ c = c
 withAttribute "privateAttributeNames" _ c = c
+withAttribute _ Null c@(Single SingleContext { attributes = Nothing }) = c
 withAttribute attr value (Single c@(SingleContext { attributes = Nothing })) =
   Single $ c { attributes = Just $ singleton attr value }
+withAttribute attr Null (Single c@(SingleContext { attributes = Just attrs })) =
+  Single $ c { attributes = Just $ deleteKey attr attrs }
 withAttribute attr value (Single c@(SingleContext { attributes = Just attrs })) =
   Single $ c { attributes = Just $ insertKey attr value attrs }
 withAttribute _ _ c = c
 
--- | Sets the private attributes for a a single-kind context.
+-- | Sets the private attributes for a single-kind context.
 --
 -- Calling this method on an invalid or multi-kind context is a no-op.
-withPrivateAttributes :: [Text] -> Context -> Context
-withPrivateAttributes [] (Single c) = Single $ c { privateAttributes = Nothing }
-withPrivateAttributes attrs (Single c) = Single $ c { privateAttributes = Just attrs }
+withPrivateAttributes :: Set Reference -> Context -> Context
+withPrivateAttributes attrs (Single c)
+    | S.null attrs = Single $ c { privateAttributes = Nothing }
+    | otherwise = Single $ c { privateAttributes = Just attrs }
 withPrivateAttributes _ c = c
 
 -- | Determines if the provided context is valid.
@@ -251,12 +259,28 @@ getKinds (Single c) = [kind c]
 getKinds (Multi (MultiContext { contexts })) = objectKeys contexts
 getKinds _ = []
 
+-- Internally used convenience function for retrieving all context keys, indexed by their kind.
+--
+-- A single kind context will return a single element map containing its kind and key.
+-- Multi-kind contexts will return a map of kind / key pairs for each of its sub-contexts.
+-- An invalid context will return the empty map.
+getKeys :: Context -> KeyMap Text
+getKeys (Single c) = singleton (kind c) (key c)
+getKeys (Multi (MultiContext { contexts })) = mapValues key contexts
+getKeys _ = emptyObject
+
 -- Internally used convenience function to retrieve a context's key.
 --
 -- This method is functionally equivalent to @fromMaybe "" $ getValue "key"@, it's just nicer to use.
 getKey :: Context -> Text
 getKey (Single c) = key c
 getKey _ = ""
+
+-- Internally used convenience function to retrieve a context's fully qualified key.
+getCanonicalKey :: Context -> Text
+getCanonicalKey (Single c) = getField @"fullKey" c
+getCanonicalKey (Multi c) = getField @"fullKey" c
+getCanonicalKey _ = ""
 
 -- | Looks up the value of any attribute of the Context by name. This includes only attributes that are addressable in
 -- evaluations-- not metadata such as private attributes.
@@ -337,20 +361,34 @@ unwrapSingleContext _ = Nothing
 -- property will be included in the final output. If we didn't have this restriction, we could simply inline this
 -- function on the SingleContext.
 toJsonObject :: Bool -> SingleContext -> Value
-toJsonObject includeKind (SingleContext { key, kind, name, anonymous, attributes, privateAttributes }) = Object $ fromList $ filter ((/=) Null . snd)
-  (
-    fromMaybe [] (toList <$> attributes)
-    ++
+toJsonObject includeKind context =
+    Object $ fromList $ (getMapOfRedactableProperties context ++ getMapOfRequiredProperties includeKind context)
+
+-- Contexts can be broken into two different types of attributes -- those which can be redacted, and those which can't.
+--
+-- This method will return a list of name / value pairs which represent the attributes which are eligible for redaction.
+-- The other half of the context can be retrieved through the getMapOfRequiredProperties function.
+getMapOfRedactableProperties :: SingleContext -> [(Text, Value)]
+getMapOfRedactableProperties (SingleContext { name = Nothing, attributes = Nothing }) = []
+getMapOfRedactableProperties (SingleContext { name = Nothing, attributes = Just attrs }) = toList attrs
+getMapOfRedactableProperties (SingleContext { name = Just n, attributes = Just attrs }) = ("name", String n):(toList attrs)
+getMapOfRedactableProperties (SingleContext { name = Just n, attributes = Nothing }) = [("name", String n)]
+
+-- Contexts can be broken into two different types of attributes -- those which can be redacted, and those which can't.
+--
+-- This method will return a list of name / value pairs which represent the attributes which cannot be redacted.
+-- The other half of the context can be retrieved through the getMapOfRedactableProperties function.
+getMapOfRequiredProperties :: Bool -> SingleContext -> [(Text, Value)]
+getMapOfRequiredProperties includeKind SingleContext { key, kind, anonymous, privateAttributes } = filter ((/=) Null . snd)
     [ ("key", toJSON $ key)
     , ("kind", toJSON $ if includeKind then String kind else Null)
-    , ("name", toJSON $ name)
     , ("anonymous", toJSON $ if anonymous then Bool True else Null)
+    , ("_meta", maybe Null toJSON privateAttributes)
     , ("_meta", case privateAttributes of
-        Nothing -> Null
-        Just attrs -> toJSON $ singleton "privateAttributes" (Array $ V.fromList $ map toJSON attrs)
+            Nothing -> Null
+            Just attrs -> toJSON $ singleton "privateAttributes" (Array $ V.fromList $ map toJSON $ S.elems attrs)
       )
     ]
-  )
 
 -- Internally used function to decode a JSON object using the legacy user scheme into a modern single-kind "user"
 -- context.
@@ -378,7 +416,7 @@ parseLegacyUser = withObject "LegacyUser" $ \o -> do
                & withAttribute "avatar" (fromMaybe Null (String <$> avatar))
                & withAttribute "name" (fromMaybe Null (String <$> name))
                & withAttribute "anonymous" (fromMaybe Null (Bool <$> anonymous))
-               & withPrivateAttributes (fromMaybe [] privateAttributeNames)
+               & withPrivateAttributes (S.fromList $ map R.makeLiteral $ fromMaybe [] privateAttributeNames)
    in return $ foldrWithKey (\k v c -> withAttribute k v c) context (fromMaybe emptyObject custom)
 
 -- Internally used function to decode a JSON object using the new context scheme into a modern single-kind context.
@@ -389,7 +427,7 @@ parseSingleContext = withObject "SingleContext" $ \o -> do
     (meta :: Maybe (KeyMap Value)) <- o .:? "_meta"
     (privateAttributes :: Maybe [Text]) <- (fromMaybe emptyObject meta) .:? "privateAttributes"
     let context = makeContext key kind
-            & withPrivateAttributes (fromMaybe [] privateAttributes)
+            & withPrivateAttributes (S.fromList $ map R.makeReference $ fromMaybe [] privateAttributes)
      in return $ foldrWithKey (\k v c -> withAttribute k v c) context o
 
 -- Internally used function to decode a JSON object using the new context scheme into a modern multi-kind context.
@@ -403,28 +441,100 @@ parseMultiContext = withObject "MultiContext" $ \o -> do
         (a, b) | a /= b -> return $ Invalid { error = "multi-kind context JSON contains non-single-kind contexts" }
         (_, _) -> return $ makeMultiContext single
 
+-- Internally used function which performs context attribute redaction.
+redactContext :: ConfigI -> Context -> Value
+redactContext _ (Invalid _) = Null
+redactContext config (Multi MultiContext { contexts }) =
+    mapValues (\context -> redactSingleContext False context (getAllPrivateAttributes config context)) contexts
+    & insertKey "kind" "multi"
+    & Object
+    & toJSON
+redactContext config (Single context) =
+    toJSON $ redactSingleContext True context (getAllPrivateAttributes config context)
 
--- Temporarily helper method to ease conversion of SDK to context-only types
+-- Apply redaction requirements to a SingleContext type.
+redactSingleContext :: Bool -> SingleContext -> Set Reference -> Value
+redactSingleContext includeKind context privateAttributes =
+    let State { context = redactedContext, redacted } = foldr applyRedaction State { context = fromList $ getMapOfRedactableProperties context, redacted = [] } privateAttributes
+        redactedValues = Array $ V.fromList $ map String redacted
+        required = fromList $ getMapOfRequiredProperties includeKind context
+    in case redacted of
+        [] -> Object $ keyMapUnion redactedContext required
+        _ -> Object $ keyMapUnion redactedContext (insertKey "_meta" (Object $ singleton "redactedAttributes" redactedValues) required)
+
+-- Internally used convenience function for creating a Set of References which can redact all top level values in a
+-- provided context.
 --
--- TODO: Remove before u2c release
-toLegacyUser :: Context -> Maybe U.User
-toLegacyUser (Invalid _) = Nothing
-toLegacyUser (Multi _) = Nothing
-toLegacyUser (Single (SingleContext { key, name, anonymous, attributes = attrs })) =
-    let attributes = fromMaybe emptyObject attrs
-        user = U.makeUser key
-                & U.userSetName name
-                & U.userSetAnonymous anonymous
-                & U.userSetSecondary (textFromValue <$> lookupKey "secondary" attributes)
-                & U.userSetIP (textFromValue <$> lookupKey "ip" attributes)
-                & U.userSetCountry (textFromValue <$> lookupKey "country" attributes)
-                & U.userSetEmail (textFromValue <$> lookupKey "email" attributes)
-                & U.userSetFirstName (textFromValue <$> lookupKey "firstName" attributes)
-                & U.userSetLastName (textFromValue <$> lookupKey "lastName" attributes)
-                & U.userSetAvatar (textFromValue <$> lookupKey "avatar" attributes)
-                & U.userSetCustom (fromMaybe emptyObject attrs)
-    in Just user
+-- Given the context:
+-- {
+--      "kind": "user",
+--      "key": "user-key",
+--      "name": "Sandy",
+--      "address": {
+--          "city": "Chicago"
+--      }
+-- }
+--
+-- getAllTopLevelRedactableNames context would yield the set ["name", "address"].
+getAllTopLevelRedactableNames :: SingleContext -> Set Reference
+getAllTopLevelRedactableNames SingleContext { name = Nothing, attributes = Nothing } = S.empty
+getAllTopLevelRedactableNames SingleContext { name = Just _, attributes = Nothing } = S.singleton $ R.makeLiteral "name"
+getAllTopLevelRedactableNames SingleContext { name = Nothing, attributes = Just attrs } = S.fromList $ map R.makeLiteral $ objectKeys attrs
+getAllTopLevelRedactableNames SingleContext { name = Just _, attributes = Just attrs } = S.fromList $ (R.makeLiteral "name"):(map R.makeLiteral $ objectKeys attrs)
 
-textFromValue :: Value -> Text
-textFromValue (String s) = s
-textFromValue _ = ""
+-- Internally used convenience function to return a set of references which would apply all redaction rules.
+--
+-- If allAttributesPrivate is True in the config, this will return a set which covers the entire context.
+getAllPrivateAttributes :: ConfigI -> SingleContext -> Set Reference
+getAllPrivateAttributes (getField @"allAttributesPrivate" -> True) context = getAllTopLevelRedactableNames context
+getAllPrivateAttributes config SingleContext { privateAttributes = Nothing } = getField @"privateAttributeNames" config
+getAllPrivateAttributes config SingleContext { privateAttributes = Just attrs } = S.union (getField @"privateAttributeNames" config) attrs
+
+-- Internally used storage type for returning both the resulting redacted context and the list of any attributes which
+-- were redacted.
+data State = State
+    { context :: KeyMap Value
+    , redacted :: ![Text]
+    }
+
+-- Internally used store type for managing some state while the redaction process is recursing.
+data RedactState = RedactState
+    { context :: KeyMap Value
+    , reference :: Reference
+    , redacted :: ![Text]
+    }
+
+-- Kick off the redaction process by priming the recursive redaction state.
+applyRedaction :: Reference -> State -> State
+applyRedaction reference State { context, redacted } =
+    let (RedactState { context = c, redacted = r }) = redactComponents (getComponents reference) 0 RedactState { context, redacted, reference }
+    in State { context = c, redacted = r }
+
+-- Recursively apply redaction rules
+redactComponents :: [Text] -> Int -> RedactState -> RedactState
+-- If there are no components left to explore, then we can just return the current state of things.
+-- This branch should never actually execute. References aren't valid if there isn't at least one component, and we
+-- don't recurse in the single component case. We just include it here for completeness.
+redactComponents [] _ state = state
+-- kind, key, and anonymous are top level attributes that cannot be redacted.
+redactComponents ["kind"] 0 state = state
+redactComponents ["key"] 0 state = state
+redactComponents ["anonymous"] 0 state = state
+-- If we have a single component, then we are either trying to redact a simple top level item, or we have recursed
+-- through all reference component parts until the last one. We determine which of those situations we are in through
+-- use of the 'level' parameter. 'level' = 0 means we are at the top level of the call stack.
+--
+-- If we have a single component and we have found it in the current context map, then we know we can redact it.
+-- If we do not find it in the context, but we are at the top level (and thus making a simple redaction), we consider
+-- that a successful redaction.
+-- Otherwise, if there is no match and we aren't at the top level, the redaction has failed and so we can just return
+-- the current state unmodified.
+redactComponents [x] level state@(RedactState { context, reference, redacted }) = case (level, lookupKey x context) of
+    (_, Just _) -> state { context = deleteKey x context, redacted = (getRawPath reference):redacted}
+    (0, _) -> state { redacted = (getRawPath reference):redacted }
+    _ -> state
+redactComponents (x:xs) level state@(RedactState { context }) = case lookupKey x context of
+    Just (Object o) ->
+        let substate@(RedactState { context = subcontext }) = redactComponents xs (level + 1) (state { context = o })
+        in substate { context = insertKey x (Object $ subcontext) context }
+    _ -> state

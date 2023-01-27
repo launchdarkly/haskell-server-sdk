@@ -60,16 +60,16 @@ evaluateInternalClient _ _ (Invalid _) fallback _ = pure $ errorDefault EvalErro
 evaluateInternalClient client key context fallback includeReason = do
     (detail, unknown, events) <- getFlagC (getField @"store" client) key >>= \case
         Left err          -> do
-            let event = newUnknownFlagEvent key fallback (EvaluationReasonError $ EvalErrorExternalStore err)
+            let event = newUnknownFlagEvent key fallback (EvaluationReasonError $ EvalErrorExternalStore err) context
             pure (errorDetail $ EvalErrorExternalStore err, True, pure event)
         Right Nothing     -> do
-            let event = newUnknownFlagEvent key fallback (EvaluationReasonError EvalErrorFlagNotFound)
+            let event = newUnknownFlagEvent key fallback (EvaluationReasonError EvalErrorFlagNotFound) context
             pure (errorDefault EvalErrorFlagNotFound fallback, True, pure event)
         Right (Just flag) -> do
             (detail, events) <- evaluateDetail flag context HS.empty $ getField @"store" client
             let detail' = setFallback detail fallback
             pure (detail', False, flip (:) events $ newSuccessfulEvalEvent flag (getField @"variationIndex" detail')
-                (getField @"value" detail') (Just fallback) (getField @"reason" detail') Nothing)
+                (getField @"value" detail') (Just fallback) (getField @"reason" detail') Nothing context)
     processEvalEvents (getField @"config" client) (getField @"events" client) context includeReason events unknown
     pure detail
 
@@ -120,7 +120,7 @@ checkPrerequisite store context flag seenFlags prereq =
         Right (Just prereqFlag) -> evaluateDetail prereqFlag context seenFlags store >>= (process prereqFlag)
         where process prereqFlag (detail, events)
                 | isError (getField @"reason" detail) = pure (Just $ errorDetail EvalErrorKindMalformedFlag, mempty)
-                | otherwise = let event = newSuccessfulEvalEvent prereqFlag (getField @"variationIndex" detail) (getField @"value" detail) Nothing (getField @"reason" detail) (Just $ getField @"key" prereqFlag)
+                | otherwise = let event = newSuccessfulEvalEvent prereqFlag (getField @"variationIndex" detail) (getField @"value" detail) Nothing (getField @"reason" detail) (Just $ getField @"key" prereqFlag) context
                             in if status prereq detail prereqFlag then pure (Nothing, event : events)
                                 else pure (pure $ getOffValue flag $ EvaluationReasonPrerequisiteFailed (getField @"key" prereq), event : events)
 

@@ -20,8 +20,10 @@ import qualified Data.Map as M
 import qualified Data.Text.Lazy as LTB
 import qualified LaunchDarkly.Server as LD
 import qualified Utils
+import qualified Data.Set as S
 import Data.Function ((&))
 import LaunchDarkly.Server (Context, withAttribute, withPrivateAttributes, getError)
+import LaunchDarkly.Server.Reference (makeReference)
 import Data.Text.Lazy (toStrict, fromStrict)
 import Data.Text.Lazy.Encoding (decodeUtf8, encodeUtf8)
 
@@ -98,7 +100,7 @@ contextBuildSingle (ContextBuildParam {kind, key, name, anonymous, private, cust
   let context = LD.makeContext key (fromMaybe "user" kind)
         & contextWithAttribute "name" (String <$> name)
         & contextWithAttribute "anonymous" (Bool <$> anonymous)
-        & withPrivateAttributes (fromMaybe [] private)
+        & withPrivateAttributes (S.map makeReference (fromMaybe S.empty private))
   in HM.foldrWithKey (\k v c -> contextWithAttribute k (Just v) c) context (fromMaybe HM.empty custom)
 
 contextWithAttribute :: Text -> (Maybe Value) -> Context -> Context

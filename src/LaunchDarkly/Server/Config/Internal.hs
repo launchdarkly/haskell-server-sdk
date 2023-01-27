@@ -1,6 +1,7 @@
 module LaunchDarkly.Server.Config.Internal
     ( Config(..)
     , mapConfig
+    , unpackConfig
     , ConfigI(..)
     , shouldSendEvents
     ) where
@@ -15,9 +16,13 @@ import Network.HTTP.Client                (Manager)
 
 import LaunchDarkly.Server.Store               (StoreInterface)
 import LaunchDarkly.Server.DataSource.Internal (DataSourceFactory)
+import LaunchDarkly.Server.Reference (Reference)
 
 mapConfig :: (ConfigI -> ConfigI) -> Config -> Config
 mapConfig f (Config c) = Config $ f c
+
+unpackConfig :: Config -> ConfigI
+unpackConfig (Config c) = c
 
 shouldSendEvents :: ConfigI -> Bool
 shouldSendEvents config = (not $ getField @"offline" config) && (getField @"sendEvents" config)
@@ -34,7 +39,7 @@ data ConfigI = ConfigI
     , storeTTLSeconds       :: !Natural
     , streaming             :: !Bool
     , allAttributesPrivate  :: !Bool
-    , privateAttributeNames :: !(Set Text)
+    , privateAttributeNames :: !(Set Reference)
     , flushIntervalSeconds  :: !Natural
     , pollIntervalSeconds   :: !Natural
     , userKeyLRUCapacity    :: !Natural

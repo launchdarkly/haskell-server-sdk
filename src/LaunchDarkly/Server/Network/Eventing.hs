@@ -43,7 +43,7 @@ setEventHeaders :: Request -> Request
 setEventHeaders request = request
     { requestHeaders = (requestHeaders request)
         & \l -> addToAL l "Content-Type" "application/json"
-        & \l -> addToAL l "X-LaunchDarkly-Event-Schema" "3"
+        & \l -> addToAL l "X-LaunchDarkly-Event-Schema" "4"
     , method         = "POST"
     }
 
