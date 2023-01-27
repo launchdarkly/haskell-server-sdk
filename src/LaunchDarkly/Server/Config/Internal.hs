@@ -42,7 +42,7 @@ data ConfigI = ConfigI
     , privateAttributeNames :: !(Set Reference)
     , flushIntervalSeconds  :: !Natural
     , pollIntervalSeconds   :: !Natural
-    , userKeyLRUCapacity    :: !Natural
+    , contextKeyLRUCapacity :: !Natural
     , eventsCapacity        :: !Natural
     , logger                :: !(LoggingT IO () -> IO ())
     , sendEvents            :: !Bool

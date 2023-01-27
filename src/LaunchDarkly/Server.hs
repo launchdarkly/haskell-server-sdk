@@ -12,6 +12,7 @@ module LaunchDarkly.Server
     , configSetPrivateAttributeNames
     , configSetFlushIntervalSeconds
     , configSetPollIntervalSeconds
+    , configSetContextKeyLRUCapacity
     , configSetUserKeyLRUCapacity
     , configSetEventsCapacity
     , configSetLogger

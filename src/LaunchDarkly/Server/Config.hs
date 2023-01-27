@@ -12,6 +12,7 @@ module LaunchDarkly.Server.Config
     , configSetPrivateAttributeNames
     , configSetFlushIntervalSeconds
     , configSetPollIntervalSeconds
+    , configSetContextKeyLRUCapacity
     , configSetUserKeyLRUCapacity
     , configSetEventsCapacity
     , configSetLogger
@@ -52,7 +53,7 @@ makeConfig key =
     , privateAttributeNames = mempty
     , flushIntervalSeconds  = 5
     , pollIntervalSeconds   = 30
-    , userKeyLRUCapacity    = 1000
+    , contextKeyLRUCapacity = 1000
     , eventsCapacity        = 10000
     , logger                = runStdoutLoggingT
     , sendEvents            = True
@@ -96,13 +97,13 @@ configSetStoreTTL = mapConfig . setField @"storeTTLSeconds"
 configSetStreaming :: Bool -> Config -> Config
 configSetStreaming = mapConfig . setField @"streaming"
 
--- | Sets whether or not all user attributes (other than the key) should be
--- hidden from LaunchDarkly. If this is true, all user attribute values will be
+-- | Sets whether or not all context attributes (other than the key) should be
+-- hidden from LaunchDarkly. If this is true, all context attribute values will be
 -- private, not just the attributes specified in PrivateAttributeNames.
 configSetAllAttributesPrivate :: Bool -> Config -> Config
 configSetAllAttributesPrivate = mapConfig . setField @"allAttributesPrivate"
 
--- | Marks a set of user attribute names private. Any users sent to LaunchDarkly
+-- | Marks a set of context attribute names private. Any contexts sent to LaunchDarkly
 -- with this configuration active will have attributes with these names removed.
 configSetPrivateAttributeNames :: Set Reference -> Config -> Config
 configSetPrivateAttributeNames = mapConfig . setField @"privateAttributeNames"
@@ -116,10 +117,15 @@ configSetFlushIntervalSeconds = mapConfig . setField @"flushIntervalSeconds"
 configSetPollIntervalSeconds :: Natural -> Config -> Config
 configSetPollIntervalSeconds = mapConfig . setField @"pollIntervalSeconds"
 
--- | The number of user keys that the event processor can remember at any one
--- time, so that duplicate user details will not be sent in analytics events.
+-- | The number of context keys that the event processor can remember at any one
+-- time, so that duplicate context details will not be sent in analytics events.
+configSetContextKeyLRUCapacity :: Natural -> Config -> Config
+configSetContextKeyLRUCapacity = mapConfig . setField @"contextKeyLRUCapacity"
+
+{-# DEPRECATED configSetUserKeyLRUCapacity "Use configSetContextKeyLRUCapacity instead" #-}
+-- | Deprecated historically named function which proxies to 'configSetContextKeyLRUCapacity'.
 configSetUserKeyLRUCapacity :: Natural -> Config -> Config
-configSetUserKeyLRUCapacity = mapConfig . setField @"userKeyLRUCapacity"
+configSetUserKeyLRUCapacity = configSetContextKeyLRUCapacity
 
 -- | The capacity of the events buffer. The client buffers up to this many
 -- events in memory before flushing. If the capacity is exceeded before the

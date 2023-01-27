@@ -30,7 +30,7 @@ data EvaluationReason
       -- ^ Indicates that the flag was off and therefore returned its configured
       -- off value.
     | EvaluationReasonTargetMatch
-      -- ^ indicates that the user key was specifically targeted for this flag.
+      -- ^ indicates that the context key was specifically targeted for this flag.
     | EvaluationReasonRuleMatch
           { ruleIndex    :: !Natural
             -- ^ The index of the rule that was matched (0 being the first).
@@ -41,7 +41,7 @@ data EvaluationReason
             -- the evaluation resulted in an experiment rollout *and* served
             -- one of the variations in the experiment. Otherwise false.
           }
-      -- ^ Indicates that the user matched one of the flag's rules.
+      -- ^ Indicates that the context matched one of the flag's rules.
     | EvaluationReasonPrerequisiteFailed
           { prerequisiteKey :: !Text
             -- ^ The flag key of the prerequisite that failed.
@@ -55,7 +55,7 @@ data EvaluationReason
             -- true if the evaluation resulted in an experiment rollout *and*
             -- served one of the variations in the experiment. Otherwise false.
           }
-      -- ^ Indicates that the flag was on but the user did not match any targets
+      -- ^ Indicates that the flag was on but the context did not match any targets
       -- or rules.
     | EvaluationReasonError
           { errorKind :: !EvalErrorKind

@@ -57,7 +57,7 @@ import           LaunchDarkly.Server.Config.Internal          (ConfigI, Config(.
 import           LaunchDarkly.Server.DataSource.Internal      (DataSource(..), DataSourceFactory, DataSourceUpdates(..), defaultDataSourceUpdates, nullDataSourceFactory)
 import           LaunchDarkly.Server.Details                  (EvaluationDetail(..), EvaluationReason(..), EvalErrorKind(..))
 import           LaunchDarkly.Server.Evaluate                 (evaluateTyped, evaluateDetail)
-import           LaunchDarkly.Server.Events                   (IdentifyEvent(..), CustomEvent(..), EventType(..), makeBaseEvent, queueEvent, makeEventState, maybeIndexUser, unixMilliseconds, noticeUser)
+import           LaunchDarkly.Server.Events                   (IdentifyEvent(..), CustomEvent(..), EventType(..), makeBaseEvent, queueEvent, makeEventState, maybeIndexContext, unixMilliseconds, noticeContext)
 import           LaunchDarkly.Server.Features                 (isClientSideOnlyFlag, isInExperiment)
 import           LaunchDarkly.Server.Network.Eventing         (eventThread)
 import           LaunchDarkly.Server.Network.Polling          (pollingThread)
@@ -153,7 +153,7 @@ fromObject :: Value -> KeyMap Value
 fromObject x = case x of (Object o) -> o; _ -> error "expected object"
 
 -- | AllFlagsState captures the state of all feature flag keys as evaluated for
--- a specific user. This includes their values, as well as other metadata.
+-- a specific context. This includes their values, as well as other metadata.
 data AllFlagsState = AllFlagsState
     { evaluations :: !(KeyMap Value)
     , state :: !(KeyMap FlagState)
@@ -239,7 +239,7 @@ identify (Client client) context = case (getValue "key" context) of
         _ -> do
             let redacted = redactContext (getField @"config" client) context
             x <- makeBaseEvent $ IdentifyEvent { key = getKey context, context = redacted }
-            _ <- noticeUser (getField @"events" client) context
+            _ <- noticeContext (getField @"events" client) context
             queueEvent (getField @"config" client) (getField @"events" client) (EventTypeIdentify x)
 
 -- | Track reports that a context has performed an event. Custom data can be
@@ -260,7 +260,7 @@ track (Client client) context key value metric = do
     let config = (getField @"config" client)
         events = (getField @"events" client)
     queueEvent config events (EventTypeCustom x)
-    unixMilliseconds >>= \now -> maybeIndexUser now config context events
+    unixMilliseconds >>= \now -> maybeIndexContext now config context events
 
 -- | Flush tells the client that all pending analytics events (if any) should be
 -- delivered as soon as possible. Flushing is asynchronous, so this method will

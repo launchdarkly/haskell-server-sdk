@@ -43,7 +43,7 @@ data EventState = EventState
     , flush               :: !(MVar ())
     , summary             :: !(MVar (KeyMap FlagSummaryContext))
     , startDate           :: !(MVar Natural)
-    , userKeyLRU          :: !(MVar (LRU Text ()))
+    , contextKeyLRU          :: !(MVar (LRU Text ()))
     } deriving (Generic)
 
 makeEventState :: ConfigI -> IO EventState
@@ -53,7 +53,7 @@ makeEventState config = do
     flush               <- newEmptyMVar
     summary             <- newMVar mempty
     startDate           <- newEmptyMVar
-    userKeyLRU          <- newMVar $ newLRU $ pure $ fromIntegral $ getField @"userKeyLRUCapacity" config
+    contextKeyLRU          <- newMVar $ newLRU $ pure $ fromIntegral $ getField @"contextKeyLRUCapacity" config
     pure EventState{..}
 
 queueEvent :: ConfigI -> EventState -> EventType -> IO ()
@@ -324,20 +324,20 @@ processEvalEvent now config state context includeReason unknown event = do
     when (now < debugEventsUntilDate && lastKnownServerTime < debugEventsUntilDate) $
         queueEvent config state $ EventTypeDebug $ BaseEvent now $ DebugEvent $ contextOrContextKeys True config context featureEvent
     runSummary now state event unknown
-    maybeIndexUser now config context state
+    maybeIndexContext now config context state
 
 processEvalEvents :: ConfigI -> EventState -> Context -> Bool -> [EvalEvent] -> Bool -> IO ()
 processEvalEvents config state context includeReason events unknown =
     unixMilliseconds >>= \now -> mapM_ (processEvalEvent now config state context includeReason unknown) events
 
-maybeIndexUser :: Natural -> ConfigI -> Context -> EventState -> IO ()
-maybeIndexUser now config context state = do
-    noticedUser <- noticeUser state context
-    when noticedUser $
+maybeIndexContext :: Natural -> ConfigI -> Context -> EventState -> IO ()
+maybeIndexContext now config context state = do
+    noticedContext <- noticeContext state context
+    when noticedContext $
         queueEvent config state (EventTypeIndex $ BaseEvent now $ IndexEvent { context = redactContext config context })
 
-noticeUser :: EventState -> Context -> IO Bool
-noticeUser state context = modifyMVar (getField @"userKeyLRU" state) $ \cache -> do
+noticeContext :: EventState -> Context -> IO Bool
+noticeContext state context = modifyMVar (getField @"contextKeyLRU" state) $ \cache -> do
     let key = getCanonicalKey context
     case LRU.lookup key cache of
         (cache', Just _)  -> pure (cache', False)

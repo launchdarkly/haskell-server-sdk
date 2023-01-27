@@ -237,7 +237,7 @@ canRedactAttributesCorrectly = TestCase $ do
         & withAttribute "hobbies" (Array $ V.fromList ["coding", "reading"])
         & withPrivateAttributes (S.fromList [R.makeLiteral "key", R.makeLiteral "kind", R.makeLiteral "anonymous", R.makeLiteral "name", R.makeReference "/address/city", R.makeReference "/hobbies/0"])
 
-    expectedString = "{\"_meta\":{\"redactedAttributes\":[\"/address/city\",\"name\"]},\"address\":{\"state\":\"IL\"},\"firstName\":\"Sandy\",\"hobbies\":[\"coding\",\"reading\"],\"key\":\"user-key\",\"kind\":\"user\",\"lastName\":\"Beaches\"}"
+    expectedString = "{\"_meta\":{\"redactedAttributes\":[\"/address/city\",\"name\"]},\"lastName\":\"Beaches\",\"kind\":\"user\",\"address\":{\"state\":\"IL\"},\"key\":\"user-key\",\"firstName\":\"Sandy\",\"hobbies\":[\"coding\",\"reading\"]}"
 
 canRedactAllAttributesCorrectly :: Test
 canRedactAllAttributesCorrectly = TestCase $ do
@@ -256,7 +256,7 @@ canRedactAllAttributesCorrectly = TestCase $ do
         & withAttribute "address" address
         & withAttribute "hobbies" (Array $ V.fromList ["coding", "reading"])
 
-    expectedString = "{\"_meta\":{\"redactedAttributes\":[\"address\",\"firstName\",\"hobbies\",\"lastName\",\"name\"]},\"key\":\"user-key\",\"kind\":\"user\"}"
+    expectedString = "{\"_meta\":{\"redactedAttributes\":[\"address\",\"firstName\",\"hobbies\",\"lastName\",\"name\"]},\"kind\":\"user\",\"key\":\"user-key\"}"
 
 allTests :: Test
 allTests = TestList
