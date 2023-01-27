@@ -7,10 +7,11 @@
 --   Please see the README on GitHub at
 --   <a>https://github.com/launchdarkly/haskell-server-sdk#readme</a>
 @package launchdarkly-server-sdk
-@version 3.0.4
+@version 3.1.0
 
 module LaunchDarkly.AesonCompat
 type KeyMap = HashMap Text
+null :: KeyMap v -> Bool
 emptyObject :: KeyMap v
 singleton :: Text -> v -> HashMap Text v
 fromList :: [(Text, v)] -> KeyMap v
@@ -546,6 +547,36 @@ configSetUseLdd :: Bool -> Config -> Config
 --   source see <a>LaunchDarkly.Server.Integrations.FileData</a>
 configSetDataSourceFactory :: Maybe DataSourceFactory -> Config -> Config
 
+-- | An object that allows configuration of application metadata.
+--   
+--   Application metadata may be used in LaunchDarkly analytics or other
+--   product features, but does not affect feature flag evaluations.
+--   
+--   If you want to set non-default values for any of these fields, provide
+--   the appropriately configured dict to the <a>Config</a> object.
+configSetApplicationInfo :: ApplicationInfo -> Config -> Config
+
+-- | An object that allows configuration of application metadata.
+--   
+--   Application metadata may be used in LaunchDarkly analytics or other
+--   product features, but does not affect feature flag evaluations.
+--   
+--   To use these properties, provide an instance of ApplicationInfo to the
+--   <a>Config</a> with <tt>configSetApplicationInfo</tt>.
+data ApplicationInfo
+
+-- | Create a default instance
+makeApplicationInfo :: ApplicationInfo
+
+-- | Set a new name / value pair into the application info instance.
+--   
+--   Values have the following restrictions: - Cannot be empty - Cannot
+--   exceed 64 characters in length - Can only contain a-z, A-Z, 0-9,
+--   period (.), dash (-), and underscore (_).
+--   
+--   Invalid values or unsupported keys will be ignored.
+withApplicationValue :: Text -> Text -> ApplicationInfo -> ApplicationInfo
+
 
 -- | This module is for configuration of the user object.
 module LaunchDarkly.Server.User
@@ -917,6 +948,36 @@ configSetUseLdd :: Bool -> Config -> Config
 -- | Sets a data source to use instead of the default network based data
 --   source see <a>LaunchDarkly.Server.Integrations.FileData</a>
 configSetDataSourceFactory :: Maybe DataSourceFactory -> Config -> Config
+
+-- | An object that allows configuration of application metadata.
+--   
+--   Application metadata may be used in LaunchDarkly analytics or other
+--   product features, but does not affect feature flag evaluations.
+--   
+--   If you want to set non-default values for any of these fields, provide
+--   the appropriately configured dict to the <a>Config</a> object.
+configSetApplicationInfo :: ApplicationInfo -> Config -> Config
+
+-- | An object that allows configuration of application metadata.
+--   
+--   Application metadata may be used in LaunchDarkly analytics or other
+--   product features, but does not affect feature flag evaluations.
+--   
+--   To use these properties, provide an instance of ApplicationInfo to the
+--   <a>Config</a> with <tt>configSetApplicationInfo</tt>.
+data ApplicationInfo
+
+-- | Create a default instance
+makeApplicationInfo :: ApplicationInfo
+
+-- | Set a new name / value pair into the application info instance.
+--   
+--   Values have the following restrictions: - Cannot be empty - Cannot
+--   exceed 64 characters in length - Can only contain a-z, A-Z, 0-9,
+--   period (.), dash (-), and underscore (_).
+--   
+--   Invalid values or unsupported keys will be ignored.
+withApplicationValue :: Text -> Text -> ApplicationInfo -> ApplicationInfo
 
 -- | User contains specific attributes of a user of your application
 --   
