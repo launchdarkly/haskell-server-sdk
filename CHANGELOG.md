@@ -2,6 +2,10 @@
 
 All notable changes to the LaunchDarkly Haskell Server-side SDK will be documented in this file. This project adheres to [Semantic Versioning](http://semver.org).
 
+## [3.1.0] - 2023-01-27
+### Added:
+- New `ApplicationInfo` type, for configuration of application metadata that may be used in LaunchDarkly analytics or other product features. This does not affect feature flag evaluations.
+
 ## [3.0.4] - 2023-01-09
 ### Changed:
 - Expanded upper version to allow `aeson-2.1`.  (Thanks, [vrom911](https://github.com/launchdarkly/haskell-server-sdk/pull/49))
