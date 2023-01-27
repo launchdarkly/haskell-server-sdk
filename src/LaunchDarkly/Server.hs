@@ -56,6 +56,7 @@ module LaunchDarkly.Server
     , EvalErrorKind(..)
     , allFlagsState
     , AllFlagsState
+    , secureModeHash
     , close
     , flushEvents
     , identify

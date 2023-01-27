@@ -46,6 +46,7 @@ data CommandParams = CommandParams
     , identifyEvent :: !(Maybe IdentifyEventParams)
     , contextBuild :: !(Maybe ContextBuildParams)
     , contextConvert :: !(Maybe ContextConvertParams)
+    , secureModeHash :: !(Maybe SecureModeHashParams)
     } deriving (FromJSON, Generic)
 
 data EvaluateFlagParams = EvaluateFlagParams
@@ -121,3 +122,11 @@ instance ToJSON ContextResponse where
     toJSON (ContextResponse { output = Just o, errorMessage = Nothing }) = object [ ("output", String o) ]
     toJSON (ContextResponse { output = _, errorMessage = Just e }) = object [ ("error", String e) ]
     toJSON _ = object [ ("error", String "Invalid context response was generated") ]
+
+data SecureModeHashParams = SecureModeHashParams
+    { context :: !(Maybe LD.Context)
+    } deriving (FromJSON, Generic)
+
+data SecureModeHashResponse = SecureModeHashResponse
+    { result :: !Text
+    } deriving (ToJSON, Show, Generic)

@@ -19,6 +19,7 @@ module LaunchDarkly.Server.Client
     , EvalErrorKind(..)
     , allFlagsState
     , AllFlagsState
+    , secureModeHash
     , close
     , flushEvents
     , identify
@@ -50,7 +51,7 @@ import           System.Clock                          (TimeSpec(..))
 
 import           LaunchDarkly.Server.Client.Internal          (Client(..), ClientI(..), getStatusI, clientVersion)
 import           LaunchDarkly.Server.Client.Status            (Status(..))
-import           LaunchDarkly.Server.Context                  (Context(..), getValue, redactContext, getKey, getKeys)
+import           LaunchDarkly.Server.Context                  (Context(..), getValue, redactContext, getCanonicalKey, getKey, getKeys)
 import           LaunchDarkly.Server.Config.ClientContext     (ClientContext(..))
 import           LaunchDarkly.Server.Config.HttpConfiguration (HttpConfiguration(..))
 import           LaunchDarkly.Server.Config.Internal          (ConfigI, Config(..), shouldSendEvents)
@@ -64,6 +65,11 @@ import           LaunchDarkly.Server.Network.Polling          (pollingThread)
 import           LaunchDarkly.Server.Network.Streaming        (streamingThread)
 import           LaunchDarkly.Server.Store.Internal           (makeStoreIO, getAllFlagsC)
 import           LaunchDarkly.AesonCompat                     (KeyMap, insertKey, emptyObject, mapValues, filterObject)
+
+import Data.Text.Encoding (decodeUtf8)
+import Data.ByteArray.Encoding (convertToBase, Base (Base16))
+import Crypto.MAC.HMAC (hmac)
+import Crypto.Hash.SHA256 (hash)
 
 
 networkDataSourceFactory :: (ClientContext -> DataSourceUpdates -> LoggingT IO ()) -> DataSourceFactory
@@ -261,6 +267,15 @@ track (Client client) context key value metric = do
         events = (getField @"events" client)
     queueEvent config events (EventTypeCustom x)
     unixMilliseconds >>= \now -> maybeIndexContext now config context events
+
+-- | Generates the secure mode hash value for a context.
+--
+-- For more information, see the Reference Guide: <https://docs.launchdarkly.com/sdk/features/secure-mode#haskell>.
+secureModeHash :: Client -> Context -> Text
+secureModeHash (Client client) context =
+    let config = getField @"config" client
+        sdkKey = getField @"key" config
+    in decodeUtf8 $ convertToBase Base16 $ hmac hash 64 (encodeUtf8 sdkKey) (encodeUtf8 $ getCanonicalKey context)
 
 -- | Flush tells the client that all pending analytics events (if any) should be
 -- delivered as soon as possible. Flushing is asynchronous, so this method will

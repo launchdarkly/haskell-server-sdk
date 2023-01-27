@@ -43,6 +43,7 @@ getAppStatus = json AppStatus
         , "all-flags-client-side-only"
         , "all-flags-details-only-for-tracked-flags"
         , "context-type"
+        , "secure-mode-hash"
         ]
     }
 
@@ -81,6 +82,7 @@ runCommand appStateRef = do
                   "flushEvents" -> liftIO $ LD.flushEvents c
                   "contextBuild" -> contextBuildCommand $ contextBuild commandParams
                   "contextConvert" -> contextConvertCommand $ contextConvert commandParams
+                  "secureModeHash" -> secureModeHashCommand c (secureModeHash commandParams)
                   _ -> error "An unknown command was requested"
 
 identifyCommand :: LD.Client -> Maybe IdentifyEventParams -> ActionM ()
@@ -119,6 +121,11 @@ createContextResponse :: Context -> ContextResponse
 createContextResponse c = case LD.isValid c of
   True -> ContextResponse { output = Just $ (toStrict (decodeUtf8 (encode c))), errorMessage = Nothing }
   False -> ContextResponse { output = Nothing, errorMessage = Just $ getError c }
+
+secureModeHashCommand :: LD.Client -> Maybe SecureModeHashParams -> ActionM ()
+secureModeHashCommand _ Nothing = error "Missing secure mode hash params"
+secureModeHashCommand _ (Just (SecureModeHashParams { context = Nothing })) = error "This SDK does not support secure mode on non-context types"
+secureModeHashCommand c (Just (SecureModeHashParams { context = Just context })) = json $ SecureModeHashResponse { result = LD.secureModeHash c context }
 
 customCommand :: LD.Client -> Maybe CustomEventParams -> ActionM ()
 customCommand _ Nothing = error "Missing custom event params"
