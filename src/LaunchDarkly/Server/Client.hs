@@ -54,7 +54,7 @@ import           LaunchDarkly.Server.Client.Internal          (Client(..), Clien
 import           LaunchDarkly.Server.Client.Status            (Status(..))
 import           LaunchDarkly.Server.Config.ClientContext     (ClientContext(..))
 import           LaunchDarkly.Server.Config.HttpConfiguration (HttpConfiguration(..))
-import           LaunchDarkly.Server.Config.Internal          (ConfigI, Config(..), shouldSendEvents)
+import           LaunchDarkly.Server.Config.Internal          (ConfigI, Config(..), shouldSendEvents, getApplicationInfoHeader, ApplicationInfo)
 import           LaunchDarkly.Server.DataSource.Internal      (DataSource(..), DataSourceFactory, DataSourceUpdates(..), defaultDataSourceUpdates, nullDataSourceFactory)
 import           LaunchDarkly.Server.Details                  (EvaluationDetail(..), EvaluationReason(..), EvalErrorKind(..))
 import           LaunchDarkly.Server.Evaluate                 (evaluateTyped, evaluateDetail)
@@ -66,7 +66,9 @@ import           LaunchDarkly.Server.Network.Streaming        (streamingThread)
 import           LaunchDarkly.Server.Store.Internal           (makeStoreIO, getAllFlagsC)
 import           LaunchDarkly.Server.User.Internal            (User(..), userSerializeRedacted)
 import           LaunchDarkly.AesonCompat                     (KeyMap, insertKey, emptyObject, mapValues, filterObject)
-  
+import Data.ByteString (ByteString)
+import Network.HTTP.Types (HeaderName)
+
 
 networkDataSourceFactory :: (ClientContext -> DataSourceUpdates -> LoggingT IO ()) -> DataSourceFactory
 networkDataSourceFactory threadF clientContext dataSourceUpdates = do
@@ -91,11 +93,18 @@ networkDataSourceFactory threadF clientContext dataSourceUpdates = do
 makeHttpConfiguration :: ConfigI -> IO HttpConfiguration
 makeHttpConfiguration config = do
     tlsManager <- newManager tlsManagerSettings
-    let defaultRequestHeaders = [ ("Authorization", encodeUtf8 $ getField @"key" config)
-                                , ("User-Agent" , "HaskellServerClient/" <> encodeUtf8 clientVersion)
-                                ]
+    let headers = [ ("Authorization", encodeUtf8 $ getField @"key" config)
+                  , ("User-Agent" , "HaskellServerClient/" <> encodeUtf8 clientVersion)
+                  ]
+        defaultRequestHeaders = addTagsHeader headers (getField @"applicationInfo" config)
         defaultRequestTimeout = Http.responseTimeoutMicro $ fromIntegral $ getField @"requestTimeoutSeconds" config * 1000000
     pure $ HttpConfiguration{..}
+    where
+        addTagsHeader :: [(HeaderName, ByteString)] -> Maybe ApplicationInfo -> [(HeaderName, ByteString)]
+        addTagsHeader headers Nothing = headers
+        addTagsHeader headers (Just info) = case getApplicationInfoHeader info of
+            Nothing -> headers
+            Just header -> ("X-LaunchDarkly-Tags", encodeUtf8 header) : headers
 
 makeClientContext :: ConfigI -> IO ClientContext
 makeClientContext config = do
@@ -119,7 +128,7 @@ makeClient (Config config) = mfix $ \(Client client) -> do
     dataSource <- dataSourceFactory config clientContext dataSourceUpdates
     eventThreadPair    <- if not (shouldSendEvents config) then pure Nothing else do
         sync   <- newEmptyMVar
-        thread <- forkFinally (runLogger clientContext $ eventThread manager client) (\_ -> putMVar sync ())
+        thread <- forkFinally (runLogger clientContext $ eventThread manager client clientContext) (\_ -> putMVar sync ())
         pure $ pure (thread, sync)
 
     dataSourceStart dataSource

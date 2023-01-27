@@ -24,23 +24,26 @@ module LaunchDarkly.Server.Config
     , configSetStoreTTL
     , configSetUseLdd
     , configSetDataSourceFactory
+    , configSetApplicationInfo
+    , ApplicationInfo
+    , makeApplicationInfo
+    , withApplicationValue
     ) where
 
 import Control.Monad.Logger                (LoggingT, runStdoutLoggingT)
 import Data.Generics.Product               (setField)
 import Data.Set                            (Set)
 import Data.Text                           (Text, dropWhileEnd)
-import Data.Monoid                         (mempty)
 import GHC.Natural                         (Natural)
 import Network.HTTP.Client                 (Manager)
 
-import LaunchDarkly.Server.Config.Internal (Config(..), mapConfig, ConfigI(..))
+import LaunchDarkly.Server.Config.Internal (Config(..), mapConfig, ConfigI(..), ApplicationInfo, makeApplicationInfo, withApplicationValue)
 import LaunchDarkly.Server.Store           (StoreInterface)
 import LaunchDarkly.Server.DataSource.Internal (DataSourceFactory)
 
 -- | Create a default configuration from a given SDK key.
 makeConfig :: Text -> Config
-makeConfig key = 
+makeConfig key =
     Config $ ConfigI
     { key                   = key
     , baseURI               = "https://app.launchdarkly.com"
@@ -61,8 +64,9 @@ makeConfig key =
     , offline               = False
     , requestTimeoutSeconds = 30
     , useLdd                = False
-    , dataSourceFactory     = Nothing 
+    , dataSourceFactory     = Nothing
     , manager               = Nothing
+    , applicationInfo       = Nothing
     }
 
 -- | Set the SDK key used to authenticate with LaunchDarkly.
@@ -161,7 +165,7 @@ configSetRequestTimeoutSeconds = mapConfig . setField @"requestTimeoutSeconds"
 configSetUseLdd :: Bool -> Config -> Config
 configSetUseLdd = mapConfig . setField @"useLdd"
 
--- | Sets a data source to use instead of the default network based data source 
+-- | Sets a data source to use instead of the default network based data source
 -- see "LaunchDarkly.Server.Integrations.FileData"
 configSetDataSourceFactory :: Maybe DataSourceFactory -> Config -> Config
 configSetDataSourceFactory = mapConfig . setField @"dataSourceFactory"
@@ -170,3 +174,13 @@ configSetDataSourceFactory = mapConfig . setField @"dataSourceFactory"
 -- 'Manager' will be created when creating the client.
 configSetManager :: Manager -> Config -> Config
 configSetManager = mapConfig . setField @"manager" . Just
+
+-- | An object that allows configuration of application metadata.
+--
+-- Application metadata may be used in LaunchDarkly analytics or other product
+-- features, but does not affect feature flag evaluations.
+--
+-- If you want to set non-default values for any of these fields, provide the
+-- appropriately configured dict to the 'Config' object.
+configSetApplicationInfo :: ApplicationInfo -> Config -> Config
+configSetApplicationInfo = mapConfig . setField @"applicationInfo" . Just

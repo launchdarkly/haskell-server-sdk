@@ -4,6 +4,7 @@ import           Control.Monad (void)
 import           Test.HUnit    (runTestTT, Test(TestList, TestLabel))
 
 import qualified Spec.Bucket
+import qualified Spec.Config
 import qualified Spec.Evaluate
 import qualified Spec.Features
 import qualified Spec.Operators
@@ -21,6 +22,7 @@ import qualified Spec.Integrations.TestData
 main :: IO ()
 main = void $ runTestTT $ TestList
     [ Spec.Bucket.allTests
+    , Spec.Config.allTests
     , Spec.Evaluate.allTests
     , Spec.Features.allTests
     , Spec.Operators.allTests
