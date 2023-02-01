@@ -9,6 +9,7 @@ jobs:
             default: 'lts-14.1'
     docker:
         - image: fpco/stack-build:<<parameters.resolver>>
+        - image: redis
     environment:
       STACK_YAML: stack-<<parameters.resolver>>.yaml
     steps:
@@ -65,6 +66,7 @@ jobs:
             default: '9.0.2'
     docker:
       - image: haskell:<<parameters.ghc-version>>
+      - image: redis
     environment:
       STACK_YAML: stack-ghc-<<parameters.ghc-version>>.yaml
     steps:
@@ -107,7 +109,11 @@ jobs:
       - checkout
       - run:
           name: Install deps
-          command: brew install haskell-stack pcre pkg-config
+          command: brew install haskell-stack pcre pkg-config redis
+      - run:
+          name: Redis
+          command: redis-server
+          background: true
       - restore_cache:
           name: Restore Cached Dependencies
           keys:

@@ -1,7 +1,7 @@
 module Main where
 
 import           Control.Monad (void)
-import           Test.HUnit    (runTestTT, Test(TestList, TestLabel))
+import           Test.HUnit    (runTestTT, Test(TestList, TestLabel), Counts(..))
 
 import qualified Spec.Bucket
 import qualified Spec.Client
@@ -20,25 +20,28 @@ import qualified Spec.Integrations.FileData
 import qualified Spec.Streaming
 import qualified Spec.User
 import qualified Spec.Integrations.TestData
+import Control.Monad.Cont (when)
+import System.Exit (exitWith, ExitCode (ExitFailure))
 
 main :: IO ()
-main = void $ runTestTT $ TestList
-    [ Spec.Bucket.allTests
-    , Spec.Client.allTests
-    , Spec.Config.allTests
-    , Spec.Context.allTests
-    , Spec.Evaluate.allTests
-    , Spec.Features.allTests
-    , Spec.Operators.allTests
-    , Spec.Reference.allTests
-    , Spec.Redis.allTests
-    , Spec.Segment.allTests
-    , Spec.Store.allTests
-    , Spec.StoreInterface.allTests
-    , Spec.DataSource.allTests
-    , Spec.Redis.allTests
-    , Spec.Streaming.allTests
-    , Spec.User.allTests
-    , TestLabel "Integration.FileData" Spec.Integrations.FileData.allTests
-    , TestLabel "Integration.TestData" Spec.Integrations.TestData.allTests
-    ]
+main = do
+    Counts {..} <- runTestTT $ TestList
+        [ Spec.Bucket.allTests
+        , Spec.Client.allTests
+        , Spec.Config.allTests
+        , Spec.Context.allTests
+        , Spec.DataSource.allTests
+        , Spec.Evaluate.allTests
+        , Spec.Features.allTests
+        , Spec.Operators.allTests
+        , Spec.Redis.allTests
+        , Spec.Reference.allTests
+        , Spec.Segment.allTests
+        , Spec.Store.allTests
+        , Spec.StoreInterface.allTests
+        , Spec.Streaming.allTests
+        , Spec.User.allTests
+        , TestLabel "Integration.FileData" Spec.Integrations.FileData.allTests
+        , TestLabel "Integration.TestData" Spec.Integrations.TestData.allTests
+        ]
+    when (errors + failures > 0) $ exitWith (ExitFailure 1)
