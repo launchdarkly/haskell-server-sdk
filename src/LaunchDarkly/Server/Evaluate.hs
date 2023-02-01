@@ -120,7 +120,7 @@ checkPrerequisite store context flag seenFlags prereq =
         Right (Just prereqFlag) -> evaluateDetail prereqFlag context seenFlags store >>= (process prereqFlag)
         where process prereqFlag (detail, events)
                 | isError (getField @"reason" detail) = pure (Just $ errorDetail EvalErrorKindMalformedFlag, mempty)
-                | otherwise = let event = newSuccessfulEvalEvent prereqFlag (getField @"variationIndex" detail) (getField @"value" detail) Nothing (getField @"reason" detail) (Just $ getField @"key" prereqFlag) context
+                | otherwise = let event = newSuccessfulEvalEvent prereqFlag (getField @"variationIndex" detail) (getField @"value" detail) Nothing (getField @"reason" detail) (Just $ getField @"key" flag) context
                             in if status prereq detail prereqFlag then pure (Nothing, event : events)
                                 else pure (pure $ getOffValue flag $ EvaluationReasonPrerequisiteFailed (getField @"key" prereq), event : events)
 

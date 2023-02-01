@@ -1,6 +1,4 @@
 evaluation/all flags state/client not ready
-events/feature prerequisite events/without reasons
-events/feature prerequisite events/with reasons
 streaming/retry behavior/retry after stream is closed
 streaming/retry behavior/retry after IO error on reconnect
 streaming/retry behavior/retry after recoverable HTTP error on reconnect/error 400

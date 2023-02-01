@@ -141,6 +141,7 @@ data FeatureEvent = FeatureEvent
     , value        :: !Value
     , defaultValue :: !(Maybe Value)
     , version      :: !(Maybe Natural)
+    , prereqOf     :: !(Maybe Text)
     , variation    :: !(Maybe Integer)
     , reason       :: !(Maybe EvaluationReason)
     } deriving (Generic, Show)
@@ -153,6 +154,7 @@ instance ToJSON FeatureEvent where
         , ("value",       toJSON $ getField @"value"        event)
         , ("default",     toJSON $ getField @"defaultValue" event)
         , ("version",     toJSON $ getField @"version"      event)
+        , ("prereqOf",    toJSON $ getField @"prereqOf"     event)
         , ("variation",   toJSON $ getField @"variation"    event)
         , ("reason",      toJSON $ getField @"reason"       event)
         ]
@@ -183,6 +185,7 @@ makeFeatureEvent config context includeReason event = contextOrContextKeys False
     , value        = getField @"value" event
     , defaultValue = getField @"defaultValue" event
     , version      = getField @"version" event
+    , prereqOf     = getField @"prereqOf" event
     , variation    = getField @"variation" event
     , reason       = if includeReason || getField @"forceIncludeReason" event
         then pure $ getField @"reason" event else Nothing
