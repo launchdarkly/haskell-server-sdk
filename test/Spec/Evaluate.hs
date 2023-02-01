@@ -172,7 +172,7 @@ testFlagReturnsErrorIfFallthroughHasEmptyRolloutVariationList = TestCase $ do
                     , seed        = Nothing
                     , kind        = RolloutKindRollout
                     , bucketBy    = pure "key"
-                    , contextKind = "user"
+                    , contextKind = Just "user"
                     }
                 }
             , variations   = [String "abc"]

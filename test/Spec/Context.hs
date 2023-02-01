@@ -12,7 +12,7 @@ import qualified Data.Vector as V
 import qualified Data.Set as S
 import Data.Aeson (Value(..), encode, decode, toJSON)
 import Data.Function ((&))
-import LaunchDarkly.AesonCompat (fromList)
+import LaunchDarkly.AesonCompat (fromList, lookupKey, deleteKey)
 import Data.Maybe (fromJust)
 
 confirmInvalidContext :: Context -> Text -> Assertion
@@ -221,27 +221,45 @@ canParseMultiKindFormat = TestCase $
 
 canRedactAttributesCorrectly :: Test
 canRedactAttributesCorrectly = TestCase $ do
-    assertEqual "" expectedString (encode $ redactContext config context)
+    assertEqual "" expectedRedacted (fromJust $ lookupKey "redactedAttributes" meta)
+    assertEqual "" "user" (fromJust $ lookupKey "kind" decodedIntoMap)
+    assertEqual "" "user-key" (fromJust $ lookupKey "key" decodedIntoMap)
+    assertEqual "" "Sandy" (fromJust $ lookupKey "firstName" decodedIntoMap)
+    assertEqual "" "Beaches" (fromJust $ lookupKey "lastName" decodedIntoMap)
+    assertEqual "" hobbies (fromJust $ lookupKey "hobbies" decodedIntoMap)
+    assertEqual "" expectedAddress (fromJust $ lookupKey "address" decodedIntoMap)
 
     where
 
     config = unpackConfig $ makeConfig "sdk-key"
 
     address = Object $ fromList [("city", "Chicago"), ("state", "IL")]
+    hobbies = (Array $ V.fromList ["coding", "reading"])
 
     context = makeContext "user-key" "user"
         & withAttribute "name" "Sandy"
         & withAttribute "firstName" "Sandy"
         & withAttribute "lastName" "Beaches"
         & withAttribute "address" address
-        & withAttribute "hobbies" (Array $ V.fromList ["coding", "reading"])
+        & withAttribute "hobbies" hobbies
         & withPrivateAttributes (S.fromList [R.makeLiteral "key", R.makeLiteral "kind", R.makeLiteral "anonymous", R.makeLiteral "name", R.makeReference "/address/city", R.makeReference "/hobbies/0"])
 
-    expectedString = "{\"_meta\":{\"redactedAttributes\":[\"/address/city\",\"name\"]},\"lastName\":\"Beaches\",\"kind\":\"user\",\"address\":{\"state\":\"IL\"},\"key\":\"user-key\",\"firstName\":\"Sandy\",\"hobbies\":[\"coding\",\"reading\"]}"
+    jsonByteString = encode $ redactContext config context
+    decodedAsValue = fromJust $ decode jsonByteString :: Value
+    decodedIntoMap = case decodedAsValue of (Object o) -> o; _ -> error "expected object"
+    meta = case lookupKey "_meta" decodedIntoMap of (Just (Object o)) -> o; _ -> error "expected object"
+    expectedRedacted = Array $ V.fromList ["/address/city", "name"]
+    expectedAddress = Object $ fromList [("state", "IL")]
 
 canRedactAllAttributesCorrectly :: Test
 canRedactAllAttributesCorrectly = TestCase $ do
-    assertEqual "" expectedString (encode $ redactContext config context)
+    assertEqual "" expectedRedacted (fromJust $ lookupKey "redactedAttributes" meta)
+    assertEqual "" "user" (fromJust $ lookupKey "kind" decodedIntoMap)
+    assertEqual "" "user-key" (fromJust $ lookupKey "key" decodedIntoMap)
+    assertEqual "" Nothing (lookupKey "firstName" decodedIntoMap)
+    assertEqual "" Nothing (lookupKey "lastName" decodedIntoMap)
+    assertEqual "" Nothing (lookupKey "hobbies" decodedIntoMap)
+    assertEqual "" Nothing (lookupKey "address" decodedIntoMap)
 
     where
 
@@ -256,7 +274,12 @@ canRedactAllAttributesCorrectly = TestCase $ do
         & withAttribute "address" address
         & withAttribute "hobbies" (Array $ V.fromList ["coding", "reading"])
 
-    expectedString = "{\"_meta\":{\"redactedAttributes\":[\"address\",\"firstName\",\"hobbies\",\"lastName\",\"name\"]},\"kind\":\"user\",\"key\":\"user-key\"}"
+    jsonByteString = encode $ redactContext config context
+    decodedAsValue = fromJust $ decode jsonByteString :: Value
+    decodedIntoMap = case decodedAsValue of (Object o) -> o; _ -> error "expected object"
+    meta = case lookupKey "_meta" decodedIntoMap of (Just (Object o)) -> o; _ -> error "expected object"
+    expectedRedacted = Array $ V.fromList ["address","firstName","hobbies","lastName","name"]
+    expectedAddress = Object $ fromList [("state", "IL")]
 
 allTests :: Test
 allTests = TestList

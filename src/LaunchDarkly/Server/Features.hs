@@ -91,7 +91,7 @@ data Rollout = Rollout
     { variations  :: ![WeightedVariation]
     , bucketBy    :: !(Maybe Text)
     , kind        :: !RolloutKind
-    , contextKind :: !Text
+    , contextKind :: !(Maybe Text)
     , seed        :: !(Maybe Int)
     } deriving (Generic, ToJSON, Show, Eq)
 
@@ -100,7 +100,7 @@ instance FromJSON Rollout where
         variations  <- o .:  "variations"
         bucketBy    <- o .:? "bucketBy"
         kind        <- o .:? "kind" .!= RolloutKindRollout
-        contextKind <- o .:? "contextKind" .!= "user"
+        contextKind <- o .:? "contextKind"
         seed        <- o .:? "seed"
         pure Rollout { .. }
 
@@ -215,7 +215,7 @@ data SegmentRule = SegmentRule
     , clauses            :: ![Clause]
     , weight             :: !(Maybe Float)
     , bucketBy           :: !(Maybe Text)
-    , rolloutContextKind :: !Text
+    , rolloutContextKind :: !(Maybe Text)
     } deriving (Generic, ToJSON, Show, Eq)
 
 instance FromJSON SegmentRule where
@@ -224,7 +224,7 @@ instance FromJSON SegmentRule where
         clauses <- o .: "clauses"
         weight <- o .:? "weight"
         bucketBy <- o .:? "bucketBy"
-        rolloutContextKind <- o .:? "rolloutContextKind" .!= "user"
+        rolloutContextKind <- o .:? "rolloutContextKind"
         return $ SegmentRule { .. }
 
 data Segment = Segment

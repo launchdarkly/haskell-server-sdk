@@ -210,7 +210,7 @@ testMatchingRuleWithFullRollout = TestCase $ do
                     ]
                 , weight   = Just 100000
                 , bucketBy = Nothing
-                , rolloutContextKind = "user"
+                , rolloutContextKind = Just "user"
                 }
             ]
         , version  = 1
@@ -247,7 +247,7 @@ testMatchingRuleWithZeroRollout = TestCase $ do
                     ]
                 , weight   = Just 0
                 , bucketBy = Nothing
-                , rolloutContextKind = "user"
+                , rolloutContextKind = Just "user"
                 }
             ]
         , version  = 1
@@ -291,7 +291,7 @@ testMatchingRuleWithMultipleClauses = TestCase $ do
                     ]
                 , weight   = Nothing
                 , bucketBy = Nothing
-                , rolloutContextKind = "user"
+                , rolloutContextKind = Just "user"
                 }
             ]
         , version  = 1
@@ -337,7 +337,7 @@ testNonMatchingRuleWithMultipleClauses = TestCase $ do
                     ]
                 , weight   = Nothing
                 , bucketBy = Nothing
-                , rolloutContextKind = "user"
+                , rolloutContextKind = Just "user"
                 }
             ]
         , version  = 1
@@ -402,7 +402,7 @@ testCanDetectRecursiveSegments = TestCase $ do
                     , id = "rule-1"
                     , weight = Nothing
                     , bucketBy = Nothing
-                    , rolloutContextKind = "user"
+                    , rolloutContextKind = Just "user"
                     }
                 ]
             }
@@ -429,7 +429,7 @@ testCanDetectRecursiveSegments = TestCase $ do
                     , id = "rule-1"
                     , weight = Nothing
                     , bucketBy = Nothing
-                    , rolloutContextKind = "user"
+                    , rolloutContextKind = Just "user"
                     }
                 ]
             }

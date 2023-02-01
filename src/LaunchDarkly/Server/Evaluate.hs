@@ -26,7 +26,7 @@ import           Data.Word                           (Word8)
 import           Data.ByteString                     (ByteString)
 import           Data.HashSet (HashSet)
 
-import           LaunchDarkly.Server.Context         (Context(..), getKey, getValue, getKinds, getIndividualContext, getValueForReference)
+import           LaunchDarkly.Server.Context         (Context(..), getKey, getKinds, getIndividualContext, getValueForReference)
 import           LaunchDarkly.Server.Client.Internal (ClientI, Status(Initialized), getStatusI)
 import           LaunchDarkly.Server.Features        (Flag, Segment(..), SegmentTarget(..), Prerequisite, SegmentRule, Clause, VariationOrRollout, Rule, RolloutKind(RolloutKindExperiment), Target)
 import           LaunchDarkly.Server.Store.Internal  (LaunchDarklyStoreRead, getFlagC, getSegmentC)
@@ -34,8 +34,7 @@ import           LaunchDarkly.Server.Operators       (Op(OpSegmentMatch), getOpe
 import           LaunchDarkly.Server.Events          (EvalEvent, newUnknownFlagEvent, newSuccessfulEvalEvent, processEvalEvents)
 import           LaunchDarkly.Server.Details         (EvaluationDetail(..), EvaluationReason(..), EvalErrorKind(..))
 import Data.Foldable (foldlM)
-import LaunchDarkly.Server.Reference (isValid, getComponents)
-import LaunchDarkly.Server.Reference (getError)
+import LaunchDarkly.Server.Reference (isValid, getComponents, makeReference, getError, makeLiteral)
 import Data.Either.Extra (mapRight)
 import Data.List.Extra (firstJust)
 
@@ -227,11 +226,14 @@ hexStringToNumber :: ByteString -> Maybe Natural
 hexStringToNumber bytes = B.foldl' step (Just 0) bytes where
     step acc x = acc >>= \acc' -> hexCharToNumber x >>= pure . (+) (acc' * 16)
 
-bucketContext :: Context -> Text -> Text -> Text -> Text -> Maybe Int -> Maybe Float
+bucketContext :: Context -> Maybe Text -> Text -> Text -> Text -> Maybe Int -> Maybe Float
 bucketContext context kind key attribute salt seed =
-    case getIndividualContext kind context of
+    let bucketBy = case kind of
+            Nothing -> makeLiteral attribute
+            Just _ -> makeReference attribute
+    in case getIndividualContext (fromMaybe "user" kind) context of
         Nothing -> Nothing
-        Just ctx -> let bucketableString = bucketableStringValue $ getValue attribute ctx
+        Just ctx -> let bucketableString = bucketableStringValue $ getValueForReference bucketBy ctx
                     in Just $ calculateBucketValue bucketableString key salt seed
 
 calculateBucketValue :: (Maybe Text) -> Text -> Text -> Maybe Int -> Float
