@@ -22,8 +22,6 @@ import           Data.HashSet (HashSet)
 import           Data.Text (Text)
 import           GHC.Generics (Generic)
 import           Data.Aeson (Value, FromJSON, decode)
-import           Data.Monoid (Monoid, mempty)
-import           Data.Semigroup (Semigroup)
 import           Data.IORef (newIORef, readIORef, writeIORef)
 import           GHC.Natural (Natural)
 import           Data.Generics.Product (getField)
@@ -34,6 +32,7 @@ data FileFlag = FileFlag
     { version                :: Maybe Natural
     , on                     :: Maybe Bool
     , targets                :: Maybe [F.Target]
+    , contextTargets         :: Maybe [F.Target]
     , rules                  :: Maybe [F.Rule]
     , fallthrough            :: Maybe F.VariationOrRollout
     , offVariation           :: Maybe Integer
@@ -46,6 +45,7 @@ expandSimpleFlag value =
         { version = Nothing
         , on = Nothing
         , targets = Nothing
+        , contextTargets = Nothing
         , rules = Nothing
         , fallthrough = Just (F.VariationOrRollout (Just 0) Nothing)
         , offVariation = Just 0
@@ -63,8 +63,7 @@ fromFileFlag key fileFlag =
           , F.prerequisites = []
           , F.salt = ""
           , F.targets = fromMaybe [] $ targets fileFlag
-          -- TODO: Change this when working on the testdata / flag data changes
-          , F.contextTargets = fromMaybe [] $ targets fileFlag
+          , F.contextTargets = fromMaybe [] $ contextTargets fileFlag
           , F.rules = fromMaybe [] $ getField @"rules" fileFlag
           , F.fallthrough = fromMaybe noFallthrough $ fallthrough fileFlag
           , F.offVariation = offVariation fileFlag

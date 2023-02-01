@@ -1,23 +1,29 @@
+{-# LANGUAGE NamedFieldPuns #-}
 module LaunchDarkly.Server.Integrations.TestData.FlagBuilder
     ( FlagBuilder(..)
-    , UserKey
     , VariationIndex
     , newFlagBuilder
     , booleanFlag
     , on
     , fallthroughVariation
     , offVariation
+    , variationForAll
     , variationForAllUsers
+    , valueForAll
     , valueForAllUsers
+    , variationForKey
     , variationForUser
     , variations
     , buildFlag
-    , UserAttribute
     , ifMatch
+    , ifMatchContext
     , ifNotMatch
+    , ifNotMatchContext
     , FlagRuleBuilder
     , andMatch
+    , andMatchContext
     , andNotMatch
+    , andNotMatchContext
     , thenReturn
     , Variation
     )
@@ -32,9 +38,8 @@ import           GHC.Natural (Natural)
 import qualified LaunchDarkly.Server.Features as F
 import qualified LaunchDarkly.Server.Operators as Op
 import           Data.Function ((&))
-import LaunchDarkly.Server.Reference (makeLiteral)
+import LaunchDarkly.Server.Reference (makeReference)
 
-type UserKey = Text
 type VariationIndex = Integer
 
 trueVariationForBoolean, falseVariationForBoolean :: VariationIndex
@@ -56,19 +61,30 @@ data FlagBuilder = FlagBuilder
     , fbOn :: Bool
     , fbFallthroughVariation :: Maybe VariationIndex
     , fbVariations :: [Aeson.Value]
-    , fbTargetMap :: Map UserKey VariationIndex
+    , fbTargetMap :: Map Text (Map VariationIndex [Text])
     , fbRules :: [FlagRule]
     } deriving (Show)
 
-fbTargets :: FlagBuilder -> [F.Target]
-fbTargets flagBuilder = undefined
--- TODO: Deferring this much larger change until I can update the test data stuff
-    -- Map.elems $
-    -- Map.mapWithKey (flip F.Target) $
-    -- Map.foldrWithKey go mempty (fbTargetMap flagBuilder)
-  -- where
-    -- go userKey variation =
-    --     Map.insertWith (<>) variation [userKey]
+fbTargets :: FlagBuilder -> ([F.Target], [F.Target])
+fbTargets FlagBuilder { fbTargetMap = targetMap } =
+    Map.foldlWithKey splitIntoTargets ([], []) targetMap
+    where
+        splitIntoTargets :: ([F.Target], [F.Target]) -> Text -> Map VariationIndex [Text] -> ([F.Target], [F.Target])
+        splitIntoTargets acc "user" keyMap = Map.foldlWithKey foldForUserKind acc keyMap
+        splitIntoTargets acc kind keyMap = Map.foldlWithKey (foldForOtherKind kind) acc keyMap
+
+        -- When processing user kinds, we need to add a full target to the user targets, and a placeholder without the values in the context targets list
+        foldForUserKind :: ([F.Target], [F.Target]) -> VariationIndex -> [Text] -> ([F.Target], [F.Target])
+        foldForUserKind (userTargets, allTargets) variation values =
+            ( F.Target { values, variation, contextKind = "user" }:userTargets
+            , F.Target { values = mempty, variation, contextKind = "user"}:allTargets
+            )
+
+        foldForOtherKind :: Text -> ([F.Target], [F.Target]) -> VariationIndex -> [Text] -> ([F.Target], [F.Target])
+        foldForOtherKind kind (userTargets, allTargets) variation values =
+            ( userTargets
+            , F.Target { values = values, variation, contextKind = kind}:allTargets
+            )
 
 buildFlag :: Natural -> FlagBuilder -> F.Flag
 buildFlag version flagBuilder =
@@ -81,9 +97,8 @@ buildFlag version flagBuilder =
         , F.deleted = False
         , F.prerequisites = []
         , F.salt = "salt"
-        , F.targets = fbTargets flagBuilder
-        -- TODO: Change this when working on the testdata / flag data changes
-        , F.contextTargets = fbTargets flagBuilder
+        , F.targets = userTargets
+        , F.contextTargets = allTargets
         , F.rules = mapWithIndex convertFlagRule (fbRules flagBuilder)
         , F.fallthrough = F.VariationOrRollout (fbFallthroughVariation flagBuilder) Nothing
         , F.offVariation = fbOffVariation flagBuilder
@@ -91,6 +106,8 @@ buildFlag version flagBuilder =
         , F.debugEventsUntilDate = Nothing
         , F.clientSideAvailability = F.ClientSideAvailability False False False
         }
+
+    where (userTargets, allTargets) = fbTargets flagBuilder
 
 mapWithIndex :: Integral num => (num -> a -> b) -> [a] -> [b]
 mapWithIndex f l =
@@ -153,14 +170,32 @@ clearRules fb =
     fb{ fbRules = mempty }
 
 -- |
--- Removes any existing user targets from the flag.
--- This undoes the effect of methods like 'variationForUser'
-clearUserTargets :: FlagBuilder -> FlagBuilder
-clearUserTargets fb =
+-- Removes any existing targets from the flag.
+-- This undoes the effect of methods like 'variationForKey'
+clearTargets :: FlagBuilder -> FlagBuilder
+clearTargets fb =
     fb{ fbTargetMap = mempty }
 
 -- |
+-- Sets the flag to always return the specified variation value for all contexts.
+--
+-- The value may be of any type that implements 'Aeson.ToJSON'. This method changes the
+-- flag to have only a single variation, which is this value, and to return the same
+-- variation regardless of whether targeting is on or off. Any existing targets or rules
+-- are removed.
+valueForAll :: Aeson.ToJSON value
+                 => value -- the desired value to be returned for all contexts
+                 -> FlagBuilder
+                 -> FlagBuilder
+valueForAll val fb =
+    fb & variations [Aeson.toJSON val]
+       & variationForAll (0 :: VariationIndex)
+
+{-# DEPRECATED valueForAllUsers "Use valueForAll instead" #-}
+-- |
 -- Sets the flag to always return the specified variation value for all users.
+--
+-- This function is an alias to 'valueForAll'.
 --
 -- The value may be of any type that implements 'Aeson.ToJSON'. This method changes the
 -- flag to have only a single variation, which is this value, and to return the same
@@ -170,9 +205,7 @@ valueForAllUsers :: Aeson.ToJSON value
                  => value -- the desired value to be returned for all users
                  -> FlagBuilder
                  -> FlagBuilder
-valueForAllUsers val fb =
-    fb & variations [Aeson.toJSON val]
-       & variationForAllUsers (0 :: VariationIndex)
+valueForAllUsers = valueForAll
 
 -- |
 -- Changes the allowable variation values for the flag.
@@ -190,7 +223,7 @@ variations values fb =
 class Variation val where
     -- |
     -- Specifies the fallthrough variation. The fallthrough is the value
-    -- that is returned if targeting is on and the user was not matched by a more specific
+    -- that is returned if targeting is on and the context was not matched by a more specific
     -- target or rule.
     --
     -- If the flag was previously configured with other variations and the variation specified is a boolean,
@@ -210,6 +243,18 @@ class Variation val where
                  -> FlagBuilder
 
     -- |
+    -- Sets the flag to always return the specified variation for all contexts.
+    --
+    -- The variation is specified, Targeting is switched on, and any existing targets or rules are removed.
+    -- The fallthrough variation is set to the specified value. The off variation is left unchanged.
+    --
+    -- If the flag was previously configured with other variations and the variation specified is a boolean,
+    -- this also changes it to a boolean flag.
+    variationForAll :: val -- ^ @True@ or @False@ or the desired fallthrough variation index: 0 for the first, 1 for the second, etc.
+                         -> FlagBuilder
+                         -> FlagBuilder
+
+    -- |
     -- Sets the flag to always return the specified variation for all users.
     --
     -- The variation is specified, Targeting is switched on, and any existing targets or rules are removed.
@@ -222,14 +267,26 @@ class Variation val where
                          -> FlagBuilder
 
     -- |
-    -- Sets the flag to return the specified variation for a specific user key when targeting
-    -- is on.
+    -- Sets the flag to return the specified variation for a specific context kind and key when targeting is on.
     --
     -- This has no effect when targeting is turned off for the flag.
     --
     -- If the flag was previously configured with other variations and the variation specified is a boolean,
     -- this also changes it to a boolean flag.
-    variationForUser :: UserKey -- ^ a user key to target
+    variationForKey :: Text -- ^ The context kind to match against
+                     -> Text -- ^ a key to target
+                     -> val -- ^ @True@ or @False@ or the desired fallthrough variation index: 0 for the first, 1 for the second, etc.
+                     -> FlagBuilder
+                     -> FlagBuilder
+
+    -- |
+    -- Sets the flag to return the specified variation for a specific user key when targeting is on.
+    --
+    -- This has no effect when targeting is turned off for the flag.
+    --
+    -- If the flag was previously configured with other variations and the variation specified is a boolean,
+    -- this also changes it to a boolean flag.
+    variationForUser :: Text -- ^ a user key to target
                      -> val -- ^ @True@ or @False@ or the desired fallthrough variation index: 0 for the first, 1 for the second, etc.
                      -> FlagBuilder
                      -> FlagBuilder
@@ -251,14 +308,23 @@ instance Variation Integer where
     offVariation variationIndex fb =
         fb{ fbOffVariation = Just variationIndex }
 
-    variationForAllUsers variationIndex fb =
+    variationForAll variationIndex fb =
         fb & on True
            & clearRules
-           & clearUserTargets
+           & clearTargets
            & fallthroughVariation variationIndex
 
-    variationForUser userKey variationIndex fb =
-        fb{ fbTargetMap = Map.insert userKey variationIndex (fbTargetMap fb) }
+    variationForAllUsers = variationForAll
+
+    variationForKey kind key variationIndex fb@(FlagBuilder { fbTargetMap = targetMap }) =
+        case Map.lookup kind targetMap of
+            Nothing -> fb { fbTargetMap = Map.insert kind (Map.singleton variationIndex [key]) targetMap }
+            Just m ->
+                case Map.lookup variationIndex m of
+                    Nothing -> fb { fbTargetMap = Map.insert kind (Map.insert variationIndex [key] m) targetMap }
+                    Just keys -> fb { fbTargetMap = Map.insert kind (Map.insert variationIndex (key:keys) m) targetMap }
+
+    variationForUser = variationForKey "user"
 
     thenReturn variationIndex ruleBuilder =
         let fb = frbBaseBuilder ruleBuilder
@@ -271,17 +337,19 @@ instance Variation Bool where
     offVariation value fb =
         fb & booleanFlag
            & offVariation (variationForBoolean value)
-    variationForAllUsers value fb =
+    variationForAll value fb =
         fb & booleanFlag
-           & variationForAllUsers (variationForBoolean value)
+           & variationForAll (variationForBoolean value)
+    variationForAllUsers = variationForAll
+    variationForKey kind key value fb =
+        fb & booleanFlag
+           & variationForKey kind key (variationForBoolean value)
     variationForUser userKey value fb =
         fb & booleanFlag
            & variationForUser userKey (variationForBoolean value)
     thenReturn value ruleBuilder =
         ruleBuilder { frbBaseBuilder = booleanFlag $ frbBaseBuilder ruleBuilder }
             & thenReturn (variationForBoolean value)
-
-type UserAttribute = Text
 
 -- |
 -- Starts defining a flag rule, using the "is one of" operator.
@@ -291,16 +359,36 @@ type UserAttribute = Text
 -- @
 -- testData
 --     & flag "flag"
---     & ifMatch "name" [toJSON \"Patsy\", toJSON \"Edina\"]
+--     & ifMatchContext "user" "name" [toJSON \"Patsy\", toJSON \"Edina\"]
 --     & thenReturn True
 -- @
-ifMatch :: UserAttribute -- ^ attribute the user attribute to match against
+ifMatchContext :: Text -- ^ the context kind to match again
+        -> Text -- ^ the context attribute to match against
         -> [Aeson.Value] -- ^ values to compare to
         -> FlagBuilder
         -> FlagRuleBuilder -- ^ call 'thenReturn' to finish the rule, or add more tests with 'andMatch' or 'andNotMatch'
-ifMatch userAttribute values fb =
+ifMatchContext kind attribute values fb =
     newFlagRuleBuilder fb
-     & andMatch userAttribute values
+     & andMatchContext kind attribute values
+
+-- |
+-- Starts defining a flag rule, using the "is one of" operator.
+--
+-- This is a shortcut for calling 'ifMatch' with a context kind of "user".
+--
+-- For example, this creates a rule that returns @True@ if the name is \"Patsy\" or \"Edina\":
+--
+-- @
+-- testData
+--     & flag "flag"
+--     & ifMatch "name" [toJSON \"Patsy\", toJSON \"Edina\"]
+--     & thenReturn True
+-- @
+ifMatch :: Text -- ^ the context attribute to match against
+        -> [Aeson.Value] -- ^ values to compare to
+        -> FlagBuilder
+        -> FlagRuleBuilder -- ^ call 'thenReturn' to finish the rule, or add more tests with 'andMatch' or 'andNotMatch'
+ifMatch = ifMatchContext "user"
 
 -- |
 -- Starts defining a flag rule, using the "is not one of" operator.
@@ -310,19 +398,39 @@ ifMatch userAttribute values fb =
 -- @
 -- testData
 --     & flag "flag"
---     & ifNotMatch "name" [toJSON \"Saffron\", toJSON \"Bubble\"]
+--     & ifNotMatchContext "user" "name" [toJSON \"Saffron\", toJSON \"Bubble\"]
 --     & thenReturn True
 -- @
-ifNotMatch :: UserAttribute -- ^ attribute the user attribute to match against
+ifNotMatchContext :: Text -- ^ context kind to match again
+           -> Text -- ^ attribute to match against
            -> [Aeson.Value] -- ^ values to compare to
            -> FlagBuilder
            -> FlagRuleBuilder -- ^ call 'thenReturn' to finish the rule, or add more tests with 'andMatch' or 'andNotMatch'
-ifNotMatch userAttribute values fb =
+ifNotMatchContext kind attibute values fb =
     newFlagRuleBuilder fb
-     & andNotMatch userAttribute values
+     & andNotMatchContext kind attibute values
+
+-- |
+-- Starts defining a flag rule, using the "is not one of" operator.
+--
+-- This is a shortcut for calling 'ifNotMatchContext' with a context kind of "user".
+--
+-- For example, this creates a rule that returns @True@ if the name is neither \"Saffron\" nor \"Bubble\"
+--
+-- @
+-- testData
+--     & flag "flag"
+--     & ifNotMatch "name" [toJSON \"Saffron\", toJSON \"Bubble\"]
+--     & thenReturn True
+-- @
+ifNotMatch :: Text -- ^ attribute to match against
+           -> [Aeson.Value] -- ^ values to compare to
+           -> FlagBuilder
+           -> FlagRuleBuilder -- ^ call 'thenReturn' to finish the rule, or add more tests with 'andMatch' or 'andNotMatch'
+ifNotMatch = ifNotMatchContext "user"
 
 data Clause = Clause
-    { clauseAttribute :: UserAttribute
+    { clauseAttribute :: Text
     , contextKind     :: Text
     , clauseValues    :: [Aeson.Value]
     , clauseNegate    :: Bool
@@ -345,7 +453,7 @@ convertFlagRule idx flagRule =
 convertClause :: Clause -> F.Clause
 convertClause clause =
     F.Clause
-        { F.attribute = makeLiteral $ clauseAttribute clause
+        { F.attribute = makeReference $ clauseAttribute clause
         , F.contextKind = contextKind clause
         , F.negate = clauseNegate clause
         , F.values = clauseValues clause
@@ -355,8 +463,8 @@ convertClause clause =
 -- A builder for feature flag rules to be used with 'FlagBuilder'.
 --
 -- In the LaunchDarkly model, a flag can have any number of rules, and a rule can have any number of
--- clauses. A clause is an individual test such as \"name is \'X\'\". A rule matches a user if all of the
--- rule's clauses match the user.
+-- clauses. A clause is an individual test such as \"name is \'X\'\". A rule matches a context if all of the
+-- rule's clauses match the context.
 --
 -- To start defining a rule, use one of the matching functions such as 'ifMatch' or 'ifNotMatch'.
 -- This defines the first clause for the rule.
@@ -373,6 +481,7 @@ newFlagRuleBuilder baseBuilder =
         { frbClauses = mempty
         , frbBaseBuilder = baseBuilder
         }
+
 -- |
 -- Adds another clause, using the "is one of" operator.
 --
@@ -386,15 +495,60 @@ newFlagRuleBuilder baseBuilder =
 --     & andMatch "country" [toJSON \"gb\"]
 --     & thenReturn True
 -- @
-andMatch :: UserAttribute -- ^ the user attribute to match against
+andMatchContext :: Text -- ^ the context kind to match again
+         -> Text -- ^ the context attribute to match against
          -> [Aeson.Value] -- ^ values to compare to
          -> FlagRuleBuilder
          -> FlagRuleBuilder
-andMatch userAttribute values ruleBuilder =
-    ruleBuilder{ frbClauses = Clause userAttribute "user" values False : frbClauses ruleBuilder }
+andMatchContext kind attribute values ruleBuilder =
+    ruleBuilder{ frbClauses = Clause attribute kind values False : frbClauses ruleBuilder }
+
+-- |
+-- Adds another clause, using the "is one of" operator.
+--
+-- This is a shortcut for calling 'andMatchContext' with a context kind of "user".
+--
+-- For example, this creates a rule that returns @True@ if the name is \"Patsy\" and the
+-- country is \"gb\":
+--
+-- @
+-- testData
+--     & flag "flag"
+--     & ifMatch "name" [toJSON \"Patsy\"]
+--     & andMatch "country" [toJSON \"gb\"]
+--     & thenReturn True
+-- @
+andMatch :: Text -- ^ the context attribute to match against
+         -> [Aeson.Value] -- ^ values to compare to
+         -> FlagRuleBuilder
+         -> FlagRuleBuilder
+andMatch = andMatchContext "user"
 
 -- |
 -- Adds another clause, using the "is not one of" operator.
+--
+-- For example, this creates a rule that returns @True@ if the name is \"Patsy\" and the
+-- country is not \"gb\":
+--
+-- @
+-- testData
+--     & flag "flag"
+--     & ifMatchContext "user" "name" [toJSON \"Patsy\"]
+--     & andNotMatchContext "user" "country" [toJSON \"gb\"]
+--     & thenReturn True
+-- @
+andNotMatchContext :: Text -- ^ the context kind to match against
+            -> Text -- ^ the context attribute to match against
+            -> [Aeson.Value] -- ^ values to compare to
+            -> FlagRuleBuilder
+            -> FlagRuleBuilder
+andNotMatchContext kind attribute values ruleBuilder =
+    ruleBuilder{ frbClauses = Clause attribute kind values True : frbClauses ruleBuilder }
+
+-- |
+-- Adds another clause, using the "is not one of" operator.
+--
+-- This is a shortcut for calling 'andNotMatchContext' with a context kind of "user".
 --
 -- For example, this creates a rule that returns @True@ if the name is \"Patsy\" and the
 -- country is not \"gb\":
@@ -406,9 +560,11 @@ andMatch userAttribute values ruleBuilder =
 --     & andNotMatch "country" [toJSON \"gb\"]
 --     & thenReturn True
 -- @
-andNotMatch :: UserAttribute -- ^ the user attribute to match against
+andNotMatch :: Text -- ^ the context attribute to match against
             -> [Aeson.Value] -- ^ values to compare to
             -> FlagRuleBuilder
             -> FlagRuleBuilder
-andNotMatch userAttribute values ruleBuilder =
-    ruleBuilder{ frbClauses = Clause userAttribute "user" values True : frbClauses ruleBuilder }
+andNotMatch = andNotMatchContext "user"
+
+{-# DEPRECATED variationForAllUsers "Use variationForAll instead" #-}
+{-# DEPRECATED variationForUser "Use variationForKey instead" #-}

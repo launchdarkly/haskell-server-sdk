@@ -1,0 +1,21 @@
+---
+flags:
+  flag1:
+    key: flag1
+    "on": true
+    targets:
+      - values: ["user1"]
+        variation: 0
+    contextTargets:
+      - values: []
+        variation: 0
+        contextKind: "user"
+      - values: ["org1"]
+        variation: 1
+        contextKind: "org"
+    fallthrough:
+      variation: 3
+    variations:
+      - "user"
+      - "org"
+      - "fall"

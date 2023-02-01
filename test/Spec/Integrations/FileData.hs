@@ -19,6 +19,8 @@ import LaunchDarkly.AesonCompat (emptyObject)
 allTests :: Test
 allTests = TestList
     [ TestLabel "testAllProperties" testAllProperties
+    , TestLabel "testTargettingJson" testTargettingJson
+    , TestLabel "testTargettingYaml" testTargettingYaml
     , TestLabel "testMultiFileFlagDuplicate" testMultiFileFlagDuplicate
     , TestLabel "testMalformedFile" testMalformedFile
     , TestLabel "testNoDataFile" testNoDataFile
@@ -51,6 +53,54 @@ testAllProperties = TestCase $ do
 
         flag2 <- stringVariation client "flag2" user1 "fallback"
         assertEqual "flag2 value" "value2" flag2
+
+testTargettingJson :: Test
+testTargettingJson = TestCase $ do
+    let factory = dataSourceFactory ["test-data/filesource/targets.json"]
+        config = testConfig factory
+        user1 = makeContext "user1" "user"
+        user2 = makeContext "user2" "user"
+        org1 = makeContext "org1" "org"
+        org2 = makeContext "org2" "org"
+    withClient config $ \client -> do
+        status <- getStatus client
+        assertEqual "status initialized" Initialized status
+
+        flag1 <- stringVariation client "flag1" user1 "fall"
+        assertEqual "flag1 user1" "user" flag1
+
+        flag1 <- stringVariation client "flag1" user2 "fall"
+        assertEqual "flag1 user2" "fall" flag1
+
+        flag1 <- stringVariation client "flag1" org1 "fall"
+        assertEqual "flag1 org1" "org" flag1
+
+        flag1 <- stringVariation client "flag1" org2 "fall"
+        assertEqual "flag1 org2" "fall" flag1
+
+testTargettingYaml :: Test
+testTargettingYaml = TestCase $ do
+    let factory = dataSourceFactory ["test-data/filesource/targets.yml"]
+        config = testConfig factory
+        user1 = makeContext "user1" "user"
+        user2 = makeContext "user2" "user"
+        org1 = makeContext "org1" "org"
+        org2 = makeContext "org2" "org"
+    withClient config $ \client -> do
+        status <- getStatus client
+        assertEqual "status initialized" Initialized status
+
+        flag1 <- stringVariation client "flag1" user1 "fall"
+        assertEqual "flag1 user1" "user" flag1
+
+        flag1 <- stringVariation client "flag1" user2 "fall"
+        assertEqual "flag1 user2" "fall" flag1
+
+        flag1 <- stringVariation client "flag1" org1 "fall"
+        assertEqual "flag1 org1" "org" flag1
+
+        flag1 <- stringVariation client "flag1" org2 "fall"
+        assertEqual "flag1 org2" "fall" flag1
 
 testMultiFileFlagDuplicate :: Test
 testMultiFileFlagDuplicate = TestCase $ do

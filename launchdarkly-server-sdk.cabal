@@ -28,6 +28,7 @@ extra-source-files:
     test-data/filesource/no-data.json
     test-data/filesource/segment-only.json
     test-data/filesource/segment-with-duplicate-key.json
+    test-data/filesource/targets.json
     test-data/filesource/value-only.json
     test-data/filesource/value-with-duplicate-key.json
 

@@ -17,16 +17,15 @@ import qualified LaunchDarkly.Server.Integrations.TestData             as TestDa
 import qualified LaunchDarkly.Server.Integrations.TestData.FlagBuilder as FlagBuilder
 
 allTests :: Test
-allTests = TestList []
-    -- TODO: Address while working on test data / flag data work
-    -- [ testVariationForAllUsers
-    -- , testMultipleFlags
-    -- , testModifyFlags
-    -- , testMultipleClients
-    -- , testTargeting
-    -- , testRules
-    -- , testValueForAllUsers
-    -- ]
+allTests = TestList
+    [ testVariationForAll
+    , testMultipleFlags
+    , testModifyFlags
+    , testMultipleClients
+    , testTargeting
+    , testRules
+    , testValueForAll
+    ]
 
 testConfig :: DataSourceFactory -> Config
 testConfig factory =
@@ -35,12 +34,12 @@ testConfig factory =
     configSetLogger (runStdoutLoggingT . filterLogger (\_ lvl -> lvl /= LevelDebug)) $
     makeConfig "sdk-key"
 
-testVariationForAllUsers :: Test
-testVariationForAllUsers = TestCase $ do
+testVariationForAll :: Test
+testVariationForAll = TestCase $ do
   td <- TestData.newTestData
   TestData.update td =<<
       (TestData.flag td "flag-key-1"
-          <&> TestData.variationForAllUsers True)
+          <&> TestData.variationForAll True)
   let config = testConfig (TestData.dataSourceFactory td)
   client <- makeClient config
   let user1 = makeContext "user1" "user"
@@ -59,7 +58,7 @@ testModifyFlags = TestCase $ do
                                   , toJSON ("red" :: Text)
                                   , toJSON ("green" :: Text)
                                   ]
-          <&> TestData.variationForAllUsers (0 :: TestData.VariationIndex))
+          <&> TestData.variationForAll (0 :: TestData.VariationIndex))
   let config = testConfig (TestData.dataSourceFactory td)
   client <- makeClient config
   let user = makeContext "user" "user"
@@ -67,7 +66,7 @@ testModifyFlags = TestCase $ do
 
   TestData.update td =<<
       (TestData.flag td "flag-key-1"
-          <&> TestData.variationForAllUsers (2 :: TestData.VariationIndex))
+          <&> TestData.variationForAll (2 :: TestData.VariationIndex))
 
   assertEqual "user set to green after update" "green" =<< stringVariation client "flag-key-1" user "none"
   close client
@@ -81,10 +80,10 @@ testMultipleFlags = TestCase $ do
                                   , toJSON ("red" :: Text)
                                   , toJSON ("green" :: Text)
                                   ]
-          <&> TestData.variationForAllUsers (0 :: TestData.VariationIndex))
+          <&> TestData.variationForAll (0 :: TestData.VariationIndex))
   TestData.update td =<<
       (TestData.flag td "flag-key-2"
-          <&> TestData.variationForAllUsers True)
+          <&> TestData.variationForAll True)
   let config = testConfig (TestData.dataSourceFactory td)
   client <- makeClient config
   let user = makeContext "user" "user"
@@ -105,13 +104,13 @@ testMultipleClients = TestCase $ do
                                   , toJSON ("red" :: Text)
                                   , toJSON ("green" :: Text)
                                   ]
-          <&> TestData.variationForAllUsers (0 :: TestData.VariationIndex))
+          <&> TestData.variationForAll (0 :: TestData.VariationIndex))
   assertEqual "client1 recieved update" "blue" =<< stringVariation client1 "flag-key-1" user "none"
   assertEqual "client2 recieved update" "blue" =<< stringVariation client2 "flag-key-1" user "none"
   close client2
   TestData.update td =<<
       (TestData.flag td "flag-key-1"
-          <&> TestData.variationForAllUsers (2 :: TestData.VariationIndex))
+          <&> TestData.variationForAll (2 :: TestData.VariationIndex))
 
   assertEqual "client1 recieved update to green" "green" =<< stringVariation client1 "flag-key-1" user "none"
   assertEqual "client2 no update after close" "none" =<< stringVariation client2 "flag-key-1" user "none"
@@ -128,18 +127,23 @@ testTargeting = TestCase $ do
                                   ]
           <&> TestData.variationForUser "ben" (0 :: TestData.VariationIndex)
           <&> TestData.variationForUser "todd" (0 :: TestData.VariationIndex)
+          <&> TestData.variationForKey "org" "ben" (0 :: TestData.VariationIndex)
           <&> TestData.offVariation (1 :: TestData.VariationIndex)
           <&> TestData.fallthroughVariation (2 :: TestData.VariationIndex))
   let config = testConfig (TestData.dataSourceFactory td)
       ben = makeContext "ben" "user"
       todd = makeContext "todd" "user"
       evelyn = makeContext "evelyn" "user"
+      benAsOrg = makeContext "ben" "org"
+      toddAsOrg = makeContext "todd" "org"
 
   client <- makeClient config
 
   assertEqual "ben receives blue" "blue" =<< stringVariation client "flag-key-1" ben "none"
   assertEqual "todd receives blue" "blue" =<< stringVariation client "flag-key-1" todd "none"
   assertEqual "evelyn receives green" "green" =<< stringVariation client "flag-key-1" evelyn "none"
+  assertEqual "ben as org receives blue" "blue" =<< stringVariation client "flag-key-1" benAsOrg "none"
+  assertEqual "todd as org receives green" "green" =<< stringVariation client "flag-key-1" toddAsOrg "none"
   TestData.update td =<<
       (TestData.flag td "flag-key-1"
           <&> TestData.on False)
@@ -147,9 +151,10 @@ testTargeting = TestCase $ do
   assertEqual "targeting off ben receives red" "red" =<< stringVariation client "flag-key-1" ben "none"
   assertEqual "targeting off todd receives red" "red" =<< stringVariation client "flag-key-1" todd "none"
   assertEqual "targeting off evelyn receives red" "red" =<< stringVariation client "flag-key-1" evelyn "none"
+  assertEqual "targeting off ben as org receives red" "red" =<< stringVariation client "flag-key-1" benAsOrg "none"
+  assertEqual "targeting off todd as org receives red" "red" =<< stringVariation client "flag-key-1" toddAsOrg "none"
 
   close client
-
 
 testRules :: Test
 testRules = TestCase $ do
@@ -189,12 +194,12 @@ data CustomType
     | CustomType2
     deriving (Generic, Eq, Show, ToJSON)
 
-testValueForAllUsers :: Test
-testValueForAllUsers = TestCase $ do
+testValueForAll :: Test
+testValueForAll= TestCase $ do
   td <- TestData.newTestData
   TestData.update td =<<
       (TestData.flag td "flag-key-1"
-        <&> TestData.valueForAllUsers CustomType1)
+        <&> TestData.valueForAll CustomType1)
   let config = testConfig (TestData.dataSourceFactory td)
       ben = makeContext "ben" "user"
       todd = makeContext "todd" "user"

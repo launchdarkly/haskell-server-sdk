@@ -9,7 +9,7 @@
 -- td <- TestData.newTestData
 -- update td =<< (flag td "flag-key-1"
 --                 \<&\> booleanFlag
---                 \<&\> variationForAllUsers True)
+--                 \<&\> variationForAll True)
 --
 -- let config = makeConfig "sdkKey"
 --                 & configSetDataSourceFactory (dataSourceFactory td)
@@ -18,7 +18,7 @@
 -- -- flags can be updated at any time:
 -- update td =<<
 --    (flag td "flag-key-2"
---          \<&\> variationForUser "some-user-key" True
+--          \<&\> variationForKey "user" "some-user-key" True
 --          \<&\> fallthroughVariation False)
 -- @
 --
@@ -49,8 +49,10 @@ module LaunchDarkly.Server.Integrations.TestData
     , on
     , fallthroughVariation
     , offVariation
-    , variationForAllUsers
+    , variationForAll
+    , valueForAll
     , valueForAllUsers
+    , variationForKey
     , variationForUser
     , variations
     , ifMatch
