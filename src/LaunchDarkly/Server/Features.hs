@@ -18,7 +18,14 @@ import LaunchDarkly.Server.Reference (Reference, makeLiteral, makeReference)
 data Target = Target
     { values    :: ![Text]
     , variation :: !Integer
-    } deriving (Generic, FromJSON, ToJSON, Show, Eq)
+    , contextKind :: Text
+    } deriving (Generic, ToJSON, Show, Eq)
+
+instance FromJSON Target where
+    parseJSON = withObject "Target" $ \t -> Target
+        <$> t .: "values"
+        <*> t .: "variation"
+        <*> t .:? "contextKind" .!= "user"
 
 data Rule = Rule
     { id                 :: !Text
@@ -128,6 +135,7 @@ data Flag = Flag
     , prerequisites          :: ![Prerequisite]
     , salt                   :: !Text
     , targets                :: ![Target]
+    , contextTargets         :: ![Target]
     , rules                  :: ![Rule]
     , fallthrough            :: !VariationOrRollout
     , offVariation           :: !(Maybe Integer)
@@ -147,6 +155,7 @@ instance ToJSON Flag where
         , "prerequisites" .= getField @"prerequisites" flag
         , "salt" .= getField @"salt" flag
         , "targets" .= getField @"targets" flag
+        , "contextTargets" .= getField @"contextTargets" flag
         , "rules" .= getField @"rules" flag
         , "fallthrough" .= getField @"fallthrough" flag
         , "offVariation" .= getField @"offVariation" flag
@@ -168,6 +177,7 @@ instance FromJSON Flag where
         prerequisites <- obj .: "prerequisites"
         salt <- obj .: "salt"
         targets <- obj .: "targets"
+        contextTargets <- obj .:? "contextTargets" .!= mempty
         rules <- obj .: "rules"
         fallthrough <- obj .: "fallthrough"
         offVariation <- obj .:? "offVariation"

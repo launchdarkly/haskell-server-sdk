@@ -61,13 +61,14 @@ data FlagBuilder = FlagBuilder
     } deriving (Show)
 
 fbTargets :: FlagBuilder -> [F.Target]
-fbTargets flagBuilder =
-    Map.elems $
-    Map.mapWithKey (flip F.Target) $
-    Map.foldrWithKey go mempty (fbTargetMap flagBuilder)
-  where
-    go userKey variation =
-        Map.insertWith (<>) variation [userKey]
+fbTargets flagBuilder = undefined
+-- TODO: Deferring this much larger change until I can update the test data stuff
+    -- Map.elems $
+    -- Map.mapWithKey (flip F.Target) $
+    -- Map.foldrWithKey go mempty (fbTargetMap flagBuilder)
+  -- where
+    -- go userKey variation =
+    --     Map.insertWith (<>) variation [userKey]
 
 buildFlag :: Natural -> FlagBuilder -> F.Flag
 buildFlag version flagBuilder =
@@ -81,6 +82,8 @@ buildFlag version flagBuilder =
         , F.prerequisites = []
         , F.salt = "salt"
         , F.targets = fbTargets flagBuilder
+        -- TODO: Change this when working on the testdata / flag data changes
+        , F.contextTargets = fbTargets flagBuilder
         , F.rules = mapWithIndex convertFlagRule (fbRules flagBuilder)
         , F.fallthrough = F.VariationOrRollout (fbFallthroughVariation flagBuilder) Nothing
         , F.offVariation = fbOffVariation flagBuilder

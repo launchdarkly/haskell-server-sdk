@@ -16,6 +16,7 @@ makeTestFlag key version = Flag
     , prerequisites          = []
     , salt                   = ""
     , targets                = []
+    , contextTargets         = []
     , rules                  = []
     , fallthrough            = VariationOrRollout
         { variation = Nothing

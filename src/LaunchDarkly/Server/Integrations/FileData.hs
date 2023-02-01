@@ -63,6 +63,8 @@ fromFileFlag key fileFlag =
           , F.prerequisites = []
           , F.salt = ""
           , F.targets = fromMaybe [] $ targets fileFlag
+          -- TODO: Change this when working on the testdata / flag data changes
+          , F.contextTargets = fromMaybe [] $ targets fileFlag
           , F.rules = fromMaybe [] $ getField @"rules" fileFlag
           , F.fallthrough = fromMaybe noFallthrough $ fallthrough fileFlag
           , F.offVariation = offVariation fileFlag

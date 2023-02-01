@@ -28,7 +28,7 @@ import           Data.HashSet (HashSet)
 
 import           LaunchDarkly.Server.Context         (Context(..), getKey, getValue, getKinds, getIndividualContext, getValueForReference)
 import           LaunchDarkly.Server.Client.Internal (ClientI, Status(Initialized), getStatusI)
-import           LaunchDarkly.Server.Features        (Flag, Segment(..), SegmentTarget(..), Prerequisite, SegmentRule, Clause, VariationOrRollout, Rule, RolloutKind(RolloutKindExperiment))
+import           LaunchDarkly.Server.Features        (Flag, Segment(..), SegmentTarget(..), Prerequisite, SegmentRule, Clause, VariationOrRollout, Rule, RolloutKind(RolloutKindExperiment), Target)
 import           LaunchDarkly.Server.Store.Internal  (LaunchDarklyStoreRead, getFlagC, getSegmentC)
 import           LaunchDarkly.Server.Operators       (Op(OpSegmentMatch), getOperation)
 import           LaunchDarkly.Server.Events          (EvalEvent, newUnknownFlagEvent, newSuccessfulEvalEvent, processEvalEvents)
@@ -37,6 +37,7 @@ import Data.Foldable (foldlM)
 import LaunchDarkly.Server.Reference (isValid, getComponents)
 import LaunchDarkly.Server.Reference (getError)
 import Data.Either.Extra (mapRight)
+import Data.List.Extra (firstJust)
 
 setFallback :: EvaluationDetail Value -> Value -> EvaluationDetail Value
 setFallback detail fallback = case getField @"variationIndex" detail of
@@ -127,17 +128,47 @@ checkPrerequisite store context flag seenFlags prereq =
 evaluateInternal :: (Monad m, LaunchDarklyStoreRead store m) => Flag -> Context -> store -> m (EvaluationDetail Value)
 evaluateInternal flag context store = result
     where
-        checkTarget target =
-            if elem (getKey context) (getField @"values" target) then Just $ getVariation flag (getField @"variation" target) EvaluationReasonTargetMatch else Nothing
-        checkRule (ruleIndex, rule) = ruleMatchesContext rule context store >>= pure . \case
-            Left _ -> Just $ errorDetail EvalErrorKindMalformedFlag
-            Right True -> Just $ getValueForVariationOrRollout flag (getField @"variationOrRollout" rule) context EvaluationReasonRuleMatch { ruleIndex = ruleIndex, ruleId = getField @"id" rule, inExperiment = False }
-            Right False -> Nothing
         fallthrough = getValueForVariationOrRollout flag (getField @"fallthrough" flag) context (EvaluationReasonFallthrough False)
         result = let
-            ruleMatch   = checkRule <$> zip [0..] (getField @"rules" flag)
-            targetMatch = return . checkTarget <$> getField @"targets" flag
-            in fromMaybe fallthrough <$> firstJustM Prelude.id (ruleMatch ++ targetMatch)
+            targetEvaluationResults  = pure <$> checkTargets context flag
+            ruleEvaluationResults = (checkRule flag context store) <$> zip [0..] (getField @"rules" flag)
+            in fromMaybe fallthrough <$> firstJustM Prelude.id (targetEvaluationResults ++ ruleEvaluationResults)
+
+checkRule :: (Monad m, LaunchDarklyStoreRead store m) => Flag -> Context -> store -> (Natural, Rule) -> m (Maybe (EvaluationDetail Value))
+checkRule flag context store (ruleIndex, rule) = ruleMatchesContext rule context store >>= pure . \case
+    Left _ -> Just $ errorDetail EvalErrorKindMalformedFlag
+    Right True -> Just $ getValueForVariationOrRollout flag (getField @"variationOrRollout" rule) context EvaluationReasonRuleMatch { ruleIndex = ruleIndex, ruleId = getField @"id" rule, inExperiment = False }
+    Right False -> Nothing
+
+checkTargets :: Context -> Flag -> [Maybe (EvaluationDetail Value)]
+checkTargets context flag =
+    let userTargets = getField @"targets" flag
+        contextTargets = getField @"contextTargets" flag
+    in case contextTargets of
+        [] -> checkTarget context "user" flag <$> userTargets
+        _ -> checkContextTargets context flag userTargets contextTargets
+
+checkContextTargets :: Context -> Flag -> [Target] -> [Target] -> [Maybe (EvaluationDetail Value)]
+checkContextTargets context flag userTargets contextTargets =
+    checkContextTarget context flag userTargets <$> contextTargets
+
+checkContextTarget :: Context -> Flag -> [Target] -> Target -> Maybe (EvaluationDetail Value)
+checkContextTarget context flag userTargets contextTarget =
+    let contextKind = getField @"contextKind" contextTarget
+        values = getField @"values" contextTarget
+    in case (contextKind, values) of
+        -- If the context target doesn't have any values specified, we are supposed to fall back to the user targets
+        ("user", []) -> firstJust Prelude.id $ (checkTarget context "user" flag) <$> userTargets
+        _ -> checkTarget context contextKind flag contextTarget
+
+checkTarget :: Context -> Text -> Flag -> Target -> Maybe (EvaluationDetail Value)
+checkTarget context contextKind flag target =
+    case getIndividualContext contextKind context of
+        Nothing -> Nothing
+        Just ctx ->
+            if elem (getKey ctx) (getField @"values" target)
+            then Just $ getVariation flag (getField @"variation" target) EvaluationReasonTargetMatch
+            else Nothing
 
 errorDefault :: EvalErrorKind -> Value -> EvaluationDetail Value
 errorDefault kind v = EvaluationDetail { value = v, variationIndex = mzero, reason = EvaluationReasonError kind }

@@ -3,9 +3,7 @@ TEMP_TEST_OUTPUT=/tmp/contract-test-service.log
 # TEST_HARNESS_PARAMS can be set to add -skip parameters for any contract tests that cannot yet pass
 # Explanation of current skips:
 TEST_HARNESS_PARAMS := $(TEST_HARNESS_PARAMS) \
-	-skip 'evaluation/bucketing/bucket by non-key attribute' \
-	-skip 'evaluation/parameterized/target match/context targets' \
-	-skip 'evaluation/parameterized/target match/multi-kind'
+	-skip 'evaluation/bucketing/bucket by non-key attribute'
 
 build-contract-tests:
 	@cd contract-tests && stack build

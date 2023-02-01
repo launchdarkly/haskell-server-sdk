@@ -58,6 +58,7 @@ testFlagReturnsOffVariationIfFlagIsOff = TestCase $ do
         , prerequisites          = []
         , salt                   = ""
         , targets                = []
+        , contextTargets         = []
         , rules                  = []
         , fallthrough            = VariationOrRollout
             { variation = Just 0
@@ -97,6 +98,7 @@ testFlagReturnsFallthroughIfFlagIsOnAndThereAreNoRules = TestCase $ do
         , prerequisites          = []
         , salt                   = ""
         , targets                = []
+        , contextTargets         = []
         , rules                  = []
         , fallthrough            = VariationOrRollout
             { variation = Just 0
@@ -364,6 +366,120 @@ testFlagReturnsFallthroughVariationIfPrerequisiteIsMetAndThereAreNoRules = TestC
                 }
             }
 
+testFlagCanTargetUserKeys :: Test
+testFlagCanTargetUserKeys = TestCase $ do
+    client@(Client clientI) <- makeTestClient
+    insertFlag (getField @"store" clientI) flag >>= (pure () @=?)
+    boolVariationDetail client "feature0" (makeContext "user-key" "user") False >>= (expected @=?)
+
+    where
+        flag :: Flag = (makeTestFlag "feature0" 52)
+            { on            = True
+            , targets = [Target { values = ["user-key"], variation = 1, contextKind = "user" }]
+            , variations = [Bool False, Bool True]
+            , fallthrough = VariationOrRollout
+                { variation = Just 0
+                , rollout = Nothing
+                }
+            }
+        expected :: EvaluationDetail Bool = EvaluationDetail
+            { value          = True
+            , variationIndex = pure 1
+            , reason         = EvaluationReasonTargetMatch
+            }
+
+testFlagCanTargetContextKeys :: Test
+testFlagCanTargetContextKeys = TestCase $ do
+    client@(Client clientI) <- makeTestClient
+    insertFlag (getField @"store" clientI) flag >>= (pure () @=?)
+    boolVariationDetail client "feature0" (makeContext "match-key" "user") False >>= (fallthrough @=?)
+    boolVariationDetail client "feature0" (makeContext "match-key" "org") False >>= (match @=?)
+
+    where
+        flag :: Flag = (makeTestFlag "feature0" 52)
+            { on            = True
+            , contextTargets = [Target { values = ["match-key"], variation = 1, contextKind = "org" }]
+            , variations = [Bool False, Bool True]
+            , fallthrough = VariationOrRollout
+                { variation = Just 0
+                , rollout = Nothing
+                }
+            }
+        match :: EvaluationDetail Bool = EvaluationDetail
+            { value          = True
+            , variationIndex = pure 1
+            , reason         = EvaluationReasonTargetMatch
+            }
+        fallthrough :: EvaluationDetail Bool = EvaluationDetail
+            { value          = False
+            , variationIndex = pure 0
+            , reason         = EvaluationReasonFallthrough {inExperiment = False}
+            }
+
+testFlagCanTargetContextFallsbackToUserTargets :: Test
+testFlagCanTargetContextFallsbackToUserTargets = TestCase $ do
+    client@(Client clientI) <- makeTestClient
+    insertFlag (getField @"store" clientI) flag >>= (pure () @=?)
+    boolVariationDetail client "feature0" (makeContext "match-key" "user") False >>= (match @=?)
+
+    where
+        flag :: Flag = (makeTestFlag "feature0" 52)
+            { on            = True
+            , targets = [Target { values = ["match-key"], variation = 1, contextKind = "user" }]
+            , contextTargets = [Target { values = [], variation = 1, contextKind = "user" }]
+            , variations = [Bool False, Bool True]
+            , fallthrough = VariationOrRollout
+                { variation = Just 0
+                , rollout = Nothing
+                }
+            }
+        match :: EvaluationDetail Bool = EvaluationDetail
+            { value          = True
+            , variationIndex = pure 1
+            , reason         = EvaluationReasonTargetMatch
+            }
+
+testFlagChecksTargetsBeforeRules :: Test
+testFlagChecksTargetsBeforeRules = TestCase $ do
+    client@(Client clientI) <- makeTestClient
+    insertFlag (getField @"store" clientI) flag >>= (pure () @=?)
+    boolVariationDetail client "feature0" (makeContext "match-key" "user") False >>= (match @=?)
+
+    where
+        flag :: Flag = (makeTestFlag "feature0" 52)
+            { on            = True
+            , targets = [Target { values = ["match-key"], variation = 0, contextKind = "user" }]
+            , rules                  =
+                [ Rule
+                    { clauses            =
+                        [ Clause
+                            { attribute   = makeLiteral "kind"
+                            , contextKind = "user"
+                            , op          = OpIn
+                            , values      = [String "user"]
+                            , negate      = False
+                            }
+                        ]
+                    , variationOrRollout = VariationOrRollout
+                        { variation = Just 1
+                        , rollout   = Nothing
+                        }
+                    , id                 = "clause"
+                    , trackEvents        = False
+                    }
+                ]
+            , variations = [Bool False, Bool True]
+            , fallthrough = VariationOrRollout
+                { variation = Just 1
+                , rollout = Nothing
+                }
+            }
+        match :: EvaluationDetail Bool = EvaluationDetail
+            { value          = False
+            , variationIndex = pure 0
+            , reason         = EvaluationReasonTargetMatch
+            }
+
 testClauseCanMatchOnKind :: Test
 testClauseCanMatchOnKind = TestCase $ do
     store <- makeStoreIO Nothing 0
@@ -407,6 +523,7 @@ testClauseCanMatchOnKind = TestCase $ do
         , prerequisites          = []
         , salt                   = ""
         , targets                = []
+        , contextTargets         = []
         , rules                  =
             [ Rule
                 { clauses            =
@@ -475,6 +592,7 @@ testClauseCanMatchCustomAttribute = TestCase $ do
         , prerequisites          = []
         , salt                   = ""
         , targets                = []
+        , contextTargets         = []
         , rules                  =
             [ Rule
                 { clauses            =
@@ -543,6 +661,7 @@ testClauseCanMatchCustomAttributeReference = TestCase $ do
         , prerequisites          = []
         , salt                   = ""
         , targets                = []
+        , contextTargets         = []
         , rules                  =
             [ Rule
                 { clauses            =
@@ -633,6 +752,10 @@ allTests = TestList
     , testFlagReturnsOffVariationIfPrerequisiteIsOff
     , testFlagReturnsOffVariationIfPrerequisiteIsNotMet
     , testFlagReturnsFallthroughVariationIfPrerequisiteIsMetAndThereAreNoRules
+    , testFlagCanTargetUserKeys
+    , testFlagCanTargetContextKeys
+    , testFlagCanTargetContextFallsbackToUserTargets
+    , testFlagChecksTargetsBeforeRules
     , testClauseCanMatchCustomAttribute
     , testClauseCanMatchCustomAttributeReference
     , testClauseCanMatchOnKind
