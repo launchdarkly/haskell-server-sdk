@@ -1,8 +1,8 @@
 module Spec.Streaming (allTests) where
 
-import Test.HUnit
+import Control.Monad (mzero)
 import Data.Attoparsec.ByteString
-import Control.Monad                         (mzero)
+import Test.HUnit
 
 import LaunchDarkly.Server.Network.Streaming
 

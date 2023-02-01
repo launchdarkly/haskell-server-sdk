@@ -1,21 +1,21 @@
 module LaunchDarkly.Server.DataSource.Internal
     ( DataSourceFactory
     , nullDataSourceFactory
-    , DataSource(..)
-    , DataSourceUpdates(..)
+    , DataSource (..)
+    , DataSourceUpdates (..)
     , defaultDataSourceUpdates
     )
-    where
+where
 
-import Data.IORef          (IORef, atomicModifyIORef')
-import Data.Text           (Text)
-import GHC.Natural         (Natural)
+import Data.IORef (IORef, atomicModifyIORef')
+import Data.Text (Text)
+import GHC.Natural (Natural)
 
+import LaunchDarkly.AesonCompat (KeyMap)
+import LaunchDarkly.Server.Client.Status (Status, transitionStatus)
 import LaunchDarkly.Server.Config.ClientContext (ClientContext)
-import LaunchDarkly.Server.Client.Status        (Status, transitionStatus)
-import LaunchDarkly.Server.Features             (Segment, Flag)
-import LaunchDarkly.Server.Store.Internal       (initializeStore, insertFlag, insertSegment, deleteFlag, deleteSegment, StoreHandle)
-import LaunchDarkly.AesonCompat                 (KeyMap)
+import LaunchDarkly.Server.Features (Flag, Segment)
+import LaunchDarkly.Server.Store.Internal (StoreHandle, deleteFlag, deleteSegment, initializeStore, insertFlag, insertSegment)
 
 type DataSourceFactory = ClientContext -> DataSourceUpdates -> IO DataSource
 
@@ -40,12 +40,12 @@ data DataSourceUpdates = DataSourceUpdates
 
 defaultDataSourceUpdates :: IORef Status -> StoreHandle IO -> DataSourceUpdates
 defaultDataSourceUpdates status store =
-    let modifyStatus status' = atomicModifyIORef' status (fmap (,()) (transitionStatus status')) 
-    in DataSourceUpdates
-        { dataSourceUpdatesInit = initializeStore store 
-        , dataSourceUpdatesInsertFlag = insertFlag store 
-        , dataSourceUpdatesInsertSegment = insertSegment store 
-        , dataSourceUpdatesDeleteFlag = deleteFlag store 
-        , dataSourceUpdatesDeleteSegment = deleteSegment store 
-        , dataSourceUpdatesSetStatus = modifyStatus 
-        }
+    let modifyStatus status' = atomicModifyIORef' status (fmap (,()) (transitionStatus status'))
+     in DataSourceUpdates
+            { dataSourceUpdatesInit = initializeStore store
+            , dataSourceUpdatesInsertFlag = insertFlag store
+            , dataSourceUpdatesInsertSegment = insertSegment store
+            , dataSourceUpdatesDeleteFlag = deleteFlag store
+            , dataSourceUpdatesDeleteSegment = deleteSegment store
+            , dataSourceUpdatesSetStatus = modifyStatus
+            }

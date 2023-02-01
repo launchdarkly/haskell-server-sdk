@@ -1,5 +1,4 @@
 -- | This module contains the core functionality of the SDK.
-
 module LaunchDarkly.Server.Client
     ( Client
     , makeClient
@@ -14,9 +13,9 @@ module LaunchDarkly.Server.Client
     , doubleVariationDetail
     , jsonVariation
     , jsonVariationDetail
-    , EvaluationDetail(..)
-    , EvaluationReason(..)
-    , EvalErrorKind(..)
+    , EvaluationDetail (..)
+    , EvaluationReason (..)
+    , EvalErrorKind (..)
     , allFlagsState
     , AllFlagsState
     , secureModeHash
@@ -24,55 +23,54 @@ module LaunchDarkly.Server.Client
     , flushEvents
     , identify
     , track
-    , Status(..)
+    , Status (..)
     , getStatus
     ) where
 
-import           Control.Concurrent                    (forkFinally, killThread)
-import           Control.Concurrent.MVar               (putMVar, takeMVar, newEmptyMVar)
-import           Control.Monad                         (void, forM_)
-import           Control.Monad.IO.Class                (liftIO)
-import           Control.Monad.Logger                  (LoggingT, logDebug, logWarn)
-import           Control.Monad.Fix                     (mfix)
-import           Data.IORef                            (newIORef, writeIORef, readIORef)
-import           Data.Maybe                            (fromMaybe)
-import           Data.Text                             (Text)
-import           Data.Text.Encoding                    (encodeUtf8)
-import           Data.Aeson                            (Value(..), toJSON, ToJSON, (.=), object)
-import           Data.Generics.Product                 (getField)
-import           Data.Scientific                       (toRealFloat, fromFloatDigits)
-import qualified Data.HashSet as                       HS
-import qualified Network.HTTP.Client as                Http
-import           GHC.Generics                          (Generic)
-import           GHC.Natural                           (Natural)
-import           Network.HTTP.Client                   (newManager)
-import           Network.HTTP.Client.TLS               (tlsManagerSettings)
-import           System.Clock                          (TimeSpec(..))
+import Control.Concurrent (forkFinally, killThread)
+import Control.Concurrent.MVar (newEmptyMVar, putMVar, takeMVar)
+import Control.Monad (forM_, void)
+import Control.Monad.Fix (mfix)
+import Control.Monad.IO.Class (liftIO)
+import Control.Monad.Logger (LoggingT, logDebug, logWarn)
+import Data.Aeson (ToJSON, Value (..), object, toJSON, (.=))
+import Data.Generics.Product (getField)
+import qualified Data.HashSet as HS
+import Data.IORef (newIORef, readIORef, writeIORef)
+import Data.Maybe (fromMaybe)
+import Data.Scientific (fromFloatDigits, toRealFloat)
+import Data.Text (Text)
+import Data.Text.Encoding (encodeUtf8)
+import GHC.Generics (Generic)
+import GHC.Natural (Natural)
+import Network.HTTP.Client (newManager)
+import qualified Network.HTTP.Client as Http
+import Network.HTTP.Client.TLS (tlsManagerSettings)
+import System.Clock (TimeSpec (..))
 
-import           LaunchDarkly.Server.Client.Internal          (Client(..), ClientI(..), getStatusI, clientVersion)
-import           LaunchDarkly.Server.Client.Status            (Status(..))
-import           LaunchDarkly.Server.Context                  (Context(..), getValue, redactContext, getCanonicalKey, getKey, getKeys)
-import           LaunchDarkly.Server.Config.ClientContext     (ClientContext(..))
-import           LaunchDarkly.Server.Config.HttpConfiguration (HttpConfiguration(..))
-import           LaunchDarkly.Server.Config.Internal          (ConfigI, Config(..), shouldSendEvents, getApplicationInfoHeader, ApplicationInfo)
-import           LaunchDarkly.Server.DataSource.Internal      (DataSource(..), DataSourceFactory, DataSourceUpdates(..), defaultDataSourceUpdates, nullDataSourceFactory)
-import           LaunchDarkly.Server.Details                  (EvaluationDetail(..), EvaluationReason(..), EvalErrorKind(..))
-import           LaunchDarkly.Server.Evaluate                 (evaluateTyped, evaluateDetail)
-import           LaunchDarkly.Server.Events                   (IdentifyEvent(..), CustomEvent(..), EventType(..), makeBaseEvent, queueEvent, makeEventState, maybeIndexContext, unixMilliseconds, noticeContext)
-import           LaunchDarkly.Server.Features                 (isClientSideOnlyFlag, isInExperiment)
-import           LaunchDarkly.Server.Network.Eventing         (eventThread)
-import           LaunchDarkly.Server.Network.Polling          (pollingThread)
-import           LaunchDarkly.Server.Network.Streaming        (streamingThread)
-import           LaunchDarkly.Server.Store.Internal           (makeStoreIO, getAllFlagsC)
-import           LaunchDarkly.AesonCompat                     (KeyMap, insertKey, emptyObject, mapValues, filterObject)
+import LaunchDarkly.AesonCompat (KeyMap, emptyObject, filterObject, insertKey, mapValues)
+import LaunchDarkly.Server.Client.Internal (Client (..), ClientI (..), clientVersion, getStatusI)
+import LaunchDarkly.Server.Client.Status (Status (..))
+import LaunchDarkly.Server.Config.ClientContext (ClientContext (..))
+import LaunchDarkly.Server.Config.HttpConfiguration (HttpConfiguration (..))
+import LaunchDarkly.Server.Config.Internal (ApplicationInfo, Config (..), ConfigI, getApplicationInfoHeader, shouldSendEvents)
+import LaunchDarkly.Server.Context (Context (..), getCanonicalKey, getKey, getKeys, getValue, redactContext)
+import LaunchDarkly.Server.DataSource.Internal (DataSource (..), DataSourceFactory, DataSourceUpdates (..), defaultDataSourceUpdates, nullDataSourceFactory)
+import LaunchDarkly.Server.Details (EvalErrorKind (..), EvaluationDetail (..), EvaluationReason (..))
+import LaunchDarkly.Server.Evaluate (evaluateDetail, evaluateTyped)
+import LaunchDarkly.Server.Events (CustomEvent (..), EventType (..), IdentifyEvent (..), makeBaseEvent, makeEventState, maybeIndexContext, noticeContext, queueEvent, unixMilliseconds)
+import LaunchDarkly.Server.Features (isClientSideOnlyFlag, isInExperiment)
+import LaunchDarkly.Server.Network.Eventing (eventThread)
+import LaunchDarkly.Server.Network.Polling (pollingThread)
+import LaunchDarkly.Server.Network.Streaming (streamingThread)
+import LaunchDarkly.Server.Store.Internal (getAllFlagsC, makeStoreIO)
 
-import Data.Text.Encoding (decodeUtf8)
-import Data.ByteArray.Encoding (convertToBase, Base (Base16))
-import Crypto.MAC.HMAC (hmac)
 import Crypto.Hash.SHA256 (hash)
+import Crypto.MAC.HMAC (hmac)
+import Data.ByteArray.Encoding (Base (Base16), convertToBase)
 import Data.ByteString (ByteString)
+import Data.Text.Encoding (decodeUtf8)
 import Network.HTTP.Types (HeaderName)
-
 
 networkDataSourceFactory :: (ClientContext -> DataSourceUpdates -> LoggingT IO ()) -> DataSourceFactory
 networkDataSourceFactory threadF clientContext dataSourceUpdates = do
@@ -92,69 +90,70 @@ networkDataSourceFactory threadF clientContext dataSourceUpdates = do
             $(logDebug) "Waiting on download thread to die"
             liftIO $ void $ takeMVar sync
 
-    pure $ DataSource{..}
+    pure $ DataSource {..}
 
 makeHttpConfiguration :: ConfigI -> IO HttpConfiguration
 makeHttpConfiguration config = do
     tlsManager <- newManager tlsManagerSettings
-    let headers = [ ("Authorization", encodeUtf8 $ getField @"key" config)
-                  , ("User-Agent" , "HaskellServerClient/" <> encodeUtf8 clientVersion)
-                  ]
+    let headers =
+            [ ("Authorization", encodeUtf8 $ getField @"key" config)
+            , ("User-Agent", "HaskellServerClient/" <> encodeUtf8 clientVersion)
+            ]
         defaultRequestHeaders = addTagsHeader headers (getField @"applicationInfo" config)
         defaultRequestTimeout = Http.responseTimeoutMicro $ fromIntegral $ getField @"requestTimeoutSeconds" config * 1000000
-    pure $ HttpConfiguration{..}
-    where
-        addTagsHeader :: [(HeaderName, ByteString)] -> Maybe ApplicationInfo -> [(HeaderName, ByteString)]
-        addTagsHeader headers Nothing = headers
-        addTagsHeader headers (Just info) = case getApplicationInfoHeader info of
-            Nothing -> headers
-            Just header -> ("X-LaunchDarkly-Tags", encodeUtf8 header) : headers
+    pure $ HttpConfiguration {..}
+  where
+    addTagsHeader :: [(HeaderName, ByteString)] -> Maybe ApplicationInfo -> [(HeaderName, ByteString)]
+    addTagsHeader headers Nothing = headers
+    addTagsHeader headers (Just info) = case getApplicationInfoHeader info of
+        Nothing -> headers
+        Just header -> ("X-LaunchDarkly-Tags", encodeUtf8 header) : headers
 
 makeClientContext :: ConfigI -> IO ClientContext
 makeClientContext config = do
     let runLogger = getField @"logger" config
     httpConfiguration <- makeHttpConfiguration config
-    pure $ ClientContext{..}
+    pure $ ClientContext {..}
 
 -- | Create a new instance of the LaunchDarkly client.
 makeClient :: Config -> IO Client
 makeClient (Config config) = mfix $ \(Client client) -> do
-    status  <- newIORef Uninitialized
-    store   <- makeStoreIO (getField @"storeBackend" config) (TimeSpec (fromIntegral $ getField @"storeTTLSeconds" config) 0)
+    status <- newIORef Uninitialized
+    store <- makeStoreIO (getField @"storeBackend" config) (TimeSpec (fromIntegral $ getField @"storeTTLSeconds" config) 0)
     manager <- case getField @"manager" config of
-      Just manager -> pure manager
-      Nothing      -> newManager tlsManagerSettings
-    events  <- makeEventState config
+        Just manager -> pure manager
+        Nothing -> newManager tlsManagerSettings
+    events <- makeEventState config
 
     clientContext <- makeClientContext config
 
     let dataSourceUpdates = defaultDataSourceUpdates status store
     dataSource <- dataSourceFactory config clientContext dataSourceUpdates
-    eventThreadPair    <- if not (shouldSendEvents config) then pure Nothing else do
-        sync   <- newEmptyMVar
-        thread <- forkFinally (runLogger clientContext $ eventThread manager client clientContext) (\_ -> putMVar sync ())
-        pure $ pure (thread, sync)
+    eventThreadPair <-
+        if not (shouldSendEvents config)
+            then pure Nothing
+            else do
+                sync <- newEmptyMVar
+                thread <- forkFinally (runLogger clientContext $ eventThread manager client clientContext) (\_ -> putMVar sync ())
+                pure $ pure (thread, sync)
 
     dataSourceStart dataSource
 
-    pure $ Client $ ClientI{..}
-
+    pure $ Client $ ClientI {..}
 
 dataSourceFactory :: ConfigI -> DataSourceFactory
 dataSourceFactory config =
-    if getField @"offline" config || getField @"useLdd" config then
-        nullDataSourceFactory
-    else
-        case getField @"dataSourceFactory" config of
+    if getField @"offline" config || getField @"useLdd" config
+        then nullDataSourceFactory
+        else case getField @"dataSourceFactory" config of
             Just factory ->
                 factory
             Nothing ->
                 let dataSourceThread =
-                        if getField @"streaming" config then
-                            streamingThread (getField @"streamURI" config)
-                        else
-                            pollingThread (getField @"baseURI" config) (getField @"pollIntervalSeconds" config)
-                in networkDataSourceFactory dataSourceThread
+                        if getField @"streaming" config
+                            then streamingThread (getField @"streamURI" config)
+                            else pollingThread (getField @"baseURI" config) (getField @"pollIntervalSeconds" config)
+                 in networkDataSourceFactory dataSourceThread
 
 clientRunLogger :: ClientI -> (LoggingT IO () -> IO ())
 clientRunLogger client = getField @"logger" $ getField @"config" client
@@ -173,13 +172,17 @@ data AllFlagsState = AllFlagsState
     { evaluations :: !(KeyMap Value)
     , state :: !(KeyMap FlagState)
     , valid :: !Bool
-    } deriving (Show, Generic)
+    }
+    deriving (Show, Generic)
 
 instance ToJSON AllFlagsState where
-    toJSON state = Object $
-        insertKey "$flagsState" (toJSON $ getField @"state" state) $
-        insertKey "$valid" (toJSON $ getField @"valid" state)
-        (fromObject $ toJSON $ getField @"evaluations" state)
+    toJSON state =
+        Object $
+            insertKey "$flagsState" (toJSON $ getField @"state" state) $
+                insertKey
+                    "$valid"
+                    (toJSON $ getField @"valid" state)
+                    (fromObject $ toJSON $ getField @"evaluations" state)
 
 data FlagState = FlagState
     { version :: !(Maybe Natural)
@@ -188,18 +191,21 @@ data FlagState = FlagState
     , trackEvents :: !Bool
     , trackReason :: !Bool
     , debugEventsUntilDate :: !(Maybe Natural)
-    } deriving (Show, Generic)
+    }
+    deriving (Show, Generic)
 
 instance ToJSON FlagState where
-    toJSON state = object $
-        filter ((/=) Null . snd)
-        [ "version" .= getField @"version" state
-        , "variation" .= getField @"variation" state
-        , "trackEvents" .= if getField @"trackEvents" state then Just True else Nothing
-        , "trackReason" .= if getField @"trackReason" state then Just True else Nothing
-        , "reason" .= getField @"reason" state
-        , "debugEventsUntilDate" .= getField @"debugEventsUntilDate" state
-        ]
+    toJSON state =
+        object $
+            filter
+                ((/=) Null . snd)
+                [ "version" .= getField @"version" state
+                , "variation" .= getField @"variation" state
+                , "trackEvents" .= if getField @"trackEvents" state then Just True else Nothing
+                , "trackReason" .= if getField @"trackReason" state then Just True else Nothing
+                , "reason" .= getField @"reason" state
+                , "debugEventsUntilDate" .= getField @"debugEventsUntilDate" state
+                ]
 
 -- | Returns an object that encapsulates the state of all feature flags for a
 -- given context. This includes the flag values, and also metadata that can be
@@ -220,42 +226,47 @@ instance ToJSON FlagState where
 -- For more information, see the Reference Guide:
 -- https://docs.launchdarkly.com/sdk/features/all-flags#haskell
 allFlagsState :: Client -> Context -> Bool -> Bool -> Bool -> IO (AllFlagsState)
-allFlagsState (Client client) context client_side_only with_reasons details_only_for_tracked_flags  = do
+allFlagsState (Client client) context client_side_only with_reasons details_only_for_tracked_flags = do
     status <- getAllFlagsC $ getField @"store" client
     case status of
-        Left _      -> pure AllFlagsState { evaluations = emptyObject, state = emptyObject, valid = False }
+        Left _ -> pure AllFlagsState {evaluations = emptyObject, state = emptyObject, valid = False}
         Right flags -> do
             filtered <- pure $ (filterObject (\flag -> (not client_side_only) || isClientSideOnlyFlag flag) flags)
             details <- mapM (\flag -> (\detail -> (flag, fst detail)) <$> (evaluateDetail flag context HS.empty $ getField @"store" client)) filtered
             evaluations <- pure $ mapValues (getField @"value" . snd) details
             now <- unixMilliseconds
-            state <- pure $ mapValues (\(flag, detail) -> do
-                let reason' = getField @"reason" detail
-                    inExperiment = isInExperiment flag reason'
-                    isDebugging = now < fromMaybe 0 (getField @"debugEventsUntilDate" flag)
-                    trackReason' = inExperiment
-                    trackEvents' = getField @"trackEvents" flag
-                    omitDetails = details_only_for_tracked_flags && (not (trackEvents' || trackReason' || isDebugging))
-                FlagState
-                    { version = if omitDetails then Nothing else Just $ getField @"version" flag
-                    , variation = getField @"variationIndex" detail
-                    , reason = if omitDetails || ((not with_reasons) && (not trackReason')) then Nothing else Just reason'
-                    , trackEvents = trackEvents' || inExperiment
-                    , trackReason = trackReason'
-                    , debugEventsUntilDate = getField @"debugEventsUntilDate" flag
-                    }) details
-            pure $ AllFlagsState { evaluations = evaluations, state = state, valid = True }
+            state <-
+                pure $
+                    mapValues
+                        ( \(flag, detail) -> do
+                            let reason' = getField @"reason" detail
+                                inExperiment = isInExperiment flag reason'
+                                isDebugging = now < fromMaybe 0 (getField @"debugEventsUntilDate" flag)
+                                trackReason' = inExperiment
+                                trackEvents' = getField @"trackEvents" flag
+                                omitDetails = details_only_for_tracked_flags && (not (trackEvents' || trackReason' || isDebugging))
+                            FlagState
+                                { version = if omitDetails then Nothing else Just $ getField @"version" flag
+                                , variation = getField @"variationIndex" detail
+                                , reason = if omitDetails || ((not with_reasons) && (not trackReason')) then Nothing else Just reason'
+                                , trackEvents = trackEvents' || inExperiment
+                                , trackReason = trackReason'
+                                , debugEventsUntilDate = getField @"debugEventsUntilDate" flag
+                                }
+                        )
+                        details
+            pure $ AllFlagsState {evaluations = evaluations, state = state, valid = True}
 
 -- | Identify reports details about a context.
 identify :: Client -> Context -> IO ()
 identify (Client client) (Invalid err) = clientRunLogger client $ $(logWarn) $ "identify called with an invalid context: " <> err
 identify (Client client) context = case (getValue "key" context) of
-        (String "") -> clientRunLogger client $ $(logWarn) "identify called with empty key"
-        _ -> do
-            let redacted = redactContext (getField @"config" client) context
-            x <- makeBaseEvent $ IdentifyEvent { key = getKey context, context = redacted }
-            _ <- noticeContext (getField @"events" client) context
-            queueEvent (getField @"config" client) (getField @"events" client) (EventTypeIdentify x)
+    (String "") -> clientRunLogger client $ $(logWarn) "identify called with empty key"
+    _ -> do
+        let redacted = redactContext (getField @"config" client) context
+        x <- makeBaseEvent $ IdentifyEvent {key = getKey context, context = redacted}
+        _ <- noticeContext (getField @"events" client) context
+        queueEvent (getField @"config" client) (getField @"events" client) (EventTypeIdentify x)
 
 -- | Track reports that a context has performed an event. Custom data can be
 -- attached to the event, and / or a numeric value.
@@ -266,12 +277,14 @@ identify (Client client) context = case (getValue "key" context) of
 track :: Client -> Context -> Text -> Maybe Value -> Maybe Double -> IO ()
 track (Client client) (Invalid err) _ _ _ = clientRunLogger client $ $(logWarn) $ "track called with invalid context: " <> err
 track (Client client) context key value metric = do
-    x <- makeBaseEvent $ CustomEvent
-        { key         = key
-        , contextKeys = getKeys context
-        , metricValue = metric
-        , value       = value
-        }
+    x <-
+        makeBaseEvent $
+            CustomEvent
+                { key = key
+                , contextKeys = getKeys context
+                , metricValue = metric
+                , value = value
+                }
     let config = (getField @"config" client)
         events = (getField @"events" client)
     queueEvent config events (EventTypeCustom x)
@@ -284,7 +297,7 @@ secureModeHash :: Client -> Context -> Text
 secureModeHash (Client client) context =
     let config = getField @"config" client
         sdkKey = getField @"key" config
-    in decodeUtf8 $ convertToBase Base16 $ hmac hash 64 (encodeUtf8 sdkKey) (encodeUtf8 $ getCanonicalKey context)
+     in decodeUtf8 $ convertToBase Base16 $ hmac hash 64 (encodeUtf8 sdkKey) (encodeUtf8 $ getCanonicalKey context)
 
 -- | Flush tells the client that all pending analytics events (if any) should be
 -- delivered as soon as possible. Flushing is asynchronous, so this method will

@@ -1,5 +1,4 @@
 -- | This module is for configuration of the SDK.
-
 module LaunchDarkly.Server.Config
     ( Config
     , makeConfig
@@ -30,44 +29,45 @@ module LaunchDarkly.Server.Config
     , withApplicationValue
     ) where
 
-import Control.Monad.Logger                (LoggingT, runStdoutLoggingT)
-import Data.Generics.Product               (setField)
-import Data.Set                            (Set)
-import Data.Text                           (Text, dropWhileEnd)
-import GHC.Natural                         (Natural)
-import Network.HTTP.Client                 (Manager)
+import Control.Monad.Logger (LoggingT, runStdoutLoggingT)
+import Data.Generics.Product (setField)
+import Data.Set (Set)
+import Data.Text (Text, dropWhileEnd)
+import GHC.Natural (Natural)
+import Network.HTTP.Client (Manager)
 
-import LaunchDarkly.Server.Config.Internal (Config(..), mapConfig, ConfigI(..), ApplicationInfo, makeApplicationInfo, withApplicationValue)
-import LaunchDarkly.Server.Store           (StoreInterface)
+import LaunchDarkly.Server.Config.Internal (ApplicationInfo, Config (..), ConfigI (..), makeApplicationInfo, mapConfig, withApplicationValue)
 import LaunchDarkly.Server.DataSource.Internal (DataSourceFactory)
 import LaunchDarkly.Server.Reference (Reference)
+import LaunchDarkly.Server.Store (StoreInterface)
 
 -- | Create a default configuration from a given SDK key.
 makeConfig :: Text -> Config
 makeConfig key =
-    Config $ ConfigI
-    { key                   = key
-    , baseURI               = "https://app.launchdarkly.com"
-    , streamURI             = "https://stream.launchdarkly.com"
-    , eventsURI             = "https://events.launchdarkly.com"
-    , storeBackend          = Nothing
-    , storeTTLSeconds       = 10
-    , streaming             = True
-    , allAttributesPrivate  = False
-    , privateAttributeNames = mempty
-    , flushIntervalSeconds  = 5
-    , pollIntervalSeconds   = 30
-    , contextKeyLRUCapacity = 1000
-    , eventsCapacity        = 10000
-    , logger                = runStdoutLoggingT
-    , sendEvents            = True
-    , offline               = False
-    , requestTimeoutSeconds = 30
-    , useLdd                = False
-    , dataSourceFactory     = Nothing
-    , manager               = Nothing
-    , applicationInfo       = Nothing
-    }
+    Config $
+        ConfigI
+            { key = key
+            , baseURI = "https://app.launchdarkly.com"
+            , streamURI = "https://stream.launchdarkly.com"
+            , eventsURI = "https://events.launchdarkly.com"
+            , storeBackend = Nothing
+            , storeTTLSeconds = 10
+            , streaming = True
+            , allAttributesPrivate = False
+            , privateAttributeNames = mempty
+            , flushIntervalSeconds = 5
+            , pollIntervalSeconds = 30
+            , contextKeyLRUCapacity = 1000
+            , eventsCapacity = 10000
+            , logger = runStdoutLoggingT
+            , sendEvents = True
+            , offline = False
+            , requestTimeoutSeconds = 30
+            , useLdd = False
+            , dataSourceFactory = Nothing
+            , manager = Nothing
+            , applicationInfo = Nothing
+            }
 
 -- | Set the SDK key used to authenticate with LaunchDarkly.
 configSetKey :: Text -> Config -> Config
@@ -128,6 +128,7 @@ configSetContextKeyLRUCapacity :: Natural -> Config -> Config
 configSetContextKeyLRUCapacity = mapConfig . setField @"contextKeyLRUCapacity"
 
 {-# DEPRECATED configSetUserKeyLRUCapacity "Use configSetContextKeyLRUCapacity instead" #-}
+
 -- | Deprecated historically named function which proxies to 'configSetContextKeyLRUCapacity'.
 configSetUserKeyLRUCapacity :: Natural -> Config -> Config
 configSetUserKeyLRUCapacity = configSetContextKeyLRUCapacity

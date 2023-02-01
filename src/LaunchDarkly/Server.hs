@@ -1,5 +1,4 @@
 -- | This module re-exports the User, Client, and Config modules.
-
 module LaunchDarkly.Server
     ( Config
     , makeConfig
@@ -55,9 +54,9 @@ module LaunchDarkly.Server
     , doubleVariationDetail
     , jsonVariation
     , jsonVariationDetail
-    , EvaluationDetail(..)
-    , EvaluationReason(..)
-    , EvalErrorKind(..)
+    , EvaluationDetail (..)
+    , EvaluationReason (..)
+    , EvalErrorKind (..)
     , allFlagsState
     , AllFlagsState
     , secureModeHash
@@ -65,7 +64,7 @@ module LaunchDarkly.Server
     , flushEvents
     , identify
     , track
-    , Status(..)
+    , Status (..)
     , getStatus
     -- Context related functions and types
     , Context
@@ -82,7 +81,7 @@ module LaunchDarkly.Server
     , getValueForReference
     ) where
 
-import LaunchDarkly.Server.User
-import LaunchDarkly.Server.Config
 import LaunchDarkly.Server.Client
+import LaunchDarkly.Server.Config
 import LaunchDarkly.Server.Context
+import LaunchDarkly.Server.User

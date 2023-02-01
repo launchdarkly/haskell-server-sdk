@@ -1,5 +1,4 @@
 -- | This module is for configuration of the user object.
-
 module LaunchDarkly.Server.User
     ( User
     , makeUser
@@ -17,30 +16,32 @@ module LaunchDarkly.Server.User
     , userSetPrivateAttributeNames
     ) where
 
-import Data.Aeson                        (Value)
-import Data.Generics.Product             (setField)
-import Data.Set                          (Set)
-import Data.Text                         (Text)
+import Data.Aeson (Value)
+import Data.Generics.Product (setField)
+import Data.Set (Set)
+import Data.Text (Text)
 
-import LaunchDarkly.Server.User.Internal (User(..), mapUser, UserI(..))
 import LaunchDarkly.AesonCompat (KeyMap)
+import LaunchDarkly.Server.User.Internal (User (..), UserI (..), mapUser)
 
 -- | Creates a new user identified by the given key.
 makeUser :: Text -> User
-makeUser key = User $ UserI
-    { key                   = key
-    , secondary             = mempty
-    , ip                    = mempty
-    , country               = mempty
-    , email                 = mempty
-    , firstName             = mempty
-    , lastName              = mempty
-    , avatar                = mempty
-    , name                  = mempty
-    , anonymous             = False
-    , custom                = mempty
-    , privateAttributeNames = mempty
-    }
+makeUser key =
+    User $
+        UserI
+            { key = key
+            , secondary = mempty
+            , ip = mempty
+            , country = mempty
+            , email = mempty
+            , firstName = mempty
+            , lastName = mempty
+            , avatar = mempty
+            , name = mempty
+            , anonymous = False
+            , custom = mempty
+            , privateAttributeNames = mempty
+            }
 
 -- | Set the primary key for a user.
 userSetKey :: Text -> User -> User

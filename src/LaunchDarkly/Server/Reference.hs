@@ -1,3 +1,6 @@
+{-# LANGUAGE NamedFieldPuns #-}
+{-# LANGUAGE ViewPatterns #-}
+
 -- | Reference is an attribute name or path expression identifying a value within a Context.
 --
 -- This type is mainly intended to be used internally by LaunchDarkly SDK and service code, where efficiency is a major
@@ -26,18 +29,18 @@
 --
 -- Suppose there is a context whose JSON implementation looks like this:
 --
---	{
---	  "kind": "user",
---	  "key": "value1",
---	  "address": {
---	    "street": {
---	      "line1": "value2",
---	      "line2": "value3"
---	    },
---	    "city": "value4"
---	  },
---	  "good/bad": "value5"
---	}
+-- 	{
+-- 	  "kind": "user",
+-- 	  "key": "value1",
+-- 	  "address": {
+-- 	    "street": {
+-- 	      "line1": "value2",
+-- 	      "line2": "value3"
+-- 	    },
+-- 	    "city": "value4"
+-- 	  },
+-- 	  "good/bad": "value5"
+-- 	}
 --
 -- The attribute references "key" and "/key" would both point to "value1".
 --
@@ -45,30 +48,26 @@
 --
 -- The attribute references "good/bad" and "/good~1bad" would both point to
 -- "value5".
---
-
-{-# LANGUAGE ViewPatterns #-}
-{-# LANGUAGE NamedFieldPuns #-}
-
 module LaunchDarkly.Server.Reference
-  ( Reference
-  , makeReference
-  , makeLiteral
-  , isValid
-  , getError
-  , getComponents
-  , getRawPath
-  )
+    ( Reference
+    , makeReference
+    , makeLiteral
+    , isValid
+    , getError
+    , getComponents
+    , getRawPath
+    )
 where
 
+import Data.Aeson (ToJSON, Value (String), toJSON)
 import Data.Text (Text)
 import qualified Data.Text as T
-import Data.Aeson (ToJSON, toJSON, Value (String))
 
 -- | data record for the Reference type.
-data Reference =
-  Valid { rawPath :: !Text, components :: ![Text] }
-  | Invalid { rawPath :: !Text, error :: !Text } deriving (Show, Eq)
+data Reference
+    = Valid {rawPath :: !Text, components :: ![Text]}
+    | Invalid {rawPath :: !Text, error :: !Text}
+    deriving (Show, Eq)
 
 instance Ord Reference where
     compare (Invalid _ _) (Valid _ _) = LT
@@ -81,7 +80,7 @@ instance Ord Reference where
         | otherwise = compare lhsRaw rhsRaw
 
 instance ToJSON Reference where
-  toJSON = String . rawPath
+    toJSON = String . rawPath
 
 -- | Creates a Reference from a string. For the supported syntax and examples, see comments on the
 -- "LaunchDarkly.Server.Reference" module.
@@ -91,11 +90,11 @@ instance ToJSON Reference where
 -- 'getError' will return an error and any SDK method that takes this Reference as a parameter will consider it
 -- invalid.
 makeReference :: Text -> Reference
-makeReference "" = Invalid { rawPath = "", error = "empty reference" }
-makeReference "/" = Invalid { rawPath = "/", error = "empty reference" }
-makeReference value@(T.stripPrefix "/" -> Nothing) = Valid { rawPath = value, components = [value] }
-makeReference value@(T.stripSuffix "/" -> Just _) = Invalid { rawPath = value, error = "trailing slash" }
-makeReference value = foldr addComponentToReference (Valid { rawPath = value, components = [] }) (T.splitOn "/" $ T.drop 1 value)
+makeReference "" = Invalid {rawPath = "", error = "empty reference"}
+makeReference "/" = Invalid {rawPath = "/", error = "empty reference"}
+makeReference value@(T.stripPrefix "/" -> Nothing) = Valid {rawPath = value, components = [value]}
+makeReference value@(T.stripSuffix "/" -> Just _) = Invalid {rawPath = value, error = "trailing slash"}
+makeReference value = foldr addComponentToReference (Valid {rawPath = value, components = []}) (T.splitOn "/" $ T.drop 1 value)
 
 -- | makeLiteral is similar to 'makeReference' except that it always interprets the string as a literal attribute name,
 -- never as a slash-delimited path expression. There is no escaping or unescaping, even if the name contains literal '/'
@@ -106,9 +105,9 @@ makeReference value = foldr addComponentToReference (Valid { rawPath = value, co
 -- equivalent to @makeReference "a/b"@ (since the syntax used by 'makeReference' treats the whole string as a literal as
 -- long as it does not start with a slash), or to @makeReference "/a~1b"@.
 makeLiteral :: Text -> Reference
-makeLiteral "" = Invalid { rawPath = "", error = "empty reference" }
-makeLiteral value@(T.stripPrefix "/" -> Nothing) = Valid { rawPath = value, components = [value] }
-makeLiteral value = Valid { rawPath = "/" <> (T.replace "/" "~1" $ T.replace "~" "~0" value), components = [value] }
+makeLiteral "" = Invalid {rawPath = "", error = "empty reference"}
+makeLiteral value@(T.stripPrefix "/" -> Nothing) = Valid {rawPath = value, components = [value]}
+makeLiteral value = Valid {rawPath = "/" <> (T.replace "/" "~1" $ T.replace "~" "~0" value), components = [value]}
 
 -- | Returns True for a valid Reference; False otherwise.
 --
@@ -127,7 +126,7 @@ isValid _ = True
 --
 -- See comments on the "LaunchDarkly.Server.Reference" module for more details of the attribute reference syntax.
 getError :: Reference -> Text
-getError (Invalid { error = e }) = e
+getError (Invalid {error = e}) = e
 getError _ = ""
 
 -- | Retrieves path components from the attribute reference.
@@ -138,7 +137,7 @@ getError _ = ""
 -- > makeReference "a" & getComponents    -- returns ["a"]
 -- > makeReference "/a/b" & getComponents -- returns ["a", "b"]
 getComponents :: Reference -> [Text]
-getComponents (Valid { components }) = components
+getComponents (Valid {components}) = components
 getComponents _ = []
 
 -- | Returns the attribute reference as a string, in the same format provided to 'makeReference'.
@@ -157,10 +156,10 @@ getRawPath = rawPath
 -- with the appropriate error description.
 addComponentToReference :: Text -> Reference -> Reference
 addComponentToReference _ r@(Invalid _ _) = r
-addComponentToReference "" (Valid { rawPath }) = Invalid { rawPath, error = "double slash" }
-addComponentToReference component (Valid { rawPath, components }) = case unescapePath component of
-  Left c -> Valid { rawPath, components = (c:components) }
-  Right e -> Invalid { rawPath, error = e }
+addComponentToReference "" (Valid {rawPath}) = Invalid {rawPath, error = "double slash"}
+addComponentToReference component (Valid {rawPath, components}) = case unescapePath component of
+    Left c -> Valid {rawPath, components = (c : components)}
+    Right e -> Invalid {rawPath, error = e}
 
 -- Performs unescaping of attribute reference path components:
 --
@@ -174,20 +173,20 @@ unescapePath :: Text -> Either Text Text
 unescapePath value@(T.isInfixOf "~" -> False) = Left value
 unescapePath (T.stripSuffix "~" -> Just _) = Right "invalid escape sequence"
 unescapePath value =
-  let component = T.foldl unescapeComponent (ComponentState { acc = [], valid = True, inEscape = False }) value
-  in case component of
-    ComponentState { acc = acc, valid = True } -> Left $ T.pack $ reverse acc
-    _ -> Right "invalid escape sequence"
+    let component = T.foldl unescapeComponent (ComponentState {acc = [], valid = True, inEscape = False}) value
+     in case component of
+            ComponentState {acc = acc, valid = True} -> Left $ T.pack $ reverse acc
+            _ -> Right "invalid escape sequence"
 
 -- Component state is a helper record to assist with unescaping a string.
 --
 -- When we are processing a string, we have to ensure that ~ is followed by 0 or 1. Any other value is invalid. To track
 -- this, we update this component state through a fold operation.
 data ComponentState = ComponentState
-  { acc :: ![Char] -- Container to hold the piece of the input that has been successfully parsed.
-  , valid :: !Bool -- Is the state currently valid?
-  , inEscape :: !Bool -- Was the last character seen a tilde?
-  }
+    { acc :: ![Char] -- Container to hold the piece of the input that has been successfully parsed.
+    , valid :: !Bool -- Is the state currently valid?
+    , inEscape :: !Bool -- Was the last character seen a tilde?
+    }
 
 -- Intended to be used in a foldl operation to apply unescaping rules as defined in 'unescapePath'.
 --
@@ -195,13 +194,13 @@ data ComponentState = ComponentState
 -- Calling functions should reverse accordingly.
 unescapeComponent :: ComponentState -> Char -> ComponentState
 -- Short circuit if we are already invalid
-unescapeComponent component@(ComponentState { valid = False }) _ = component
+unescapeComponent component@(ComponentState {valid = False}) _ = component
 -- Escape mode with a 0 or 1 means a valid escape sequence. We can append this to the state's accumulator.
-unescapeComponent component@(ComponentState { acc, inEscape = True }) '0' = component { acc = '~':acc, valid = True, inEscape = False }
-unescapeComponent component@(ComponentState { acc, inEscape = True }) '1' = component { acc = '/':acc, valid = True, inEscape = False }
+unescapeComponent component@(ComponentState {acc, inEscape = True}) '0' = component {acc = '~' : acc, valid = True, inEscape = False}
+unescapeComponent component@(ComponentState {acc, inEscape = True}) '1' = component {acc = '/' : acc, valid = True, inEscape = False}
 -- Any other character during an escape sequence isn't valid
-unescapeComponent component@(ComponentState { inEscape = True }) _ = component { valid = False }
+unescapeComponent component@(ComponentState {inEscape = True}) _ = component {valid = False}
 -- ~ means we should start escaping
-unescapeComponent component '~' = component { inEscape = True }
+unescapeComponent component '~' = component {inEscape = True}
 -- Regular characters can be added without issue
-unescapeComponent component@(ComponentState { acc }) c = component { acc = c:acc }
+unescapeComponent component@(ComponentState {acc}) c = component {acc = c : acc}

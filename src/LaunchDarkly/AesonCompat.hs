@@ -1,4 +1,5 @@
 {-# LANGUAGE CPP #-}
+
 module LaunchDarkly.AesonCompat where
 
 #if MIN_VERSION_aeson(2,0,0)
@@ -10,7 +11,7 @@ import qualified Data.Map.Strict as M
 #else
 import qualified Data.HashMap.Strict as HM
 #endif
-import qualified Data.Text                  as T
+import qualified Data.Text as T
 
 #if MIN_VERSION_aeson(2,0,0)
 type KeyMap = KeyMap.KeyMap

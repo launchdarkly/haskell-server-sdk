@@ -1,11 +1,11 @@
 module Spec.DataSource (allTests) where
 
-import           Test.HUnit
+import Data.Generics.Product (getField)
 import LaunchDarkly.Server.Client
 import LaunchDarkly.Server.Config
 import LaunchDarkly.Server.DataSource.Internal
-import Data.Generics.Product               (getField)
+import Test.HUnit
 
-allTests :: Test 
+allTests :: Test
 allTests =
     TestList []

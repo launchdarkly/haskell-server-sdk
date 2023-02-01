@@ -1,22 +1,22 @@
 module Spec.Redis (allTests) where
 
-import           Test.HUnit
-import           Data.Text                                (Text)
-import qualified Database.Redis as                        R
-import           Data.HashMap.Strict                      (HashMap)
-import qualified Data.HashMap.Strict as                   HM
-import           Control.Monad                            (void)
-import           GHC.Natural                              (Natural)
-import           GHC.Int                                  (Int64)
-import           System.Clock                             (TimeSpec(..))
+import Control.Monad (void)
+import Data.HashMap.Strict (HashMap)
+import qualified Data.HashMap.Strict as HM
+import Data.Text (Text)
+import qualified Database.Redis as R
+import GHC.Int (Int64)
+import GHC.Natural (Natural)
+import System.Clock (TimeSpec (..))
+import Test.HUnit
 
-import           Util.Features                            (makeTestFlag)
+import Util.Features (makeTestFlag)
 
-import           Spec.Store                               (testWithStore)
+import Spec.Store (testWithStore)
 
-import           LaunchDarkly.Server.Features             (Flag(..), VariationOrRollout(..))
-import           LaunchDarkly.Server.Store.Internal
-import           LaunchDarkly.Server.Store.Redis.Internal
+import LaunchDarkly.Server.Features (Flag (..), VariationOrRollout (..))
+import LaunchDarkly.Server.Store.Internal
+import LaunchDarkly.Server.Store.Redis.Internal
 
 freshConnection :: IO R.Connection
 freshConnection = do
@@ -42,8 +42,9 @@ prepareRedisStore ttl = do
     makeStoreIO (pure backend) $ TimeSpec ttl 0
 
 allTests :: Test
-allTests = TestList
-    [ testWithStore $ prepareRedisStore 10
-    , testWithStore $ prepareRedisStore 0
-    , testUpsertRace
-    ]
+allTests =
+    TestList
+        [ testWithStore $ prepareRedisStore 10
+        , testWithStore $ prepareRedisStore 0
+        , testUpsertRace
+        ]

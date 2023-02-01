@@ -135,7 +135,7 @@ jobs:
             - "/Users/distiller/.stack"
             - ".stack-work"
 
-  verify-cabal-is-updated:
+  verify-checkout-status:
     docker:
       - image: haskell:9.0.2
     working_directory: ~/sdk
@@ -145,11 +145,12 @@ jobs:
           name: Install dependencies
           command: apt-get update && apt-get install -y --no-install-recommends jq git
       - run:
-          name: Install hpack
+          name: Install hpack and fourmolu
           command: |
             cd ..
             cabal update
             cabal install hpack-0.35.1
+            cabal install fourmolu-0.10.1.0
             cd -
       - run:
           name: Verify the generated .cabal file is up-to-date
@@ -162,12 +163,15 @@ jobs:
               git status
               exit -1
             fi
+      - run:
+          name: Lint check
+          command: fourmolu --mode check src stores test
 
 workflows:
   version: 2
   build_and_test_all:
     jobs:
-      - verify-cabal-is-updated
+      - verify-checkout-status
       - build-test-linux:
           matrix:
               parameters:

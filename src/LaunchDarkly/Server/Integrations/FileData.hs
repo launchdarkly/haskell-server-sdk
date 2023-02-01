@@ -1,4 +1,5 @@
 {-# LANGUAGE BangPatterns #-}
+
 -- | Integration between the LaunchDarkly SDK and file data.
 --
 --  The file data source allows you to use local files as a source of feature flag state. This would
@@ -6,38 +7,38 @@
 --  without an actual LaunchDarkly connection. See 'dataSourceFactory' for details.
 --
 --  @since 2.2.1
---
 module LaunchDarkly.Server.Integrations.FileData
     ( dataSourceFactory
     )
-    where
+where
 
-import           LaunchDarkly.Server.DataSource.Internal (DataSourceFactory, DataSource(..), DataSourceUpdates(..))
-import qualified LaunchDarkly.Server.Features as F
-import           LaunchDarkly.Server.Client.Status
-import           LaunchDarkly.AesonCompat (KeyMap, mapWithKey)
-import           Data.Maybe (fromMaybe)
+import Control.Applicative ((<|>))
+import Data.Aeson (FromJSON, Value, decode)
 import qualified Data.ByteString.Lazy as BSL
-import           Data.HashSet (HashSet)
-import           Data.Text (Text)
-import           GHC.Generics (Generic)
-import           Data.Aeson (Value, FromJSON, decode)
-import           Data.IORef (newIORef, readIORef, writeIORef)
-import           GHC.Natural (Natural)
-import           Data.Generics.Product (getField)
+import Data.Generics.Product (getField)
+import Data.HashSet (HashSet)
+import Data.IORef (newIORef, readIORef, writeIORef)
+import Data.Maybe (fromMaybe)
+import Data.Text (Text)
 import qualified Data.Yaml as Yaml
-import           Control.Applicative ((<|>))
+import GHC.Generics (Generic)
+import GHC.Natural (Natural)
+import LaunchDarkly.AesonCompat (KeyMap, mapWithKey)
+import LaunchDarkly.Server.Client.Status
+import LaunchDarkly.Server.DataSource.Internal (DataSource (..), DataSourceFactory, DataSourceUpdates (..))
+import qualified LaunchDarkly.Server.Features as F
 
 data FileFlag = FileFlag
-    { version                :: Maybe Natural
-    , on                     :: Maybe Bool
-    , targets                :: Maybe [F.Target]
-    , contextTargets         :: Maybe [F.Target]
-    , rules                  :: Maybe [F.Rule]
-    , fallthrough            :: Maybe F.VariationOrRollout
-    , offVariation           :: Maybe Integer
-    , variations             :: ![Value]
-    } deriving (Generic, FromJSON, Show, Eq)
+    { version :: Maybe Natural
+    , on :: Maybe Bool
+    , targets :: Maybe [F.Target]
+    , contextTargets :: Maybe [F.Target]
+    , rules :: Maybe [F.Rule]
+    , fallthrough :: Maybe F.VariationOrRollout
+    , offVariation :: Maybe Integer
+    , variations :: ![Value]
+    }
+    deriving (Generic, FromJSON, Show, Eq)
 
 expandSimpleFlag :: Value -> FileFlag
 expandSimpleFlag value =
@@ -54,23 +55,24 @@ expandSimpleFlag value =
 
 fromFileFlag :: Text -> FileFlag -> F.Flag
 fromFileFlag key fileFlag =
-    F.Flag{ F.key = key
-          , F.version = fromMaybe 1 $ getField @"version" fileFlag
-          , F.on = fromMaybe True $ on fileFlag
-          , F.trackEvents = False
-          , F.trackEventsFallthrough = False
-          , F.deleted = False
-          , F.prerequisites = []
-          , F.salt = ""
-          , F.targets = fromMaybe [] $ targets fileFlag
-          , F.contextTargets = fromMaybe [] $ contextTargets fileFlag
-          , F.rules = fromMaybe [] $ getField @"rules" fileFlag
-          , F.fallthrough = fromMaybe noFallthrough $ fallthrough fileFlag
-          , F.offVariation = offVariation fileFlag
-          , F.variations = variations fileFlag
-          , F.debugEventsUntilDate = Nothing
-          , F.clientSideAvailability = F.ClientSideAvailability False False False
-          }
+    F.Flag
+        { F.key = key
+        , F.version = fromMaybe 1 $ getField @"version" fileFlag
+        , F.on = fromMaybe True $ on fileFlag
+        , F.trackEvents = False
+        , F.trackEventsFallthrough = False
+        , F.deleted = False
+        , F.prerequisites = []
+        , F.salt = ""
+        , F.targets = fromMaybe [] $ targets fileFlag
+        , F.contextTargets = fromMaybe [] $ contextTargets fileFlag
+        , F.rules = fromMaybe [] $ getField @"rules" fileFlag
+        , F.fallthrough = fromMaybe noFallthrough $ fallthrough fileFlag
+        , F.offVariation = offVariation fileFlag
+        , F.variations = variations fileFlag
+        , F.debugEventsUntilDate = Nothing
+        , F.clientSideAvailability = F.ClientSideAvailability False False False
+        }
 
 noFallthrough :: F.VariationOrRollout
 noFallthrough =
@@ -81,28 +83,31 @@ data FileSegment = FileSegment
     , includedContexts :: Maybe [F.SegmentTarget]
     , excluded :: Maybe (HashSet Text)
     , excludedContexts :: Maybe [F.SegmentTarget]
-    , rules    :: Maybe [F.SegmentRule]
-    , version  :: Maybe Natural
-    } deriving (Generic, FromJSON, Show, Eq)
+    , rules :: Maybe [F.SegmentRule]
+    , version :: Maybe Natural
+    }
+    deriving (Generic, FromJSON, Show, Eq)
 
 fromFileSegment :: Text -> FileSegment -> F.Segment
 fromFileSegment key fileSegment =
-    F.Segment{ F.key = key
-             , F.version = fromMaybe 1 $ getField @"version" fileSegment
-             , F.included = fromMaybe mempty $ included fileSegment
-             , F.includedContexts = fromMaybe mempty $ includedContexts fileSegment
-             , F.excluded = fromMaybe mempty $ excluded fileSegment
-             , F.excludedContexts = fromMaybe mempty $ excludedContexts fileSegment
-             , F.salt = ""
-             , F.rules = fromMaybe [] $ getField @"rules" fileSegment
-             , F.deleted = False
-             }
+    F.Segment
+        { F.key = key
+        , F.version = fromMaybe 1 $ getField @"version" fileSegment
+        , F.included = fromMaybe mempty $ included fileSegment
+        , F.includedContexts = fromMaybe mempty $ includedContexts fileSegment
+        , F.excluded = fromMaybe mempty $ excluded fileSegment
+        , F.excludedContexts = fromMaybe mempty $ excludedContexts fileSegment
+        , F.salt = ""
+        , F.rules = fromMaybe [] $ getField @"rules" fileSegment
+        , F.deleted = False
+        }
 
 data FileBody = FileBody
-    { flags      :: Maybe (KeyMap FileFlag)
+    { flags :: Maybe (KeyMap FileFlag)
     , flagValues :: Maybe (KeyMap Value)
-    , segments   :: Maybe (KeyMap FileSegment)
-    } deriving (Generic, Show, FromJSON)
+    , segments :: Maybe (KeyMap FileSegment)
+    }
+    deriving (Generic, Show, FromJSON)
 
 instance Semigroup FileBody where
     f1 <> f2 =
@@ -225,14 +230,14 @@ dataSourceFactory sources _clientContext dataSourceUpdates = do
             dataSourceUpdatesSetStatus dataSourceUpdates Initialized
             writeIORef inited True
         dataSourceStop = pure ()
-    pure $ DataSource{..}
+    pure $ DataSource {..}
 
 loadFile :: FilePath -> IO FileBody
 loadFile filePath = do
     file <- BSL.readFile filePath
     let mDecodedFile = decode file <|> Yaml.decodeThrow (BSL.toStrict file)
     case mDecodedFile of
-      Just !fileBody ->
-          pure fileBody
-      Nothing ->
-          pure mempty
+        Just !fileBody ->
+            pure fileBody
+        Nothing ->
+            pure mempty
