@@ -21,7 +21,7 @@ import Network.HTTP.Client (BodyReader, HttpException, Manager, Request (..), Re
 import Network.HTTP.Types.Header (hDate)
 import Network.HTTP.Types.Status (forbidden403, unauthorized401)
 
-import LaunchDarkly.Server.Client.Internal (ClientI, Status (Unauthorized), setStatus)
+import LaunchDarkly.Server.Client.Internal (Client, Status (Unauthorized), setStatus)
 import LaunchDarkly.Server.DataSource.Internal (DataSourceUpdates (..))
 import Network.HTTP.Types (ok200)
 
@@ -41,7 +41,7 @@ handleUnauthorized dataSourceUpdates = handle $ \UnauthorizedE -> do
     $(logError) "SDK key is unauthorized"
     liftIO $ dataSourceUpdatesSetStatus dataSourceUpdates Unauthorized
 
-tryAuthorized :: (MonadIO m, MonadLogger m, MonadCatch m) => ClientI -> m a -> m ()
+tryAuthorized :: (MonadIO m, MonadLogger m, MonadCatch m) => Client -> m a -> m ()
 tryAuthorized client operation =
     try operation >>= \case
         (Left UnauthorizedE) -> do

@@ -29,8 +29,9 @@ import GHC.Natural (Natural)
 import Data.Either.Extra (mapRight)
 import Data.Foldable (foldlM)
 import Data.List.Extra (firstJust)
-import LaunchDarkly.Server.Client.Internal (ClientI, Status (Initialized), getStatusI)
-import LaunchDarkly.Server.Context (Context (..), getIndividualContext, getKey, getKinds, getValueForReference)
+import LaunchDarkly.Server.Client.Internal (Client, Status (Initialized), getStatusI)
+import LaunchDarkly.Server.Context (getIndividualContext, getValueForReference)
+import LaunchDarkly.Server.Context.Internal (Context (Invalid), getKey, getKinds)
 import LaunchDarkly.Server.Details (EvalErrorKind (..), EvaluationDetail (..), EvaluationReason (..))
 import LaunchDarkly.Server.Events (EvalEvent, newSuccessfulEvalEvent, newUnknownFlagEvent, processEvalEvents)
 import LaunchDarkly.Server.Features (Clause, Flag, Prerequisite, RolloutKind (RolloutKindExperiment), Rule, Segment (..), SegmentRule, SegmentTarget (..), Target, VariationOrRollout)
@@ -49,7 +50,7 @@ setValue x v = x {value = v}
 isError :: EvaluationReason -> Bool
 isError reason = case reason of (EvaluationReasonError _) -> True; _ -> False
 
-evaluateTyped :: ClientI -> Text -> Context -> a -> (a -> Value) -> Bool -> (Value -> Maybe a) -> IO (EvaluationDetail a)
+evaluateTyped :: Client -> Text -> Context -> a -> (a -> Value) -> Bool -> (Value -> Maybe a) -> IO (EvaluationDetail a)
 evaluateTyped client key context fallback wrap includeReason convert =
     getStatusI client >>= \status ->
         if status /= Initialized
@@ -62,7 +63,7 @@ evaluateTyped client key context fallback wrap includeReason convert =
                             (setValue detail)
                             (convert $ getField @"value" detail)
 
-evaluateInternalClient :: ClientI -> Text -> Context -> Value -> Bool -> IO (EvaluationDetail Value)
+evaluateInternalClient :: Client -> Text -> Context -> Value -> Bool -> IO (EvaluationDetail Value)
 evaluateInternalClient _ _ (Invalid _) fallback _ = pure $ errorDefault EvalErrorInvalidContext fallback
 evaluateInternalClient client key context fallback includeReason = do
     (detail, unknown, events) <-

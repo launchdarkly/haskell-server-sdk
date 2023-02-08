@@ -20,7 +20,7 @@ import Network.HTTP.Types.Status (status400, status408, status429, status500)
 import System.Random (newStdGen, random)
 import System.Timeout (timeout)
 
-import LaunchDarkly.Server.Client.Internal (ClientI, Status (ShuttingDown))
+import LaunchDarkly.Server.Client.Internal (Client, Status (ShuttingDown))
 import LaunchDarkly.Server.Config.ClientContext
 import LaunchDarkly.Server.Config.HttpConfiguration (prepareRequest)
 import LaunchDarkly.Server.Events (EventState, processSummary)
@@ -57,7 +57,7 @@ setEventHeaders request =
 updateLastKnownServerTime :: EventState -> Integer -> IO ()
 updateLastKnownServerTime state serverTime = modifyMVar_ (getField @"lastKnownServerTime" state) (\lastKnown -> pure $ max serverTime lastKnown)
 
-eventThread :: (MonadIO m, MonadLogger m, MonadMask m) => Manager -> ClientI -> ClientContext -> m ()
+eventThread :: (MonadIO m, MonadLogger m, MonadMask m) => Manager -> Client -> ClientContext -> m ()
 eventThread manager client clientContext = do
     let state = getField @"events" client; config = getField @"config" client; httpConfig = httpConfiguration clientContext
     rngRef <- liftIO $ newStdGen >>= newIORef

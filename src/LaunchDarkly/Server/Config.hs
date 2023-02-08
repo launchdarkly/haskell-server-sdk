@@ -39,7 +39,7 @@ import Data.Text (Text, dropWhileEnd)
 import GHC.Natural (Natural)
 import Network.HTTP.Client (Manager)
 
-import LaunchDarkly.Server.Config.Internal (ApplicationInfo, Config (..), ConfigI (..), makeApplicationInfo, mapConfig, withApplicationValue)
+import LaunchDarkly.Server.Config.Internal (ApplicationInfo, Config (..), makeApplicationInfo, withApplicationValue)
 import LaunchDarkly.Server.DataSource.Internal (DataSourceFactory)
 import LaunchDarkly.Server.Reference (Reference)
 import LaunchDarkly.Server.Store (StoreInterface)
@@ -47,69 +47,68 @@ import LaunchDarkly.Server.Store (StoreInterface)
 -- | Create a default configuration from a given SDK key.
 makeConfig :: Text -> Config
 makeConfig key =
-    Config $
-        ConfigI
-            { key = key
-            , baseURI = "https://app.launchdarkly.com"
-            , streamURI = "https://stream.launchdarkly.com"
-            , eventsURI = "https://events.launchdarkly.com"
-            , storeBackend = Nothing
-            , storeTTLSeconds = 10
-            , streaming = True
-            , initialRetryDelay = 1_000
-            , allAttributesPrivate = False
-            , privateAttributeNames = mempty
-            , flushIntervalSeconds = 5
-            , pollIntervalSeconds = 30
-            , contextKeyLRUCapacity = 1_000
-            , eventsCapacity = 10_000
-            , logger = runStdoutLoggingT
-            , sendEvents = True
-            , offline = False
-            , requestTimeoutSeconds = 30
-            , useLdd = False
-            , dataSourceFactory = Nothing
-            , manager = Nothing
-            , applicationInfo = Nothing
-            }
+    Config
+        { key = key
+        , baseURI = "https://app.launchdarkly.com"
+        , streamURI = "https://stream.launchdarkly.com"
+        , eventsURI = "https://events.launchdarkly.com"
+        , storeBackend = Nothing
+        , storeTTLSeconds = 10
+        , streaming = True
+        , initialRetryDelay = 1_000
+        , allAttributesPrivate = False
+        , privateAttributeNames = mempty
+        , flushIntervalSeconds = 5
+        , pollIntervalSeconds = 30
+        , contextKeyLRUCapacity = 1_000
+        , eventsCapacity = 10_000
+        , logger = runStdoutLoggingT
+        , sendEvents = True
+        , offline = False
+        , requestTimeoutSeconds = 30
+        , useLdd = False
+        , dataSourceFactory = Nothing
+        , manager = Nothing
+        , applicationInfo = Nothing
+        }
 
 -- | Set the SDK key used to authenticate with LaunchDarkly.
 configSetKey :: Text -> Config -> Config
-configSetKey = mapConfig . setField @"key"
+configSetKey = setField @"key"
 
 -- |
 -- The base URI of the main LaunchDarkly service. This should not normally be
 -- changed except for testing.
 configSetBaseURI :: Text -> Config -> Config
-configSetBaseURI = mapConfig . setField @"baseURI" . dropWhileEnd ((==) '/')
+configSetBaseURI = setField @"baseURI" . dropWhileEnd ((==) '/')
 
 -- |
 -- The base URI of the LaunchDarkly streaming service. This should not
 -- normally be changed except for testing.
 configSetStreamURI :: Text -> Config -> Config
-configSetStreamURI = mapConfig . setField @"streamURI" . dropWhileEnd ((==) '/')
+configSetStreamURI = setField @"streamURI" . dropWhileEnd ((==) '/')
 
 -- |
 -- The base URI of the LaunchDarkly service that accepts analytics events.
 -- This should not normally be changed except for testing.
 configSetEventsURI :: Text -> Config -> Config
-configSetEventsURI = mapConfig . setField @"eventsURI" . dropWhileEnd ((==) '/')
+configSetEventsURI = setField @"eventsURI" . dropWhileEnd ((==) '/')
 
 -- | Configures a handle to an external store such as Redis.
 configSetStoreBackend :: Maybe StoreInterface -> Config -> Config
-configSetStoreBackend = mapConfig . setField @"storeBackend"
+configSetStoreBackend = setField @"storeBackend"
 
 -- |
 -- When a store backend is configured, control how long values should be
 -- cached in memory before going back to the backend.
 configSetStoreTTL :: Natural -> Config -> Config
-configSetStoreTTL = mapConfig . setField @"storeTTLSeconds"
+configSetStoreTTL = setField @"storeTTLSeconds"
 
 -- |
 -- Sets whether streaming mode should be enabled. By default, streaming is
 -- enabled. It should only be disabled on the advice of LaunchDarkly support.
 configSetStreaming :: Bool -> Config -> Config
-configSetStreaming = mapConfig . setField @"streaming"
+configSetStreaming = setField @"streaming"
 
 -- |
 -- The initial delay in milliseconds before reconnecting after an error in the
@@ -120,38 +119,38 @@ configSetStreaming = mapConfig . setField @"streaming"
 configSetInitialRetryDelay :: Int -> Config -> Config
 configSetInitialRetryDelay seconds config
     | seconds <= 0 = config
-    | otherwise = mapConfig (setField @"initialRetryDelay" seconds) config
+    | otherwise = setField @"initialRetryDelay" seconds config
 
 -- |
 -- Sets whether or not all context attributes (other than the key) should be
 -- hidden from LaunchDarkly. If this is true, all context attribute values will
 -- be private, not just the attributes specified in PrivateAttributeNames.
 configSetAllAttributesPrivate :: Bool -> Config -> Config
-configSetAllAttributesPrivate = mapConfig . setField @"allAttributesPrivate"
+configSetAllAttributesPrivate = setField @"allAttributesPrivate"
 
 -- |
 -- Marks a set of context attribute names private. Any contexts sent to
 -- LaunchDarkly with this configuration active will have attributes with these
 -- names removed.
 configSetPrivateAttributeNames :: Set Reference -> Config -> Config
-configSetPrivateAttributeNames = mapConfig . setField @"privateAttributeNames"
+configSetPrivateAttributeNames = setField @"privateAttributeNames"
 
 -- |
 -- The time between flushes of the event buffer. Decreasing the flush
 -- interval means that the event buffer is less likely to reach capacity.
 configSetFlushIntervalSeconds :: Natural -> Config -> Config
-configSetFlushIntervalSeconds = mapConfig . setField @"flushIntervalSeconds"
+configSetFlushIntervalSeconds = setField @"flushIntervalSeconds"
 
 -- | The polling interval (when streaming is disabled).
 configSetPollIntervalSeconds :: Natural -> Config -> Config
-configSetPollIntervalSeconds = mapConfig . setField @"pollIntervalSeconds"
+configSetPollIntervalSeconds = setField @"pollIntervalSeconds"
 
 -- |
 -- The number of context keys that the event processor can remember at any
 -- one time, so that duplicate context details will not be sent in analytics
 -- events.
 configSetContextKeyLRUCapacity :: Natural -> Config -> Config
-configSetContextKeyLRUCapacity = mapConfig . setField @"contextKeyLRUCapacity"
+configSetContextKeyLRUCapacity = setField @"contextKeyLRUCapacity"
 
 {-# DEPRECATED configSetUserKeyLRUCapacity "Use configSetContextKeyLRUCapacity instead" #-}
 
@@ -166,31 +165,31 @@ configSetUserKeyLRUCapacity = configSetContextKeyLRUCapacity
 -- events in memory before flushing. If the capacity is exceeded before the
 -- buffer is flushed, events will be discarded.
 configSetEventsCapacity :: Natural -> Config -> Config
-configSetEventsCapacity = mapConfig . setField @"eventsCapacity"
+configSetEventsCapacity = setField @"eventsCapacity"
 
 -- | Set the logger to be used by the client.
 configSetLogger :: (LoggingT IO () -> IO ()) -> Config -> Config
-configSetLogger = mapConfig . setField @"logger"
+configSetLogger = setField @"logger"
 
 -- |
 -- Sets whether to send analytics events back to LaunchDarkly. By default,
 -- the client will send events. This differs from Offline in that it only
 -- affects sending events, not streaming or polling for events from the server.
 configSetSendEvents :: Bool -> Config -> Config
-configSetSendEvents = mapConfig . setField @"sendEvents"
+configSetSendEvents = setField @"sendEvents"
 
 -- |
 -- Sets whether this client is offline. An offline client will not make any
 -- network connections to LaunchDarkly, and will return default values for all
 -- feature flags.
 configSetOffline :: Bool -> Config -> Config
-configSetOffline = mapConfig . setField @"offline"
+configSetOffline = setField @"offline"
 
 -- |
 -- Sets how long an the HTTP client should wait before a response is
 -- returned.
 configSetRequestTimeoutSeconds :: Natural -> Config -> Config
-configSetRequestTimeoutSeconds = mapConfig . setField @"requestTimeoutSeconds"
+configSetRequestTimeoutSeconds = setField @"requestTimeoutSeconds"
 
 -- |
 -- Sets whether this client should use the LaunchDarkly Relay Proxy in daemon
@@ -198,19 +197,19 @@ configSetRequestTimeoutSeconds = mapConfig . setField @"requestTimeoutSeconds"
 -- polling API, but reads data only from the feature store. See:
 -- https://docs.launchdarkly.com/home/relay-proxy
 configSetUseLdd :: Bool -> Config -> Config
-configSetUseLdd = mapConfig . setField @"useLdd"
+configSetUseLdd = setField @"useLdd"
 
 -- |
 -- Sets a data source to use instead of the default network based data source
 -- see "LaunchDarkly.Server.Integrations.FileData"
 configSetDataSourceFactory :: Maybe DataSourceFactory -> Config -> Config
-configSetDataSourceFactory = mapConfig . setField @"dataSourceFactory"
+configSetDataSourceFactory = setField @"dataSourceFactory"
 
 -- |
 -- Sets the 'Manager' to use with the client. If not set explicitly a new
 -- 'Manager' will be created when creating the client.
 configSetManager :: Manager -> Config -> Config
-configSetManager = mapConfig . setField @"manager" . Just
+configSetManager = setField @"manager" . Just
 
 -- |
 -- An object that allows configuration of application metadata.
@@ -221,4 +220,4 @@ configSetManager = mapConfig . setField @"manager" . Just
 -- If you want to set non-default values for any of these fields, provide the
 -- appropriately configured dict to the 'Config' object.
 configSetApplicationInfo :: ApplicationInfo -> Config -> Config
-configSetApplicationInfo = mapConfig . setField @"applicationInfo" . Just
+configSetApplicationInfo = setField @"applicationInfo" . Just

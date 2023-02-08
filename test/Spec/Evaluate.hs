@@ -18,8 +18,6 @@ import LaunchDarkly.Server.Features
 import LaunchDarkly.Server.Operators
 import LaunchDarkly.Server.Store
 import LaunchDarkly.Server.Store.Internal
-import LaunchDarkly.Server.User
-import LaunchDarkly.Server.User.Internal
 
 import LaunchDarkly.AesonCompat (fromList)
 import LaunchDarkly.Server.Reference (makeLiteral, makeReference)
@@ -118,8 +116,8 @@ testFlagReturnsFallthroughIfFlagIsOnAndThereAreNoRules = TestCase $ do
 
 testFlagReturnsErrorIfFallthroughHasTooHighVariation :: Test
 testFlagReturnsErrorIfFallthroughHasTooHighVariation = TestCase $ do
-    client@(Client clientI) <- makeTestClient
-    insertFlag (getField @"store" clientI) flag >>= (pure () @=?)
+    client <- makeTestClient
+    insertFlag (getField @"store" client) flag >>= (pure () @=?)
     stringVariationDetail client "a" (makeContext "b" "user") "default" >>= (expected @=?)
   where
     flag =
@@ -146,8 +144,8 @@ testFlagReturnsErrorIfFallthroughHasTooHighVariation = TestCase $ do
 
 testFlagReturnsErrorIfFallthroughHasNeitherVariationNorRollout :: Test
 testFlagReturnsErrorIfFallthroughHasNeitherVariationNorRollout = TestCase $ do
-    client@(Client clientI) <- makeTestClient
-    insertFlag (getField @"store" clientI) flag >>= (pure () @=?)
+    client <- makeTestClient
+    insertFlag (getField @"store" client) flag >>= (pure () @=?)
     stringVariationDetail client "a" (makeContext "b" "user") "default" >>= (expected @=?)
   where
     flag =
@@ -170,8 +168,8 @@ testFlagReturnsErrorIfFallthroughHasNeitherVariationNorRollout = TestCase $ do
 
 testFlagReturnsErrorIfFallthroughHasEmptyRolloutVariationList :: Test
 testFlagReturnsErrorIfFallthroughHasEmptyRolloutVariationList = TestCase $ do
-    client@(Client clientI) <- makeTestClient
-    insertFlag (getField @"store" clientI) flag >>= (pure () @=?)
+    client <- makeTestClient
+    insertFlag (getField @"store" client) flag >>= (pure () @=?)
     stringVariationDetail client "a" (makeContext "b" "user") "default" >>= (expected @=?)
   where
     flag =
@@ -202,9 +200,9 @@ testFlagReturnsErrorIfFallthroughHasEmptyRolloutVariationList = TestCase $ do
 
 testFlagReturnsErrorIfThereIsAPrerequisiteCycle :: Test
 testFlagReturnsErrorIfThereIsAPrerequisiteCycle = TestCase $ do
-    client@(Client clientI) <- makeTestClient
-    insertFlag (getField @"store" clientI) flag0 >>= (pure () @=?)
-    insertFlag (getField @"store" clientI) flag1 >>= (pure () @=?)
+    client <- makeTestClient
+    insertFlag (getField @"store" client) flag0 >>= (pure () @=?)
+    insertFlag (getField @"store" client) flag1 >>= (pure () @=?)
     stringVariationDetail client "feature0" (makeContext "b" "user") "default" >>= (expected @=?)
   where
     flag0 =
@@ -250,8 +248,8 @@ testFlagReturnsErrorIfThereIsAPrerequisiteCycle = TestCase $ do
 
 testFlagReturnsOffVariationIfPrerequisiteIsNotFound :: Test
 testFlagReturnsOffVariationIfPrerequisiteIsNotFound = TestCase $ do
-    client@(Client clientI) <- makeTestClient
-    insertFlag (getField @"store" clientI) flag >>= (pure () @=?)
+    client <- makeTestClient
+    insertFlag (getField @"store" client) flag >>= (pure () @=?)
     stringVariationDetail client "a" (makeContext "b" "user") "default" >>= (expected @=?)
   where
     flag =
@@ -280,9 +278,9 @@ testFlagReturnsOffVariationIfPrerequisiteIsNotFound = TestCase $ do
 
 testFlagReturnsOffVariationIfPrerequisiteIsOff :: Test
 testFlagReturnsOffVariationIfPrerequisiteIsOff = TestCase $ do
-    client@(Client clientI) <- makeTestClient
-    insertFlag (getField @"store" clientI) flag0 >>= (pure () @=?)
-    insertFlag (getField @"store" clientI) flag1 >>= (pure () @=?)
+    client <- makeTestClient
+    insertFlag (getField @"store" client) flag0 >>= (pure () @=?)
+    insertFlag (getField @"store" client) flag1 >>= (pure () @=?)
     stringVariationDetail client "feature0" (makeContext "b" "user") "default" >>= (expected @=?)
   where
     flag0 =
@@ -322,9 +320,9 @@ testFlagReturnsOffVariationIfPrerequisiteIsOff = TestCase $ do
 
 testFlagReturnsOffVariationIfPrerequisiteIsNotMet :: Test
 testFlagReturnsOffVariationIfPrerequisiteIsNotMet = TestCase $ do
-    client@(Client clientI) <- makeTestClient
-    insertFlag (getField @"store" clientI) flag0 >>= (pure () @=?)
-    insertFlag (getField @"store" clientI) flag1 >>= (pure () @=?)
+    client <- makeTestClient
+    insertFlag (getField @"store" client) flag0 >>= (pure () @=?)
+    insertFlag (getField @"store" client) flag1 >>= (pure () @=?)
     stringVariationDetail client "feature0" (makeContext "b" "user") "default" >>= (expected @=?)
   where
     flag0 =
@@ -364,9 +362,9 @@ testFlagReturnsOffVariationIfPrerequisiteIsNotMet = TestCase $ do
 
 testFlagReturnsFallthroughVariationIfPrerequisiteIsMetAndThereAreNoRules :: Test
 testFlagReturnsFallthroughVariationIfPrerequisiteIsMetAndThereAreNoRules = TestCase $ do
-    client@(Client clientI) <- makeTestClient
-    insertFlag (getField @"store" clientI) flag0 >>= (pure () @=?)
-    insertFlag (getField @"store" clientI) flag1 >>= (pure () @=?)
+    client <- makeTestClient
+    insertFlag (getField @"store" client) flag0 >>= (pure () @=?)
+    insertFlag (getField @"store" client) flag1 >>= (pure () @=?)
     stringVariationDetail client "feature0" (makeContext "b" "user") "default" >>= (expected @=?)
   where
     flag0 =
@@ -409,8 +407,8 @@ testFlagReturnsFallthroughVariationIfPrerequisiteIsMetAndThereAreNoRules = TestC
 
 testFlagCanTargetUserKeys :: Test
 testFlagCanTargetUserKeys = TestCase $ do
-    client@(Client clientI) <- makeTestClient
-    insertFlag (getField @"store" clientI) flag >>= (pure () @=?)
+    client <- makeTestClient
+    insertFlag (getField @"store" client) flag >>= (pure () @=?)
     boolVariationDetail client "feature0" (makeContext "user-key" "user") False >>= (expected @=?)
   where
     flag :: Flag =
@@ -433,8 +431,8 @@ testFlagCanTargetUserKeys = TestCase $ do
 
 testFlagCanTargetContextKeys :: Test
 testFlagCanTargetContextKeys = TestCase $ do
-    client@(Client clientI) <- makeTestClient
-    insertFlag (getField @"store" clientI) flag >>= (pure () @=?)
+    client <- makeTestClient
+    insertFlag (getField @"store" client) flag >>= (pure () @=?)
     boolVariationDetail client "feature0" (makeContext "match-key" "user") False >>= (fallthrough @=?)
     boolVariationDetail client "feature0" (makeContext "match-key" "org") False >>= (match @=?)
   where
@@ -464,8 +462,8 @@ testFlagCanTargetContextKeys = TestCase $ do
 
 testFlagCanTargetContextFallsbackToUserTargets :: Test
 testFlagCanTargetContextFallsbackToUserTargets = TestCase $ do
-    client@(Client clientI) <- makeTestClient
-    insertFlag (getField @"store" clientI) flag >>= (pure () @=?)
+    client <- makeTestClient
+    insertFlag (getField @"store" client) flag >>= (pure () @=?)
     boolVariationDetail client "feature0" (makeContext "match-key" "user") False >>= (match @=?)
   where
     flag :: Flag =
@@ -489,8 +487,8 @@ testFlagCanTargetContextFallsbackToUserTargets = TestCase $ do
 
 testFlagChecksTargetsBeforeRules :: Test
 testFlagChecksTargetsBeforeRules = TestCase $ do
-    client@(Client clientI) <- makeTestClient
-    insertFlag (getField @"store" clientI) flag >>= (pure () @=?)
+    client <- makeTestClient
+    insertFlag (getField @"store" client) flag >>= (pure () @=?)
     boolVariationDetail client "feature0" (makeContext "match-key" "user") False >>= (match @=?)
   where
     flag :: Flag =
@@ -769,9 +767,9 @@ testClauseCanMatchCustomAttributeReference = TestCase $ do
 
 makeTestClient :: IO Client
 makeTestClient = do
-    (Client client) <- makeClient $ (makeConfig "") & configSetOffline True
+    client <- makeClient $ (makeConfig "") & configSetOffline True
     initializeStore (getField @"store" client) mempty mempty
-    pure (Client client)
+    pure client
 
 testEvaluatingUnknownFlagReturnsDefault :: Test
 testEvaluatingUnknownFlagReturnsDefault = TestCase $ do
@@ -792,8 +790,8 @@ testEvaluatingUnknownFlagReturnsDefaultWithDetail = TestCase $ do
 
 testDefaultIsReturnedIfFlagEvaluatesToNil :: Test
 testDefaultIsReturnedIfFlagEvaluatesToNil = TestCase $ do
-    client@(Client clientI) <- makeTestClient
-    insertFlag (getField @"store" clientI) flag >>= (pure () @=?)
+    client <- makeTestClient
+    insertFlag (getField @"store" client) flag >>= (pure () @=?)
     boolVariation client "a" (makeContext "b" "user") False >>= (False @=?)
   where
     flag =
@@ -804,8 +802,8 @@ testDefaultIsReturnedIfFlagEvaluatesToNil = TestCase $ do
 
 testDefaultIsReturnedIfFlagEvaluatesToNilWithDetail :: Test
 testDefaultIsReturnedIfFlagEvaluatesToNilWithDetail = TestCase $ do
-    client@(Client clientI) <- makeTestClient
-    insertFlag (getField @"store" clientI) flag >>= (pure () @=?)
+    client <- makeTestClient
+    insertFlag (getField @"store" client) flag >>= (pure () @=?)
     boolVariationDetail client "a" (makeContext "b" "user") False >>= (expected @=?)
   where
     flag =

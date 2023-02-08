@@ -44,7 +44,6 @@ library
       LaunchDarkly.Server.Config
       LaunchDarkly.Server.Context
       LaunchDarkly.Server.Reference
-      LaunchDarkly.Server.User
       LaunchDarkly.Server.Store
       LaunchDarkly.Server.Integrations.FileData
       LaunchDarkly.Server.Integrations.TestData
@@ -54,6 +53,7 @@ library
       LaunchDarkly.Server.Config.ClientContext
       LaunchDarkly.Server.Config.HttpConfiguration
       LaunchDarkly.Server.Config.Internal
+      LaunchDarkly.Server.Context.Internal
       LaunchDarkly.Server.DataSource.Internal
       LaunchDarkly.Server.Details
       LaunchDarkly.Server.Evaluate
@@ -66,7 +66,6 @@ library
       LaunchDarkly.Server.Network.Streaming
       LaunchDarkly.Server.Operators
       LaunchDarkly.Server.Store.Internal
-      LaunchDarkly.Server.User.Internal
       Paths_launchdarkly_server_sdk
   hs-source-dirs:
       src
@@ -150,7 +149,6 @@ test-suite haskell-server-sdk-test
       Spec.Store
       Spec.StoreInterface
       Spec.Streaming
-      Spec.User
       Util.Features
       LaunchDarkly.AesonCompat
       LaunchDarkly.Server
@@ -162,6 +160,7 @@ test-suite haskell-server-sdk-test
       LaunchDarkly.Server.Config.HttpConfiguration
       LaunchDarkly.Server.Config.Internal
       LaunchDarkly.Server.Context
+      LaunchDarkly.Server.Context.Internal
       LaunchDarkly.Server.DataSource.Internal
       LaunchDarkly.Server.Details
       LaunchDarkly.Server.Evaluate
@@ -178,8 +177,6 @@ test-suite haskell-server-sdk-test
       LaunchDarkly.Server.Reference
       LaunchDarkly.Server.Store
       LaunchDarkly.Server.Store.Internal
-      LaunchDarkly.Server.User
-      LaunchDarkly.Server.User.Internal
       LaunchDarkly.Server.Store.Redis
       LaunchDarkly.Server.Store.Redis.Internal
       Paths_launchdarkly_server_sdk

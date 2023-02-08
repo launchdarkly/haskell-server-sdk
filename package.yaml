@@ -90,7 +90,6 @@ library:
   - LaunchDarkly.Server.Config
   - LaunchDarkly.Server.Context
   - LaunchDarkly.Server.Reference
-  - LaunchDarkly.Server.User
   - LaunchDarkly.Server.Store
   - LaunchDarkly.Server.Integrations.FileData
   - LaunchDarkly.Server.Integrations.TestData

@@ -17,8 +17,6 @@ import LaunchDarkly.Server.Operators
 import LaunchDarkly.Server.Reference (makeLiteral)
 import LaunchDarkly.Server.Store
 import LaunchDarkly.Server.Store.Internal
-import LaunchDarkly.Server.User
-import LaunchDarkly.Server.User.Internal
 
 makeEmptyStore = do
     handle <- makeStoreIO Nothing 0
@@ -27,9 +25,9 @@ makeEmptyStore = do
 
 makeTestClient :: IO Client
 makeTestClient = do
-    (Client client) <- makeClient $ (makeConfig "") & configSetOffline True
+    client <- makeClient $ (makeConfig "") & configSetOffline True
     initializeStore (getField @"store" client) mempty mempty
-    pure (Client client)
+    pure client
 
 testExplicitIncludeUser :: Test
 testExplicitIncludeUser = TestCase $ do
@@ -341,10 +339,10 @@ testNonMatchingRuleWithMultipleClauses = TestCase $ do
 
 testCanDetectRecursiveSegments :: Test
 testCanDetectRecursiveSegments = TestCase $ do
-    client@(Client clientI) <- makeTestClient
-    insertFlag (getField @"store" clientI) flag >>= (pure () @=?)
-    insertSegment (getField @"store" clientI) segmentA >>= (pure () @=?)
-    insertSegment (getField @"store" clientI) segmentB >>= (pure () @=?)
+    client <- makeTestClient
+    insertFlag (getField @"store" client) flag >>= (pure () @=?)
+    insertSegment (getField @"store" client) segmentA >>= (pure () @=?)
+    insertSegment (getField @"store" client) segmentB >>= (pure () @=?)
     boolVariationDetail client "a" (makeContext "b" "user") False >>= (expected @=?)
   where
     flag =

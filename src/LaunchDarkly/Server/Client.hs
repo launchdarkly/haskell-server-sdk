@@ -49,12 +49,13 @@ import Network.HTTP.Client.TLS (tlsManagerSettings)
 import System.Clock (TimeSpec (..))
 
 import LaunchDarkly.AesonCompat (KeyMap, emptyObject, filterObject, insertKey, mapValues)
-import LaunchDarkly.Server.Client.Internal (Client (..), ClientI (..), clientVersion, getStatusI)
+import LaunchDarkly.Server.Client.Internal (Client (..), clientVersion, getStatusI)
 import LaunchDarkly.Server.Client.Status (Status (..))
 import LaunchDarkly.Server.Config.ClientContext (ClientContext (..))
 import LaunchDarkly.Server.Config.HttpConfiguration (HttpConfiguration (..))
-import LaunchDarkly.Server.Config.Internal (ApplicationInfo, Config (..), ConfigI, getApplicationInfoHeader, shouldSendEvents)
-import LaunchDarkly.Server.Context (Context (..), getCanonicalKey, getKey, getKeys, getValue, redactContext)
+import LaunchDarkly.Server.Config.Internal (ApplicationInfo, Config, getApplicationInfoHeader, shouldSendEvents)
+import LaunchDarkly.Server.Context (getValue)
+import LaunchDarkly.Server.Context.Internal (Context (Invalid), getCanonicalKey, getKey, getKeys, redactContext)
 import LaunchDarkly.Server.DataSource.Internal (DataSource (..), DataSourceFactory, DataSourceUpdates (..), defaultDataSourceUpdates, nullDataSourceFactory)
 import LaunchDarkly.Server.Details (EvalErrorKind (..), EvaluationDetail (..), EvaluationReason (..))
 import LaunchDarkly.Server.Evaluate (evaluateDetail, evaluateTyped)
@@ -92,7 +93,7 @@ networkDataSourceFactory threadF clientContext dataSourceUpdates = do
 
     pure $ DataSource {..}
 
-makeHttpConfiguration :: ConfigI -> IO HttpConfiguration
+makeHttpConfiguration :: Config -> IO HttpConfiguration
 makeHttpConfiguration config = do
     tlsManager <- newManager tlsManagerSettings
     let headers =
@@ -109,7 +110,7 @@ makeHttpConfiguration config = do
         Nothing -> headers
         Just header -> ("X-LaunchDarkly-Tags", encodeUtf8 header) : headers
 
-makeClientContext :: ConfigI -> IO ClientContext
+makeClientContext :: Config -> IO ClientContext
 makeClientContext config = do
     let runLogger = getField @"logger" config
     httpConfiguration <- makeHttpConfiguration config
@@ -117,7 +118,7 @@ makeClientContext config = do
 
 -- | Create a new instance of the LaunchDarkly client.
 makeClient :: Config -> IO Client
-makeClient (Config config) = mfix $ \(Client client) -> do
+makeClient config = mfix $ \client -> do
     status <- newIORef Uninitialized
     store <- makeStoreIO (getField @"storeBackend" config) (TimeSpec (fromIntegral $ getField @"storeTTLSeconds" config) 0)
     manager <- case getField @"manager" config of
@@ -139,9 +140,9 @@ makeClient (Config config) = mfix $ \(Client client) -> do
 
     dataSourceStart dataSource
 
-    pure $ Client $ ClientI {..}
+    pure $ Client {..}
 
-dataSourceFactory :: ConfigI -> DataSourceFactory
+dataSourceFactory :: Config -> DataSourceFactory
 dataSourceFactory config =
     if getField @"offline" config || getField @"useLdd" config
         then nullDataSourceFactory
@@ -155,12 +156,12 @@ dataSourceFactory config =
                             else pollingThread (getField @"baseURI" config) (getField @"pollIntervalSeconds" config)
                  in networkDataSourceFactory dataSourceThread
 
-clientRunLogger :: ClientI -> (LoggingT IO () -> IO ())
+clientRunLogger :: Client -> (LoggingT IO () -> IO ())
 clientRunLogger client = getField @"logger" $ getField @"config" client
 
 -- | Return the initialization status of the Client
 getStatus :: Client -> IO Status
-getStatus (Client client) = getStatusI client
+getStatus client = getStatusI client
 
 -- TODO(mmk) This method exists in multiple places. Should we move this into a
 -- util file?
@@ -229,7 +230,7 @@ instance ToJSON FlagState where
 -- For more information, see the Reference Guide:
 -- https://docs.launchdarkly.com/sdk/features/all-flags#haskell
 allFlagsState :: Client -> Context -> Bool -> Bool -> Bool -> IO (AllFlagsState)
-allFlagsState (Client client) context client_side_only with_reasons details_only_for_tracked_flags = do
+allFlagsState client context client_side_only with_reasons details_only_for_tracked_flags = do
     status <- getAllFlagsC $ getField @"store" client
     case status of
         Left _ -> pure AllFlagsState {evaluations = emptyObject, state = emptyObject, valid = False}
@@ -262,8 +263,8 @@ allFlagsState (Client client) context client_side_only with_reasons details_only
 
 -- | Identify reports details about a context.
 identify :: Client -> Context -> IO ()
-identify (Client client) (Invalid err) = clientRunLogger client $ $(logWarn) $ "identify called with an invalid context: " <> err
-identify (Client client) context = case (getValue "key" context) of
+identify client (Invalid err) = clientRunLogger client $ $(logWarn) $ "identify called with an invalid context: " <> err
+identify client context = case (getValue "key" context) of
     (String "") -> clientRunLogger client $ $(logWarn) "identify called with empty key"
     _ -> do
         let redacted = redactContext (getField @"config" client) context
@@ -279,8 +280,8 @@ identify (Client client) context = case (getValue "key" context) of
 -- numeric custom metrics, and will also be returned as part of the custom
 -- event for Data Export.
 track :: Client -> Context -> Text -> Maybe Value -> Maybe Double -> IO ()
-track (Client client) (Invalid err) _ _ _ = clientRunLogger client $ $(logWarn) $ "track called with invalid context: " <> err
-track (Client client) context key value metric = do
+track client (Invalid err) _ _ _ = clientRunLogger client $ $(logWarn) $ "track called with invalid context: " <> err
+track client context key value metric = do
     x <-
         makeBaseEvent $
             CustomEvent
@@ -300,7 +301,7 @@ track (Client client) context key value metric = do
 -- For more information, see the Reference Guide:
 -- <https://docs.launchdarkly.com/sdk/features/secure-mode#haskell>.
 secureModeHash :: Client -> Context -> Text
-secureModeHash (Client client) context =
+secureModeHash client context =
     let config = getField @"config" client
         sdkKey = getField @"key" config
      in decodeUtf8 $ convertToBase Base16 $ hmac hash 64 (encodeUtf8 sdkKey) (encodeUtf8 $ getCanonicalKey context)
@@ -310,20 +311,20 @@ secureModeHash (Client client) context =
 -- be delivered as soon as possible. Flushing is asynchronous, so this method
 -- will return before it is complete.
 flushEvents :: Client -> IO ()
-flushEvents (Client client) = putMVar (getField @"flush" $ getField @"events" client) ()
+flushEvents client = putMVar (getField @"flush" $ getField @"events" client) ()
 
 -- |
 -- Close shuts down the LaunchDarkly client. After calling this, the
 -- LaunchDarkly client should no longer be used. The method will block until
 -- all pending analytics events have been sent.
 close :: Client -> IO ()
-close outer@(Client client) = clientRunLogger client $ do
+close client = clientRunLogger client $ do
     $(logDebug) "Setting client status to ShuttingDown"
     liftIO $ writeIORef (getField @"status" client) ShuttingDown
     liftIO $ dataSourceStop $ getField @"dataSource" client
     forM_ (getField @"eventThreadPair" client) $ \(_, sync) -> do
         $(logDebug) "Triggering event flush"
-        liftIO $ flushEvents outer
+        liftIO $ flushEvents client
         $(logDebug) "Waiting on event thread to die"
         liftIO $ void $ takeMVar sync
     $(logDebug) "Client background resources destroyed"
@@ -331,7 +332,7 @@ close outer@(Client client) = clientRunLogger client $ do
 type ValueConverter a = (a -> Value, Value -> Maybe a)
 
 reorderStuff :: ValueConverter a -> Bool -> Client -> Text -> Context -> a -> IO (EvaluationDetail a)
-reorderStuff converter includeReason (Client client) key context fallback = evaluateTyped client key context fallback (fst converter) includeReason (snd converter)
+reorderStuff converter includeReason client key context fallback = evaluateTyped client key context fallback (fst converter) includeReason (snd converter)
 
 dropReason :: (Text -> Context -> a -> IO (EvaluationDetail a)) -> Text -> Context -> a -> IO a
 dropReason = (((fmap (getField @"value") .) .) .)

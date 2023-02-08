@@ -17,8 +17,9 @@ import GHC.Generics (Generic)
 import GHC.Natural (Natural, naturalFromInteger)
 
 import LaunchDarkly.AesonCompat (KeyMap, insertKey, keyMapUnion, lookupKey, objectValues)
-import LaunchDarkly.Server.Config.Internal (ConfigI, shouldSendEvents)
-import LaunchDarkly.Server.Context (Context, getCanonicalKey, getKeys, getKinds, redactContext)
+import LaunchDarkly.Server.Config.Internal (Config, shouldSendEvents)
+import LaunchDarkly.Server.Context (Context)
+import LaunchDarkly.Server.Context.Internal (getCanonicalKey, getKeys, getKinds, redactContext)
 import LaunchDarkly.Server.Details (EvaluationReason (..))
 import LaunchDarkly.Server.Features (Flag)
 
@@ -48,7 +49,7 @@ data EventState = EventState
     }
     deriving (Generic)
 
-makeEventState :: ConfigI -> IO EventState
+makeEventState :: Config -> IO EventState
 makeEventState config = do
     events <- newMVar []
     lastKnownServerTime <- newMVar 0
@@ -58,7 +59,7 @@ makeEventState config = do
     contextKeyLRU <- newMVar $ newLRU $ pure $ fromIntegral $ getField @"contextKeyLRUCapacity" config
     pure EventState {..}
 
-queueEvent :: ConfigI -> EventState -> EventType -> IO ()
+queueEvent :: Config -> EventState -> EventType -> IO ()
 queueEvent config state event =
     if not (shouldSendEvents config)
         then pure ()
@@ -74,7 +75,7 @@ unixMilliseconds = round . (* 1000) <$> getPOSIXTime
 makeBaseEvent :: a -> IO (BaseEvent a)
 makeBaseEvent child = unixMilliseconds >>= \now -> pure $ BaseEvent {creationDate = now, event = child}
 
-processSummary :: ConfigI -> EventState -> IO ()
+processSummary :: Config -> EventState -> IO ()
 processSummary config state =
     tryTakeMVar (getField @"startDate" state) >>= \case
         Nothing -> pure ()
@@ -189,14 +190,14 @@ instance EventKind DebugEvent where
 instance ToJSON DebugEvent where
     toJSON (DebugEvent x) = toJSON x
 
-addContextToEvent :: (HasField' "context" r (Maybe Value)) => ConfigI -> Context -> r -> r
+addContextToEvent :: (HasField' "context" r (Maybe Value)) => Config -> Context -> r -> r
 addContextToEvent config context event = setField @"context" (Just $ redactContext config context) event
 
-contextOrContextKeys :: Bool -> ConfigI -> Context -> FeatureEvent -> FeatureEvent
+contextOrContextKeys :: Bool -> Config -> Context -> FeatureEvent -> FeatureEvent
 contextOrContextKeys True config context event = addContextToEvent config context event & setField @"contextKeys" Nothing
 contextOrContextKeys False _ context event = event {contextKeys = Just $ getKeys context, context = Nothing}
 
-makeFeatureEvent :: ConfigI -> Context -> Bool -> EvalEvent -> FeatureEvent
+makeFeatureEvent :: Config -> Context -> Bool -> EvalEvent -> FeatureEvent
 makeFeatureEvent config context includeReason event =
     contextOrContextKeys False config context $
         FeatureEvent
@@ -353,7 +354,7 @@ runSummary now state event unknown =
     putIfEmptyMVar (getField @"startDate" state) now
         >> modifyMVar_ (getField @"summary" state) (\summary -> pure $ summarizeEvent summary event unknown)
 
-processEvalEvent :: Natural -> ConfigI -> EventState -> Context -> Bool -> Bool -> EvalEvent -> IO ()
+processEvalEvent :: Natural -> Config -> EventState -> Context -> Bool -> Bool -> EvalEvent -> IO ()
 processEvalEvent now config state context includeReason unknown event = do
     let featureEvent = makeFeatureEvent config context includeReason event
         trackEvents = getField @"trackEvents" event
@@ -372,11 +373,11 @@ processEvalEvent now config state context includeReason unknown event = do
     runSummary now state event unknown
     maybeIndexContext now config context state
 
-processEvalEvents :: ConfigI -> EventState -> Context -> Bool -> [EvalEvent] -> Bool -> IO ()
+processEvalEvents :: Config -> EventState -> Context -> Bool -> [EvalEvent] -> Bool -> IO ()
 processEvalEvents config state context includeReason events unknown =
     unixMilliseconds >>= \now -> mapM_ (processEvalEvent now config state context includeReason unknown) events
 
-maybeIndexContext :: Natural -> ConfigI -> Context -> EventState -> IO ()
+maybeIndexContext :: Natural -> Config -> Context -> EventState -> IO ()
 maybeIndexContext now config context state = do
     noticedContext <- noticeContext state context
     when noticedContext $

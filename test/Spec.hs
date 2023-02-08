@@ -20,7 +20,6 @@ import qualified Spec.Segment
 import qualified Spec.Store
 import qualified Spec.StoreInterface
 import qualified Spec.Streaming
-import qualified Spec.User
 import System.Exit (ExitCode (ExitFailure), exitWith)
 
 main :: IO ()
@@ -42,7 +41,6 @@ main = do
                 , Spec.Store.allTests
                 , Spec.StoreInterface.allTests
                 , Spec.Streaming.allTests
-                , Spec.User.allTests
                 , TestLabel "Integration.FileData" Spec.Integrations.FileData.allTests
                 , TestLabel "Integration.TestData" Spec.Integrations.TestData.allTests
                 ]

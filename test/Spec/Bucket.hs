@@ -11,8 +11,6 @@ import LaunchDarkly.Server.Client
 import LaunchDarkly.Server.Context (makeContext, withAttribute)
 import LaunchDarkly.Server.Evaluate
 import LaunchDarkly.Server.Features
-import LaunchDarkly.Server.User
-import LaunchDarkly.Server.User.Internal
 
 testBucketUserByKey :: Test
 testBucketUserByKey =

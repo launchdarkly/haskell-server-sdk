@@ -143,7 +143,7 @@ testSegmentFile :: Test
 testSegmentFile = TestCase $ do
     let factory = dataSourceFactory ["test-data/filesource/segment-only.json"]
         config = testConfig factory
-    withClient config $ \(Client client) -> do
+    withClient config $ \client -> do
         eSeg1 <- storeHandleGetSegment (store client) "seg1"
         mSeg1 <- either (assertFailure . show) pure eSeg1
         seg1 <- maybe (assertFailure "Segment Not Found") pure mSeg1

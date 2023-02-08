@@ -1,8 +1,5 @@
 module LaunchDarkly.Server.Config.Internal
     ( Config (..)
-    , mapConfig
-    , unpackConfig
-    , ConfigI (..)
     , shouldSendEvents
     , ApplicationInfo
     , makeApplicationInfo
@@ -28,19 +25,8 @@ import LaunchDarkly.Server.DataSource.Internal (DataSourceFactory)
 import LaunchDarkly.Server.Reference (Reference)
 import LaunchDarkly.Server.Store (StoreInterface)
 
-mapConfig :: (ConfigI -> ConfigI) -> Config -> Config
-mapConfig f (Config c) = Config $ f c
-
-unpackConfig :: Config -> ConfigI
-unpackConfig (Config c) = c
-
-shouldSendEvents :: ConfigI -> Bool
-shouldSendEvents config = (not $ getField @"offline" config) && (getField @"sendEvents" config)
-
 -- | Config allows advanced configuration of the LaunchDarkly client.
-newtype Config = Config ConfigI
-
-data ConfigI = ConfigI
+data Config = Config
     { key :: !Text
     , baseURI :: !Text
     , streamURI :: !Text
@@ -65,6 +51,9 @@ data ConfigI = ConfigI
     , applicationInfo :: !(Maybe ApplicationInfo)
     }
     deriving (Generic)
+
+shouldSendEvents :: Config -> Bool
+shouldSendEvents config = (not $ getField @"offline" config) && (getField @"sendEvents" config)
 
 -- |
 -- An object that allows configuration of application metadata.

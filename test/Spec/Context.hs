@@ -13,6 +13,7 @@ import LaunchDarkly.AesonCompat (deleteKey, fromList, lookupKey)
 import LaunchDarkly.Server.Config (configSetAllAttributesPrivate, makeConfig)
 import LaunchDarkly.Server.Config.Internal
 import LaunchDarkly.Server.Context
+import LaunchDarkly.Server.Context.Internal (redactContext)
 import qualified LaunchDarkly.Server.Reference as R
 
 confirmInvalidContext :: Context -> Text -> Assertion
@@ -260,7 +261,7 @@ canRedactAttributesCorrectly = TestCase $ do
     assertEqual "" hobbies (fromJust $ lookupKey "hobbies" decodedIntoMap)
     assertEqual "" expectedAddress (fromJust $ lookupKey "address" decodedIntoMap)
   where
-    config = unpackConfig $ makeConfig "sdk-key"
+    config = makeConfig "sdk-key"
 
     address = Object $ fromList [("city", "Chicago"), ("state", "IL")]
     hobbies = (Array $ V.fromList ["coding", "reading"])
@@ -291,7 +292,7 @@ canRedactAllAttributesCorrectly = TestCase $ do
     assertEqual "" Nothing (lookupKey "hobbies" decodedIntoMap)
     assertEqual "" Nothing (lookupKey "address" decodedIntoMap)
   where
-    config = makeConfig "sdk-key" & configSetAllAttributesPrivate True & unpackConfig
+    config = makeConfig "sdk-key" & configSetAllAttributesPrivate True
 
     address = Object $ fromList [("city", "Chicago"), ("state", "IL")]
 
