@@ -32,6 +32,8 @@ where
 
 import qualified Data.Aeson as Aeson
 import Data.Function ((&))
+import Data.HashSet (HashSet)
+import qualified Data.HashSet as HS
 import Data.Map.Strict (Map)
 import qualified Data.Map.Strict as Map
 import Data.Text (Text)
@@ -63,7 +65,7 @@ data FlagBuilder = FlagBuilder
     , fbOn :: Bool
     , fbFallthroughVariation :: Maybe VariationIndex
     , fbVariations :: [Aeson.Value]
-    , fbTargetMap :: Map Text (Map VariationIndex [Text])
+    , fbTargetMap :: Map Text (Map VariationIndex (HashSet Text))
     , fbRules :: [FlagRule]
     }
     deriving (Show)
@@ -72,18 +74,18 @@ fbTargets :: FlagBuilder -> ([F.Target], [F.Target])
 fbTargets FlagBuilder {fbTargetMap = targetMap} =
     Map.foldlWithKey splitIntoTargets ([], []) targetMap
   where
-    splitIntoTargets :: ([F.Target], [F.Target]) -> Text -> Map VariationIndex [Text] -> ([F.Target], [F.Target])
+    splitIntoTargets :: ([F.Target], [F.Target]) -> Text -> Map VariationIndex (HashSet Text) -> ([F.Target], [F.Target])
     splitIntoTargets acc "user" keyMap = Map.foldlWithKey foldForUserKind acc keyMap
     splitIntoTargets acc kind keyMap = Map.foldlWithKey (foldForOtherKind kind) acc keyMap
 
     -- When processing user kinds, we need to add a full target to the user targets, and a placeholder without the values in the context targets list
-    foldForUserKind :: ([F.Target], [F.Target]) -> VariationIndex -> [Text] -> ([F.Target], [F.Target])
+    foldForUserKind :: ([F.Target], [F.Target]) -> VariationIndex -> HashSet Text -> ([F.Target], [F.Target])
     foldForUserKind (userTargets, allTargets) variation values =
         ( F.Target {values, variation, contextKind = "user"} : userTargets
         , F.Target {values = mempty, variation, contextKind = "user"} : allTargets
         )
 
-    foldForOtherKind :: Text -> ([F.Target], [F.Target]) -> VariationIndex -> [Text] -> ([F.Target], [F.Target])
+    foldForOtherKind :: Text -> ([F.Target], [F.Target]) -> VariationIndex -> HashSet Text -> ([F.Target], [F.Target])
     foldForOtherKind kind (userTargets, allTargets) variation values =
         ( userTargets
         , F.Target {values = values, variation, contextKind = kind} : allTargets
@@ -362,11 +364,11 @@ instance Variation Integer where
 
     variationForKey kind key variationIndex fb@(FlagBuilder {fbTargetMap = targetMap}) =
         case Map.lookup kind targetMap of
-            Nothing -> fb {fbTargetMap = Map.insert kind (Map.singleton variationIndex [key]) targetMap}
+            Nothing -> fb {fbTargetMap = Map.insert kind (Map.singleton variationIndex $ HS.singleton key) targetMap}
             Just m ->
                 case Map.lookup variationIndex m of
-                    Nothing -> fb {fbTargetMap = Map.insert kind (Map.insert variationIndex [key] m) targetMap}
-                    Just keys -> fb {fbTargetMap = Map.insert kind (Map.insert variationIndex (key : keys) m) targetMap}
+                    Nothing -> fb {fbTargetMap = Map.insert kind (Map.insert variationIndex (HS.singleton key) m) targetMap}
+                    Just keys -> fb {fbTargetMap = Map.insert kind (Map.insert variationIndex (HS.insert key keys) m) targetMap}
 
     variationForUser = variationForKey "user"
 

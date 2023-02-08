@@ -16,7 +16,7 @@ import LaunchDarkly.Server.Operators (Op)
 import LaunchDarkly.Server.Reference (Reference, makeLiteral, makeReference)
 
 data Target = Target
-    { values :: ![Text]
+    { values :: !(HashSet Text)
     , variation :: !Integer
     , contextKind :: Text
     }

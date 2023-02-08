@@ -192,10 +192,10 @@ checkContextTarget :: Context -> Flag -> [Target] -> Target -> Maybe (Evaluation
 checkContextTarget context flag userTargets contextTarget =
     let contextKind = getField @"contextKind" contextTarget
         values = getField @"values" contextTarget
-     in case (contextKind, values) of
-            -- If the context target doesn't have any values specified, we are supposed to fall back to the user targets
-            ("user", []) -> firstJust Prelude.id $ (checkTarget context "user" flag) <$> userTargets
-            _ -> checkTarget context contextKind flag contextTarget
+     in if contextKind == "user" && HS.null values
+            then -- If the context target doesn't have any values specified, we are supposed to fall back to the user targets
+                firstJust Prelude.id $ (checkTarget context "user" flag) <$> userTargets
+            else checkTarget context contextKind flag contextTarget
 
 checkTarget :: Context -> Text -> Flag -> Target -> Maybe (EvaluationDetail Value)
 checkTarget context contextKind flag target =

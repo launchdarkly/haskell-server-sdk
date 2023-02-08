@@ -414,7 +414,7 @@ testFlagCanTargetUserKeys = TestCase $ do
     flag :: Flag =
         (makeTestFlag "feature0" 52)
             { on = True
-            , targets = [Target {values = ["user-key"], variation = 1, contextKind = "user"}]
+            , targets = [Target {values = HS.singleton "user-key", variation = 1, contextKind = "user"}]
             , variations = [Bool False, Bool True]
             , fallthrough =
                 VariationOrRollout
@@ -439,7 +439,7 @@ testFlagCanTargetContextKeys = TestCase $ do
     flag :: Flag =
         (makeTestFlag "feature0" 52)
             { on = True
-            , contextTargets = [Target {values = ["match-key"], variation = 1, contextKind = "org"}]
+            , contextTargets = [Target {values = HS.singleton "match-key", variation = 1, contextKind = "org"}]
             , variations = [Bool False, Bool True]
             , fallthrough =
                 VariationOrRollout
@@ -469,8 +469,8 @@ testFlagCanTargetContextFallsbackToUserTargets = TestCase $ do
     flag :: Flag =
         (makeTestFlag "feature0" 52)
             { on = True
-            , targets = [Target {values = ["match-key"], variation = 1, contextKind = "user"}]
-            , contextTargets = [Target {values = [], variation = 1, contextKind = "user"}]
+            , targets = [Target {values = HS.singleton "match-key", variation = 1, contextKind = "user"}]
+            , contextTargets = [Target {values = HS.empty, variation = 1, contextKind = "user"}]
             , variations = [Bool False, Bool True]
             , fallthrough =
                 VariationOrRollout
@@ -494,7 +494,7 @@ testFlagChecksTargetsBeforeRules = TestCase $ do
     flag :: Flag =
         (makeTestFlag "feature0" 52)
             { on = True
-            , targets = [Target {values = ["match-key"], variation = 0, contextKind = "user"}]
+            , targets = [Target {values = HS.singleton "match-key", variation = 0, contextKind = "user"}]
             , rules =
                 [ Rule
                     { clauses =
