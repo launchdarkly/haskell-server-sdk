@@ -49,7 +49,7 @@ makeConfig :: Text -> Config
 makeConfig key =
     Config
         { key = key
-        , baseURI = "https://app.launchdarkly.com"
+        , baseURI = "https://sdk.launchdarkly.com"
         , streamURI = "https://stream.launchdarkly.com"
         , eventsURI = "https://events.launchdarkly.com"
         , storeBackend = Nothing
