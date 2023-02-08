@@ -162,11 +162,13 @@ clientRunLogger client = getField @"logger" $ getField @"config" client
 getStatus :: Client -> IO Status
 getStatus (Client client) = getStatusI client
 
--- TODO(mmk) This method exists in multiple places. Should we move this into a util file?
+-- TODO(mmk) This method exists in multiple places. Should we move this into a
+-- util file?
 fromObject :: Value -> KeyMap Value
 fromObject x = case x of (Object o) -> o; _ -> error "expected object"
 
--- | AllFlagsState captures the state of all feature flag keys as evaluated for
+-- |
+-- AllFlagsState captures the state of all feature flag keys as evaluated for
 -- a specific context. This includes their values, as well as other metadata.
 data AllFlagsState = AllFlagsState
     { evaluations :: !(KeyMap Value)
@@ -207,7 +209,8 @@ instance ToJSON FlagState where
                 , "debugEventsUntilDate" .= getField @"debugEventsUntilDate" state
                 ]
 
--- | Returns an object that encapsulates the state of all feature flags for a
+-- |
+-- Returns an object that encapsulates the state of all feature flags for a
 -- given context. This includes the flag values, and also metadata that can be
 -- used on the front end.
 --
@@ -268,12 +271,13 @@ identify (Client client) context = case (getValue "key" context) of
         _ <- noticeContext (getField @"events" client) context
         queueEvent (getField @"config" client) (getField @"events" client) (EventTypeIdentify x)
 
--- | Track reports that a context has performed an event. Custom data can be
+-- |
+-- Track reports that a context has performed an event. Custom data can be
 -- attached to the event, and / or a numeric value.
 --
 -- The numeric value is used by the LaunchDarkly experimentation feature in
--- numeric custom metrics, and will also be returned as part of the custom event
--- for Data Export.
+-- numeric custom metrics, and will also be returned as part of the custom
+-- event for Data Export.
 track :: Client -> Context -> Text -> Maybe Value -> Maybe Double -> IO ()
 track (Client client) (Invalid err) _ _ _ = clientRunLogger client $ $(logWarn) $ "track called with invalid context: " <> err
 track (Client client) context key value metric = do
@@ -290,24 +294,28 @@ track (Client client) context key value metric = do
     queueEvent config events (EventTypeCustom x)
     unixMilliseconds >>= \now -> maybeIndexContext now config context events
 
--- | Generates the secure mode hash value for a context.
+-- |
+-- Generates the secure mode hash value for a context.
 --
--- For more information, see the Reference Guide: <https://docs.launchdarkly.com/sdk/features/secure-mode#haskell>.
+-- For more information, see the Reference Guide:
+-- <https://docs.launchdarkly.com/sdk/features/secure-mode#haskell>.
 secureModeHash :: Client -> Context -> Text
 secureModeHash (Client client) context =
     let config = getField @"config" client
         sdkKey = getField @"key" config
      in decodeUtf8 $ convertToBase Base16 $ hmac hash 64 (encodeUtf8 sdkKey) (encodeUtf8 $ getCanonicalKey context)
 
--- | Flush tells the client that all pending analytics events (if any) should be
--- delivered as soon as possible. Flushing is asynchronous, so this method will
--- return before it is complete.
+-- |
+-- Flush tells the client that all pending analytics events (if any) should
+-- be delivered as soon as possible. Flushing is asynchronous, so this method
+-- will return before it is complete.
 flushEvents :: Client -> IO ()
 flushEvents (Client client) = putMVar (getField @"flush" $ getField @"events" client) ()
 
--- | Close shuts down the LaunchDarkly client. After calling this, the
--- LaunchDarkly client should no longer be used. The method will block until all
--- pending analytics events have been sent.
+-- |
+-- Close shuts down the LaunchDarkly client. After calling this, the
+-- LaunchDarkly client should no longer be used. The method will block until
+-- all pending analytics events have been sent.
 close :: Client -> IO ()
 close outer@(Client client) = clientRunLogger client $ do
     $(logDebug) "Setting client status to ShuttingDown"
@@ -363,7 +371,8 @@ stringVariationDetail = reorderStuff stringConverter True
 intVariation :: Client -> Text -> Context -> Int -> IO Int
 intVariation = dropReason . reorderStuff intConverter False
 
--- | Evaluate a Number typed flag, truncate the result, and return an
+-- |
+-- Evaluate a Number typed flag, truncate the result, and return an
 -- explanation.
 intVariationDetail :: Client -> Text -> Context -> Int -> IO (EvaluationDetail Int)
 intVariationDetail = reorderStuff intConverter True

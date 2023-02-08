@@ -87,7 +87,8 @@ userSetAnonymous = mapUser . setField @"anonymous"
 userSetCustom :: KeyMap Value -> User -> User
 userSetCustom = mapUser . setField @"custom"
 
--- | This contains list of attributes to keep private, whether they appear at
+-- |
+-- This contains list of attributes to keep private, whether they appear at
 -- the top-level or Custom The attribute "key" is always sent regardless of
 -- whether it is in this list, and "custom" cannot be used to eliminate all
 -- custom attributes

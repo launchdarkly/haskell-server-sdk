@@ -8,7 +8,8 @@ import GHC.Exts (fromList)
 import GHC.Generics (Generic)
 import GHC.Natural (Natural)
 
--- | Combines the result of a flag evaluation with an explanation of how it was
+-- |
+-- Combines the result of a flag evaluation with an explanation of how it was
 -- calculated.
 data EvaluationDetail value = EvaluationDetail
     { value :: !value

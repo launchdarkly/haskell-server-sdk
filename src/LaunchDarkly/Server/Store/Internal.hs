@@ -45,7 +45,8 @@ import LaunchDarkly.Server.Features (Flag, Segment)
 -- Store result not defined in terms of StoreResultM so we dont have to export.
 type StoreResultM m a = m (Either Text a)
 
--- | The result type for every `StoreInterface` function. Instead of throwing
+-- |
+-- The result type for every `StoreInterface` function. Instead of throwing
 -- an exception, any store related error should return `Left`. Exceptions
 -- unrelated to the store should not be caught.
 type StoreResult a = IO (Either Text a)

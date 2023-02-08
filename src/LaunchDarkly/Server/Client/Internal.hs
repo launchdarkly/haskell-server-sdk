@@ -20,7 +20,8 @@ import LaunchDarkly.Server.DataSource.Internal (DataSource)
 import LaunchDarkly.Server.Events (EventState)
 import LaunchDarkly.Server.Store.Internal (StoreHandle, getInitializedC)
 
--- | Client is the LaunchDarkly client. Client instances are thread-safe.
+-- |
+-- Client is the LaunchDarkly client. Client instances are thread-safe.
 -- Applications should instantiate a single instance for the lifetime of their
 -- application.
 newtype Client = Client ClientI

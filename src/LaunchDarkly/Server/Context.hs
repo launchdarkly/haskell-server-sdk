@@ -2,16 +2,21 @@
 {-# LANGUAGE NamedFieldPuns #-}
 {-# LANGUAGE ViewPatterns #-}
 
--- | Context is a collection of attributes that can be referenced in flag evaluations and analytics events.
+-- |
+-- Context is a collection of attributes that can be referenced in flag
+-- evaluations and analytics events.
 --
--- To create a Context of a single kind, such as a user, you may use 'makeContext'.
+-- To create a Context of a single kind, such as a user, you may use
+-- 'makeContext'.
 --
 -- To create an LDContext with multiple kinds, use 'makeMultiContext'.
 --
--- Additional properties can be set on a single-kind context using the set methods found in this module.
+-- Additional properties can be set on a single-kind context using the set
+-- methods found in this module.
 --
--- Each method will always return a Context. However, that Context may be invalid. You can check the validity of the
--- resulting context, and the associated errors by calling 'isValid' and 'getError'.
+-- Each method will always return a Context. However, that Context may be
+-- invalid. You can check the validity of the resulting context, and the
+-- associated errors by calling 'isValid' and 'getError'.
 module LaunchDarkly.Server.Context
     ( Context (Single, Multi, Invalid)
     , makeContext
@@ -96,17 +101,20 @@ instance ToJSON MultiContext where
             & insertKey "kind" "multi"
             & Object
 
--- | Create a single kind context from the provided hash.
+-- |
+-- Create a single kind context from the provided hash.
 --
--- The provided hash must match the format as outlined in the
--- [SDK documentation](https://docs.launchdarkly.com/sdk/features/user-config).
+-- The provided hash must match the format as outlined in the [SDK
+-- documentation](https://docs.launchdarkly.com/sdk/features/user-config).
 makeContext :: Text -> Text -> Context
 makeContext "" _ = Invalid {error = "context key must not be empty"}
 makeContext key kind = makeSingleContext key kind
 
--- This function is used internally to create a context with legacy key validation rules; namely, a legacy context is
--- allowed to have an empty key. No other type of context is. Users of this SDK can only use the makeContext
--- to create a single-kind context, which includes the non-empty key restriction.
+-- This function is used internally to create a context with legacy key
+-- validation rules; namely, a legacy context is allowed to have an empty key.
+-- No other type of context is. Users of this SDK can only use the makeContext
+-- to create a single-kind context, which includes the non-empty key
+-- restriction.
 makeSingleContext :: Text -> Text -> Context
 makeSingleContext _ "" = Invalid {error = "context kind must not be empty"}
 makeSingleContext _ "kind" = Invalid {error = "context kind cannot be 'kind'"}
@@ -125,16 +133,19 @@ makeSingleContext key kind
                 , privateAttributes = Nothing
                 }
 
--- | Create a multi-kind context from the list of Contexts provided.
+-- |
+-- Create a multi-kind context from the list of Contexts provided.
 --
--- A multi-kind context is comprised of two or more single kind contexts. You cannot include a multi-kind context
--- instead another multi-kind context.
+-- A multi-kind context is comprised of two or more single kind contexts. You
+-- cannot include a multi-kind context instead another multi-kind context.
 --
--- Additionally, the kind of each single-kind context must be unique. For instance, you cannot create a multi-kind
--- context that includes two user kind contexts.
+-- Additionally, the kind of each single-kind context must be unique. For
+-- instance, you cannot create a multi-kind context that includes two user kind
+-- contexts.
 --
--- If you attempt to create a multi-kind context from one single-kind context, this method will return the single-kind
--- context instead of a new multi-kind context wrapping that one single-kind.
+-- If you attempt to create a multi-kind context from one single-kind context,
+-- this method will return the single-kind context instead of a new multi-kind
+-- context wrapping that one single-kind.
 makeMultiContext :: [Context] -> Context
 makeMultiContext [] = Invalid {error = "multi-kind contexts require at least one single-kind context"}
 makeMultiContext [c@(Single _)] = c
@@ -152,52 +163,63 @@ makeMultiContext contexts =
                         , contexts = fromList $ map (\c -> ((kind c), c)) singleContexts
                         }
 
--- | Sets the name attribute for a a single-kind context.
+-- |
+-- Sets the name attribute for a single-kind context.
 --
 -- Calling this method on an invalid or multi-kind context is a no-op.
 withName :: Text -> Context -> Context
 withName name (Single c) = Single $ setField @"name" (Just name) c
 withName _ c = c
 
--- | Sets the anonymous attribute for a a single-kind context.
+-- |
+-- Sets the anonymous attribute for a single-kind context.
 --
 -- Calling this method on an invalid or multi-kind context is a no-op.
 withAnonymous :: Bool -> Context -> Context
 withAnonymous anonymous (Single c) = Single $ setField @"anonymous" anonymous c
 withAnonymous _ c = c
 
--- | Sets the value of any attribute for the context.
+-- |
+-- Sets the value of any attribute for the context.
 --
--- This includes only attributes that are addressable in evaluations -- not metadata such as private attributes. For
--- example, if the attribute name is "privateAttributes", you will be setting an attribute with that name which you can
--- use in evaluations or to record data for your own purposes, but it will be unrelated to
--- 'withPrivateAttributes'.
+-- This includes only attributes that are addressable in evaluations -- not
+-- metadata such as private attributes. For example, if the attribute name is
+-- "privateAttributes", you will be setting an attribute with that name which
+-- you can use in evaluations or to record data for your own purposes, but it
+-- will be unrelated to 'withPrivateAttributes'.
 --
--- If attribute name is "privateAttributeNames", it is ignored and no attribute is set.
+-- If attribute name is "privateAttributeNames", it is ignored and no attribute
+-- is set.
 --
--- This method uses the Value type to represent a value of any JSON type: null, boolean, number, string, array, or
--- object. For all attribute names that do not have special meaning to LaunchDarkly, you may use any of those types.
--- Values of different JSON types are always treated as different values: for instance, null, false, and the empty
--- string "" are not the same, and the number 1 is not the same as the string "1".
+-- This method uses the Value type to represent a value of any JSON type: null,
+-- boolean, number, string, array, or object. For all attribute names that do
+-- not have special meaning to LaunchDarkly, you may use any of those types.
+-- Values of different JSON types are always treated as different values: for
+-- instance, null, false, and the empty string "" are not the same, and the
+-- number 1 is not the same as the string "1".
 --
--- The following attribute names have special restrictions on their value types, and any value of an unsupported type
--- will be ignored (leaving the attribute unchanged):
+-- The following attribute names have special restrictions on their value
+-- types, and any value of an unsupported type will be ignored (leaving the
+-- attribute unchanged):
 --
 -- - "name": Must be a string.
 -- - "anonymous": Must be a boolean.
 --
--- The attribute name "_meta" is not allowed, because it has special meaning in the JSON schema for contexts; any
--- attempt to set an attribute with this name has no effect.
+-- The attribute name "_meta" is not allowed, because it has special meaning in
+-- the JSON schema for contexts; any attempt to set an attribute with this name
+-- has no effect.
 --
--- The attribute names "kind" and "key" are not allowed. They must be provided during the initial context creation. See
--- 'makeContext'.
+-- The attribute names "kind" and "key" are not allowed. They must be provided
+-- during the initial context creation. See 'makeContext'.
 --
--- Values that are JSON arrays or objects have special behavior when referenced in flag/segment rules.
+-- Values that are JSON arrays or objects have special behavior when referenced
+-- in flag/segment rules.
 --
--- For attributes that aren't subject to the special restrictions mentioned above, a value of Null is equivalent to
--- removing any current non-default value of the attribute. Null is not a valid attribute value in the LaunchDarkly
--- model; any expressions in feature flags that reference an attribute with a null value will behave as if the attribute
--- did not exist.
+-- For attributes that aren't subject to the special restrictions mentioned
+-- above, a value of Null is equivalent to removing any current non-default
+-- value of the attribute. Null is not a valid attribute value in the
+-- LaunchDarkly model; any expressions in feature flags that reference an
+-- attribute with a null value will behave as if the attribute did not exist.
 --
 -- Calling this method on an invalid or multi-kind context is a no-op.
 withAttribute :: Text -> Value -> Context -> Context
@@ -219,7 +241,8 @@ withAttribute attr value (Single c@(SingleContext {attributes = Just attrs})) =
     Single $ c {attributes = Just $ insertKey attr value attrs}
 withAttribute _ _ c = c
 
--- | Sets the private attributes for a single-kind context.
+-- |
+-- Sets the private attributes for a single-kind context.
 --
 -- Calling this method on an invalid or multi-kind context is a no-op.
 withPrivateAttributes :: Set Reference -> Context -> Context
@@ -238,13 +261,15 @@ getError :: Context -> Text
 getError (Invalid e) = e
 getError _ = ""
 
--- | Returns the single-kind Context corresponding to one of the kinds in this context.
+-- |
+-- Returns the single-kind Context corresponding to one of the kinds in this
+-- context.
 --
--- If this method is called on a single-kind Context and the requested kind matches the context's kind, then that
--- context is returned.
+-- If this method is called on a single-kind Context and the requested kind
+-- matches the context's kind, then that context is returned.
 --
--- If the method is called on a multi-context, the provided kind must match the context kind of one of the individual
--- contexts.
+-- If the method is called on a multi-context, the provided kind must match the
+-- context kind of one of the individual contexts.
 --
 -- If there is no context corresponding to `kind`, the method returns Nothing.
 getIndividualContext :: Text -> Context -> Maybe Context
@@ -254,21 +279,23 @@ getIndividualContext kind c@(Single (SingleContext {kind = k}))
     | otherwise = Nothing
 getIndividualContext _ _ = Nothing
 
--- Internally used convenience function for retrieving a list of context kinds in the provided context.
+-- Internally used convenience function for retrieving a list of context kinds
+-- in the provided context.
 --
--- A single kind context will return a single element list containing only that one kind.
--- Multi-kind contexts will return a list of kinds for each of its sub-contexts.
--- An invalid context will return the empty list.
+-- A single kind context will return a single element list containing only that
+-- one kind. Multi-kind contexts will return a list of kinds for each of its
+-- sub-contexts. An invalid context will return the empty list.
 getKinds :: Context -> [Text]
 getKinds (Single c) = [kind c]
 getKinds (Multi (MultiContext {contexts})) = objectKeys contexts
 getKinds _ = []
 
--- Internally used convenience function for retrieving all context keys, indexed by their kind.
+-- Internally used convenience function for retrieving all context keys,
+-- indexed by their kind.
 --
--- A single kind context will return a single element map containing its kind and key.
--- Multi-kind contexts will return a map of kind / key pairs for each of its sub-contexts.
--- An invalid context will return the empty map.
+-- A single kind context will return a single element map containing its kind
+-- and key. Multi-kind contexts will return a map of kind / key pairs for each
+-- of its sub-contexts. An invalid context will return the empty map.
 getKeys :: Context -> KeyMap Text
 getKeys (Single c) = singleton (kind c) (key c)
 getKeys (Multi (MultiContext {contexts})) = mapValues key contexts
@@ -276,46 +303,59 @@ getKeys _ = emptyObject
 
 -- Internally used convenience function to retrieve a context's key.
 --
--- This method is functionally equivalent to @fromMaybe "" $ getValue "key"@, it's just nicer to use.
+-- This method is functionally equivalent to @fromMaybe "" $ getValue "key"@,
+-- it's just nicer to use.
 getKey :: Context -> Text
 getKey (Single c) = key c
 getKey _ = ""
 
--- Internally used convenience function to retrieve a context's fully qualified key.
+-- Internally used convenience function to retrieve a context's fully qualified
+-- key.
 getCanonicalKey :: Context -> Text
 getCanonicalKey (Single c) = getField @"fullKey" c
 getCanonicalKey (Multi c) = getField @"fullKey" c
 getCanonicalKey _ = ""
 
--- | Looks up the value of any attribute of the Context by name. This includes only attributes that are addressable in
--- evaluations-- not metadata such as private attributes.
+-- |
+-- Looks up the value of any attribute of the Context by name. This includes
+-- only attributes that are addressable in evaluations-- not metadata such as
+-- private attributes.
 --
--- For a single-kind context, the attribute name can be any custom attribute. It can also be one of the built-in ones
--- like "kind", "key", or "name".
+-- For a single-kind context, the attribute name can be any custom attribute.
+-- It can also be one of the built-in ones like "kind", "key", or "name".
 --
--- For a multi-kind context, the only supported attribute name is "kind". Use 'getIndividualContext' to inspect a
--- Context for a particular kind and then get its attributes.
+-- For a multi-kind context, the only supported attribute name is "kind". Use
+-- 'getIndividualContext' to inspect a Context for a particular kind and then
+-- get its attributes.
 --
--- This method does not support complex expressions for getting individual values out of JSON objects or arrays, such as
--- "/address/street". Use 'getValueForReference' for that purpose.
+-- This method does not support complex expressions for getting individual
+-- values out of JSON objects or arrays, such as "/address/street". Use
+-- 'getValueForReference' for that purpose.
 --
--- If the value is found, the return value is the attribute value; otherwise, it is Null.
+-- If the value is found, the return value is the attribute value; otherwise,
+-- it is Null.
 getValue :: Text -> Context -> Value
 getValue ref = getValueForReference (R.makeLiteral ref)
 
--- | Looks up the value of any attribute of the Context, or a value contained within an attribute, based on a
--- 'Reference' instance. This includes only attributes that are addressable in evaluations-- not metadata such as
+-- |
+-- Looks up the value of any attribute of the Context, or a value contained
+-- within an attribute, based on a 'Reference' instance. This includes only
+-- attributes that are addressable in evaluations-- not metadata such as
 -- private attributes.
 --
--- This implements the same behavior that the SDK uses to resolve attribute references during a flag evaluation. In a
--- single-kind context, the 'Reference' can represent a simple attribute name-- either a built-in one like "name" or
--- "key", or a custom attribute -- or, it can be a slash-delimited path using a JSON-Pointer-like syntax. See
--- 'Reference' for more details.
+-- This implements the same behavior that the SDK uses to resolve attribute
+-- references during a flag evaluation. In a single-kind context, the
+-- 'Reference' can represent a simple attribute name-- either a built-in one
+-- like "name" or "key", or a custom attribute -- or, it can be a
+-- slash-delimited path using a JSON-Pointer-like syntax. See 'Reference' for
+-- more details.
 --
--- For a multi-kind context, the only supported attribute name is "kind". Use 'getIndividualContext' to inspect a
--- Context for a particular kind and then get its attributes.
+-- For a multi-kind context, the only supported attribute name is "kind". Use
+-- 'getIndividualContext' to inspect a Context for a particular kind and then
+-- get its attributes.
 --
--- If the value is found, the return value is the attribute value; otherwise, it is Null.
+-- If the value is found, the return value is the attribute value; otherwise,
+-- it is Null.
 getValueForReference :: Reference -> Context -> Value
 getValueForReference (R.isValid -> False) _ = Null
 getValueForReference reference context = case R.getComponents reference of
@@ -326,15 +366,18 @@ getValueForReference reference context = case R.getComponents reference of
 
 -- This helper method retrieves a Value from a JSON object type.
 --
--- If the key does not exist, or the type isn't an object, this method will return Null.
+-- If the key does not exist, or the type isn't an object, this method will
+-- return Null.
 getValueFromJsonObject :: Value -> Text -> Value
 getValueFromJsonObject (Object nm) component = fromMaybe Null (lookupKey component nm)
 getValueFromJsonObject _ _ = Null
 
--- Attribute retrieval can mostly be defined recursively. However, this isn't true for the top level attribute since
--- the entire context isn't stored in a single object property.
+-- Attribute retrieval can mostly be defined recursively. However, this isn't
+-- true for the top level attribute since the entire context isn't stored in a
+-- single object property.
 --
--- To prime the recursion, we define this simple helper function to retrieve attributes addressable at the top level.
+-- To prime the recursion, we define this simple helper function to retrieve
+-- attributes addressable at the top level.
 getTopLevelValue :: Text -> Context -> Value
 getTopLevelValue _ (Invalid _) = Null
 getTopLevelValue "kind" (Multi _) = "multi"
@@ -349,9 +392,10 @@ getTopLevelValue key (Single SingleContext {attributes = Just attrs}) = fromMayb
 
 -- Given a key and kind, generate a canonical key.
 --
--- In a multi-kind context, each individual context should theoretically contain the same key. To address this
--- restriction, we generate a canonical key that includes the context's kind. However, if the kind is "user", we omit
--- the kind inclusion to maintain backwards compatibility.
+-- In a multi-kind context, each individual context should theoretically
+-- contain the same key. To address this restriction, we generate a canonical
+-- key that includes the context's kind. However, if the kind is "user", we
+-- omit the kind inclusion to maintain backwards compatibility.
 canonicalizeKey :: Text -> Text -> Text
 canonicalizeKey key "user" = key
 canonicalizeKey key kind = kind <> ":" <> (replace "%" "%25" key & replace ":" "%3A")
@@ -362,27 +406,32 @@ unwrapSingleContext _ = Nothing
 
 -- Internally used function for encoding a SingleContext into a JSON object.
 --
--- This functionality has been extracted into this separate function because we need to control whether or not the kind
--- property will be included in the final output. If we didn't have this restriction, we could simply inline this
--- function on the SingleContext.
+-- This functionality has been extracted into this separate function because we
+-- need to control whether or not the kind property will be included in the
+-- final output. If we didn't have this restriction, we could simply inline
+-- this function on the SingleContext.
 toJsonObject :: Bool -> SingleContext -> Value
 toJsonObject includeKind context =
     Object $ fromList $ (getMapOfRedactableProperties context ++ getMapOfRequiredProperties includeKind context)
 
--- Contexts can be broken into two different types of attributes -- those which can be redacted, and those which can't.
+-- Contexts can be broken into two different types of attributes -- those which
+-- can be redacted, and those which can't.
 --
--- This method will return a list of name / value pairs which represent the attributes which are eligible for redaction.
--- The other half of the context can be retrieved through the getMapOfRequiredProperties function.
+-- This method will return a list of name / value pairs which represent the
+-- attributes which are eligible for redaction. The other half of the context
+-- can be retrieved through the getMapOfRequiredProperties function.
 getMapOfRedactableProperties :: SingleContext -> [(Text, Value)]
 getMapOfRedactableProperties (SingleContext {name = Nothing, attributes = Nothing}) = []
 getMapOfRedactableProperties (SingleContext {name = Nothing, attributes = Just attrs}) = toList attrs
 getMapOfRedactableProperties (SingleContext {name = Just n, attributes = Just attrs}) = ("name", String n) : (toList attrs)
 getMapOfRedactableProperties (SingleContext {name = Just n, attributes = Nothing}) = [("name", String n)]
 
--- Contexts can be broken into two different types of attributes -- those which can be redacted, and those which can't.
+-- Contexts can be broken into two different types of attributes -- those which
+-- can be redacted, and those which can't.
 --
--- This method will return a list of name / value pairs which represent the attributes which cannot be redacted.
--- The other half of the context can be retrieved through the getMapOfRedactableProperties function.
+-- This method will return a list of name / value pairs which represent the
+-- attributes which cannot be redacted. The other half of the context can be
+-- retrieved through the getMapOfRedactableProperties function.
 getMapOfRequiredProperties :: Bool -> SingleContext -> [(Text, Value)]
 getMapOfRequiredProperties includeKind SingleContext {key, kind, anonymous, privateAttributes} =
     filter
@@ -399,8 +448,8 @@ getMapOfRequiredProperties includeKind SingleContext {key, kind, anonymous, priv
             )
         ]
 
--- Internally used function to decode a JSON object using the legacy user scheme into a modern single-kind "user"
--- context.
+-- Internally used function to decode a JSON object using the legacy user
+-- scheme into a modern single-kind "user" context.
 parseLegacyUser :: Value -> Parser Context
 parseLegacyUser = withObject "LegacyUser" $ \o -> do
     (key :: Text) <- o .: "key"
@@ -429,7 +478,8 @@ parseLegacyUser = withObject "LegacyUser" $ \o -> do
                 & withPrivateAttributes (S.fromList $ map R.makeLiteral $ fromMaybe [] privateAttributeNames)
      in return $ foldrWithKey (\k v c -> withAttribute k v c) context (fromMaybe emptyObject custom)
 
--- Internally used function to decode a JSON object using the new context scheme into a modern single-kind context.
+-- Internally used function to decode a JSON object using the new context
+-- scheme into a modern single-kind context.
 parseSingleContext :: Value -> Parser Context
 parseSingleContext = withObject "SingleContext" $ \o -> do
     (key :: Text) <- o .: "key"
@@ -441,7 +491,8 @@ parseSingleContext = withObject "SingleContext" $ \o -> do
                 & withPrivateAttributes (S.fromList $ map R.makeReference $ fromMaybe [] privateAttributes)
      in return $ foldrWithKey (\k v c -> withAttribute k v c) context o
 
--- Internally used function to decode a JSON object using the new context scheme into a modern multi-kind context.
+-- Internally used function to decode a JSON object using the new context
+-- scheme into a modern multi-kind context.
 parseMultiContext :: Value -> Parser Context
 parseMultiContext = withObject "MultiContext" $ \o -> do
     let contextLists = toList $ deleteKey "kind" o
@@ -473,8 +524,8 @@ redactSingleContext includeKind context privateAttributes =
             [] -> Object $ keyMapUnion redactedContext required
             _ -> Object $ keyMapUnion redactedContext (insertKey "_meta" (Object $ singleton "redactedAttributes" redactedValues) required)
 
--- Internally used convenience function for creating a Set of References which can redact all top level values in a
--- provided context.
+-- Internally used convenience function for creating a Set of References which
+-- can redact all top level values in a provided context.
 --
 -- Given the context:
 -- {
@@ -486,29 +537,33 @@ redactSingleContext includeKind context privateAttributes =
 --      }
 -- }
 --
--- getAllTopLevelRedactableNames context would yield the set ["name", "address"].
+-- getAllTopLevelRedactableNames context would yield the set ["name",
+-- "address"].
 getAllTopLevelRedactableNames :: SingleContext -> Set Reference
 getAllTopLevelRedactableNames SingleContext {name = Nothing, attributes = Nothing} = S.empty
 getAllTopLevelRedactableNames SingleContext {name = Just _, attributes = Nothing} = S.singleton $ R.makeLiteral "name"
 getAllTopLevelRedactableNames SingleContext {name = Nothing, attributes = Just attrs} = S.fromList $ map R.makeLiteral $ objectKeys attrs
 getAllTopLevelRedactableNames SingleContext {name = Just _, attributes = Just attrs} = S.fromList $ (R.makeLiteral "name") : (map R.makeLiteral $ objectKeys attrs)
 
--- Internally used convenience function to return a set of references which would apply all redaction rules.
+-- Internally used convenience function to return a set of references which
+-- would apply all redaction rules.
 --
--- If allAttributesPrivate is True in the config, this will return a set which covers the entire context.
+-- If allAttributesPrivate is True in the config, this will return a set which
+-- covers the entire context.
 getAllPrivateAttributes :: ConfigI -> SingleContext -> Set Reference
 getAllPrivateAttributes (getField @"allAttributesPrivate" -> True) context = getAllTopLevelRedactableNames context
 getAllPrivateAttributes config SingleContext {privateAttributes = Nothing} = getField @"privateAttributeNames" config
 getAllPrivateAttributes config SingleContext {privateAttributes = Just attrs} = S.union (getField @"privateAttributeNames" config) attrs
 
--- Internally used storage type for returning both the resulting redacted context and the list of any attributes which
--- were redacted.
+-- Internally used storage type for returning both the resulting redacted
+-- context and the list of any attributes which were redacted.
 data State = State
     { context :: KeyMap Value
     , redacted :: ![Text]
     }
 
--- Internally used store type for managing some state while the redaction process is recursing.
+-- Internally used store type for managing some state while the redaction
+-- process is recursing.
 data RedactState = RedactState
     { context :: KeyMap Value
     , reference :: Reference
@@ -523,23 +578,30 @@ applyRedaction reference State {context, redacted} =
 
 -- Recursively apply redaction rules
 redactComponents :: [Text] -> Int -> RedactState -> RedactState
--- If there are no components left to explore, then we can just return the current state of things.
--- This branch should never actually execute. References aren't valid if there isn't at least one component, and we
--- don't recurse in the single component case. We just include it here for completeness.
+-- If there are no components left to explore, then we can just return the
+-- current state of things. This branch should never actually execute.
+-- References aren't valid if there isn't at least one component, and we don't
+-- recurse in the single component case. We just include it here for
+-- completeness.
 redactComponents [] _ state = state
 -- kind, key, and anonymous are top level attributes that cannot be redacted.
 redactComponents ["kind"] 0 state = state
 redactComponents ["key"] 0 state = state
 redactComponents ["anonymous"] 0 state = state
--- If we have a single component, then we are either trying to redact a simple top level item, or we have recursed
--- through all reference component parts until the last one. We determine which of those situations we are in through
--- use of the 'level' parameter. 'level' = 0 means we are at the top level of the call stack.
+-- If we have a single component, then we are either trying to redact a simple
+-- top level item, or we have recursed through all reference component parts
+-- until the last one. We determine which of those situations we are in through
+-- use of the 'level' parameter. 'level' = 0 means we are at the top level of
+-- the call stack.
 --
--- If we have a single component and we have found it in the current context map, then we know we can redact it.
--- If we do not find it in the context, but we are at the top level (and thus making a simple redaction), we consider
--- that a successful redaction.
--- Otherwise, if there is no match and we aren't at the top level, the redaction has failed and so we can just return
--- the current state unmodified.
+-- If we have a single component and we have found it in the current context
+-- map, then we know we can redact it.
+--
+-- If we do not find it in the context, but we are at the top level (and thus
+-- making a simple redaction), we consider that a successful redaction.
+--
+-- Otherwise, if there is no match and we aren't at the top level, the
+-- redaction has failed and so we can just return the current state unmodified.
 redactComponents [x] level state@(RedactState {context, reference, redacted}) = case (level, lookupKey x context) of
     (_, Just _) -> state {context = deleteKey x context, redacted = (getRawPath reference) : redacted}
     (0, _) -> state {redacted = (getRawPath reference) : redacted}

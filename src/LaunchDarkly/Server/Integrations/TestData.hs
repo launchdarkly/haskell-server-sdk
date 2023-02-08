@@ -1,9 +1,10 @@
 -- |
--- A mechanism for providing dynamically updatable feature flag state in a simplified form to an SDK
--- client in test scenarios.
+-- A mechanism for providing dynamically updatable feature flag state in a
+-- simplified form to an SDK client in test scenarios.
 --
--- Unlike "LaunchDarkly.Server.Integrations.FileData", this mechanism does not use any external resources. It provides only
--- the data that the application has put into it using the 'update' function.
+-- Unlike "LaunchDarkly.Server.Integrations.FileData", this mechanism does not
+-- use any external resources. It provides only the data that the application
+-- has put into it using the 'update' function.
 --
 -- @
 -- td <- TestData.newTestData
@@ -22,16 +23,17 @@
 --          \<&\> fallthroughVariation False)
 -- @
 --
--- The above example uses a simple boolean flag, but more complex configurations are possible using
--- the methods of the 'FlagBuilder' that is returned by 'flag'. 'FlagBuilder'
--- supports many of the ways a flag can be configured on the LaunchDarkly dashboard, but does not
--- currently support:
+-- The above example uses a simple boolean flag, but more complex
+-- configurations are possible using the methods of the 'FlagBuilder' that is
+-- returned by 'flag'. 'FlagBuilder' supports many of the ways a flag can be
+-- configured on the LaunchDarkly dashboard, but does not currently support:
 --
 --      1. Rule operators other than "in" and "not in"
 --      2. Percentage rollouts.
 --
--- If the same 'TestData' instance is used to configure multiple 'LaunchDarkly.Server.Client.Client' instances,
--- any changes made to the data will propagate to all of the @Client@s.
+-- If the same 'TestData' instance is used to configure multiple
+-- 'LaunchDarkly.Server.Client.Client' instances, any changes made to the data
+-- will propagate to all of the @Client@s.
 --
 -- see "LaunchDarkly.Server.Integrations.FileData"
 --
@@ -50,19 +52,24 @@ module LaunchDarkly.Server.Integrations.TestData
     , fallthroughVariation
     , offVariation
     , variationForAll
+    , variationForAllUsers
     , valueForAll
     , valueForAllUsers
     , variationForKey
     , variationForUser
     , variations
     , ifMatch
+    , ifMatchContext
     , ifNotMatch
+    , ifNotMatchContext
     , VariationIndex
 
       -- * FlagRuleBuilder
     , FlagRuleBuilder
     , andMatch
+    , andMatchContext
     , andNotMatch
+    , andNotMatchContext
     , thenReturn
     )
 where
@@ -137,13 +144,15 @@ removeDataSourceListener td listenerId =
 -- |
 --  Creates or copies a 'FlagBuilder' for building a test flag configuration.
 --
---  If this flag key has already been defined in this 'TestData' instance, then the builder
---  starts with the same configuration that was last provided for this flag.
+--  If this flag key has already been defined in this 'TestData' instance, then
+--  the builder starts with the same configuration that was last provided for
+--  this flag.
 --
---  Otherwise, it starts with a new default configuration in which the flag has @True@ and
---  @False@ variations, is @True@ for all users when targeting is turned on and
---  @False@ otherwise, and currently has targeting turned on. You can change any of those
---  properties, and provide more complex behavior, using the 'FlagBuilder' methods.
+--  Otherwise, it starts with a new default configuration in which the flag has
+--  @True@ and @False@ variations, is @True@ for all users when targeting is
+--  turned on and @False@ otherwise, and currently has targeting turned on. You
+--  can change any of those properties, and provide more complex behavior,
+--  using the 'FlagBuilder' methods.
 --
 --  Once you have set the desired configuration, pass the builder to 'update'.
 --
@@ -163,14 +172,15 @@ flag (TestData ref) key = do
 -- |
 --  Updates the test data with the specified flag configuration.
 --
---  This has the same effect as if a flag were added or modified on the LaunchDarkly dashboard.
---  It immediately propagates the flag change to any 'LaunchDarkly.Server.Client.Client' instance(s) that you have
---  already configured to use this 'TestData'. If no @Client@ has been started yet,
---  it simply adds this flag to the test data which will be provided to any @Client@ that
---  you subsequently configure.
+--  This has the same effect as if a flag were added or modified on the
+--  LaunchDarkly dashboard. It immediately propagates the flag change to any
+--  'LaunchDarkly.Server.Client.Client' instance(s) that you have already
+--  configured to use this 'TestData'. If no @Client@ has been started yet, it
+--  simply adds this flag to the test data which will be provided to any
+--  @Client@ that you subsequently configure.
 --
---  Any subsequent changes to this 'FlagBuilder' instance do not affect the test data,
---  unless you call 'update'
+--  Any subsequent changes to this 'FlagBuilder' instance do not affect the
+--  test data, unless you call 'update'
 --
 --  see 'flag'
 update ::

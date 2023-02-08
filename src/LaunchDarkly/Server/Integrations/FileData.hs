@@ -1,10 +1,12 @@
 {-# LANGUAGE BangPatterns #-}
 
--- | Integration between the LaunchDarkly SDK and file data.
+-- |
+-- Integration between the LaunchDarkly SDK and file data.
 --
---  The file data source allows you to use local files as a source of feature flag state. This would
---  typically be used in a test environment, to operate using a predetermined feature flag state
---  without an actual LaunchDarkly connection. See 'dataSourceFactory' for details.
+--  The file data source allows you to use local files as a source of feature
+--  flag state. This would typically be used in a test environment, to operate
+--  using a predetermined feature flag state without an actual LaunchDarkly
+--  connection. See 'dataSourceFactory' for details.
 --
 --  @since 2.2.1
 module LaunchDarkly.Server.Integrations.FileData
@@ -126,11 +128,14 @@ instance Monoid FileBody where
     mappend = (<>)
 
 -- |
--- Creates a @DataSourceFactory@ which uses the configured the file data sources.
--- This allows you to use local files as a source of
--- feature flag state, instead of using an actual LaunchDarkly connection.
+-- Creates a @DataSourceFactory@ which uses the configured file data sources.
 --
--- To use the file dataSource you can add it to the 'LaunchDarkly.Server.Config' using 'LaunchDarkly.Server.Config.configSetDataSourceFactory'
+-- This allows you to use local files as a source of feature flag state,
+-- instead of using an actual LaunchDarkly connection.
+--
+-- To use the file dataSource you can add it to the
+-- 'LaunchDarkly.Server.Config' using
+-- 'LaunchDarkly.Server.Config.configSetDataSourceFactory'
 --
 -- @
 -- let config = configSetDataSourceFactory (FileData.dataSourceFactory ["./testData/flags.json"]) $
@@ -138,27 +143,30 @@ instance Monoid FileBody where
 -- client <- makeClient config
 -- @
 --
--- This will cause the client /not/ to connect to LaunchDarkly to get feature flags. The
--- client may still make network connections to send analytics events, unless you have disabled
--- this with 'LaunchDarkly.Server.Config.configSetSendEvents' to @False@.
--- IMPORTANT: Do /not/ set 'LaunchDarkly.Server.Config.configSetOffline' to @True@; doing so
--- would not just put the SDK \"offline\" with regard to LaunchDarkly, but will completely turn off
--- all flag data sources to the SDK /including the file data source/.
+-- This will cause the client /not/ to connect to LaunchDarkly to get feature
+-- flags. The client may still make network connections to send analytics
+-- events, unless you have disabled this with
+-- 'LaunchDarkly.Server.Config.configSetSendEvents' to @False@. IMPORTANT: Do
+-- /not/ set 'LaunchDarkly.Server.Config.configSetOffline' to @True@; doing so
+-- would not just put the SDK \"offline\" with regard to LaunchDarkly, but will
+-- completely turn off all flag data sources to the SDK /including the file
+-- data source/.
 --
--- Flag data files can be either JSON or YAML. They contain an object with three possible
--- properties:
+-- Flag data files can be either JSON or YAML. They contain an object with
+-- three possible properties:
 --
 --      [@flags@]: Feature flag definitions.
 --      [@flagValues@]: Simplified feature flags that contain only a value.
 --      [@segments@]: Context segment definitions.
 --
--- The format of the data in @flags@ and @segments@ is defined by the LaunchDarkly application
--- and is subject to change. Rather than trying to construct these objects yourself, it is simpler
--- to request existing flags directly from the LaunchDarkly server in JSON format, and use this
--- output as the starting point for your file. In Linux you would do this:
+-- The format of the data in @flags@ and @segments@ is defined by the
+-- LaunchDarkly application and is subject to change. Rather than trying to
+-- construct these objects yourself, it is simpler to request existing flags
+-- directly from the LaunchDarkly server in JSON format, and use this output as
+-- the starting point for your file. In Linux you would do this:
 --
 -- @
--- curl -H "Authorization: {your sdk key}" https://app.launchdarkly.com/sdk/latest-all
+-- curl -H "Authorization: {your sdk key}" https://sdk.launchdarkly.com/sdk/latest-all
 -- @
 --
 -- The output will look something like this (but with many more properties):
@@ -186,9 +194,10 @@ instance Monoid FileBody where
 -- }
 -- @
 --
--- Data in this format allows the SDK to exactly duplicate all the kinds of flag behavior supported
--- by LaunchDarkly. However, in many cases you will not need this complexity, but will just want to
--- set specific flag keys to specific values. For that, you can use a much simpler format:
+-- Data in this format allows the SDK to exactly duplicate all the kinds of
+-- flag behavior supported by LaunchDarkly. However, in many cases you will not
+-- need this complexity, but will just want to set specific flag keys to
+-- specific values. For that, you can use a much simpler format:
 --
 -- @
 -- {
@@ -208,12 +217,14 @@ instance Monoid FileBody where
 --   my-boolean-flag-key: true
 -- @
 --
--- It is also possible to specify both @flags@ and @flagValues@, if you want some flags
--- to have simple values and others to have complex behavior. However, it is an error to use the
--- same flag key or segment key more than once, either in a single file or across multiple files.
+-- It is also possible to specify both @flags@ and @flagValues@, if you want
+-- some flags to have simple values and others to have complex behavior.
+-- However, it is an error to use the same flag key or segment key more than
+-- once, either in a single file or across multiple files.
 --
--- If the data source encounters any error in any file(malformed content, a missing file) it will not load flags from that file.
--- If the data source encounters a duplicate key it will ignore that duplicate entry.
+-- If the data source encounters any error in any file(malformed content, a
+-- missing file) it will not load flags from that file. If the data source
+-- encounters a duplicate key it will ignore that duplicate entry.
 --
 -- @since 2.2.1
 dataSourceFactory :: [FilePath] -> DataSourceFactory

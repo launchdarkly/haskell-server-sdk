@@ -18,7 +18,8 @@ import LaunchDarkly.AesonCompat (KeyMap, lookupKey)
 mapUser :: (UserI -> UserI) -> User -> User
 mapUser f (User c) = User $ f c
 
--- | User contains specific attributes of a user of your application
+-- |
+-- User contains specific attributes of a user of your application
 --
 -- The only mandatory property is the Key, which must uniquely identify
 -- each user. For authenticated users, this may be a username or e-mail address.

@@ -1,6 +1,7 @@
--- | This module re-exports the User, Client, and Config modules.
+-- | This module re-exports the User, Client, Config, and Context modules.
 module LaunchDarkly.Server
-    ( Config
+    ( -- * Config
+      Config
     , makeConfig
     , configSetKey
     , configSetBaseURI
@@ -28,6 +29,8 @@ module LaunchDarkly.Server
     , ApplicationInfo
     , makeApplicationInfo
     , withApplicationValue
+
+      -- * User
     , User
     , makeUser
     , userSetKey
@@ -42,6 +45,8 @@ module LaunchDarkly.Server
     , userSetAnonymous
     , userSetCustom
     , userSetPrivateAttributeNames
+
+      -- * Client
     , Client
     , makeClient
     , clientVersion
@@ -67,7 +72,8 @@ module LaunchDarkly.Server
     , track
     , Status (..)
     , getStatus
-    -- Context related functions and types
+
+      -- * Context
     , Context
     , makeContext
     , makeMultiContext

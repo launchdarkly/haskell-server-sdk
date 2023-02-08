@@ -63,12 +63,14 @@ makeRedisStoreConfig connection =
         , connection = connection
         }
 
--- | Configure the Redis key prefix. All keys are prefixed by default before
+-- |
+-- Configure the Redis key prefix. All keys are prefixed by default before
 -- being inserted into Redis. The default prefix is "LaunchDarkly".
 redisConfigSetNamespace :: Text -> RedisStoreConfig -> RedisStoreConfig
 redisConfigSetNamespace namespace' config = config {namespace = namespace'}
 
--- | Construct a `StoreInterface` that can then be used during SDK
+-- |
+-- Construct a `StoreInterface` that can then be used during SDK
 -- configuration.
 makeRedisStore :: RedisStoreConfig -> IO StoreInterface
 makeRedisStore config =

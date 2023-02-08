@@ -66,7 +66,8 @@ data ConfigI = ConfigI
     }
     deriving (Generic)
 
--- | An object that allows configuration of application metadata.
+-- |
+-- An object that allows configuration of application metadata.
 --
 -- Application metadata may be used in LaunchDarkly analytics or other product
 -- features, but does not affect feature flag evaluations.
@@ -78,7 +79,8 @@ newtype ApplicationInfo = ApplicationInfo (KeyMap Text) deriving (Show, Eq)
 makeApplicationInfo :: ApplicationInfo
 makeApplicationInfo = ApplicationInfo emptyObject
 
--- | Set a new name / value pair into the application info instance.
+-- |
+-- Set a new name / value pair into the application info instance.
 --
 -- Values have the following restrictions:
 -- - Cannot be empty
