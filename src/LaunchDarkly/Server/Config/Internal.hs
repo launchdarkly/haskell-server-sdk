@@ -48,6 +48,7 @@ data ConfigI = ConfigI
     , storeBackend :: !(Maybe StoreInterface)
     , storeTTLSeconds :: !Natural
     , streaming :: !Bool
+    , initialRetryDelay :: !Int
     , allAttributesPrivate :: !Bool
     , privateAttributeNames :: !(Set Reference)
     , flushIntervalSeconds :: !Natural

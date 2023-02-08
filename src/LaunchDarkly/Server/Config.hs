@@ -1,3 +1,5 @@
+{-# LANGUAGE NumericUnderscores #-}
+
 -- | This module is for configuration of the SDK.
 module LaunchDarkly.Server.Config
     ( Config
@@ -7,6 +9,7 @@ module LaunchDarkly.Server.Config
     , configSetStreamURI
     , configSetEventsURI
     , configSetStreaming
+    , configSetInitialRetryDelay
     , configSetAllAttributesPrivate
     , configSetPrivateAttributeNames
     , configSetFlushIntervalSeconds
@@ -53,12 +56,13 @@ makeConfig key =
             , storeBackend = Nothing
             , storeTTLSeconds = 10
             , streaming = True
+            , initialRetryDelay = 1_000
             , allAttributesPrivate = False
             , privateAttributeNames = mempty
             , flushIntervalSeconds = 5
             , pollIntervalSeconds = 30
-            , contextKeyLRUCapacity = 1000
-            , eventsCapacity = 10000
+            , contextKeyLRUCapacity = 1_000
+            , eventsCapacity = 10_000
             , logger = runStdoutLoggingT
             , sendEvents = True
             , offline = False
@@ -101,6 +105,14 @@ configSetStoreTTL = mapConfig . setField @"storeTTLSeconds"
 -- enabled. It should only be disabled on the advice of LaunchDarkly support.
 configSetStreaming :: Bool -> Config -> Config
 configSetStreaming = mapConfig . setField @"streaming"
+
+-- | The initial delay in milliseconds before reconnecting after an error in the SSE client. Defaults to 1 second.
+--
+-- This only applies to the streaming connection. Providing a non-positive integer is a no-op.
+configSetInitialRetryDelay :: Int -> Config -> Config
+configSetInitialRetryDelay seconds config
+    | seconds <= 0 = config
+    | otherwise = mapConfig (setField @"initialRetryDelay" seconds) config
 
 -- | Sets whether or not all context attributes (other than the key) should be
 -- hidden from LaunchDarkly. If this is true, all context attribute values will be

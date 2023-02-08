@@ -151,7 +151,7 @@ dataSourceFactory config =
             Nothing ->
                 let dataSourceThread =
                         if getField @"streaming" config
-                            then streamingThread (getField @"streamURI" config)
+                            then streamingThread (getField @"streamURI" config) (getField @"initialRetryDelay" config)
                             else pollingThread (getField @"baseURI" config) (getField @"pollIntervalSeconds" config)
                  in networkDataSourceFactory dataSourceThread
 

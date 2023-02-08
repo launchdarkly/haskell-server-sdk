@@ -29,10 +29,10 @@ updateConfig :: (a -> LD.Config -> LD.Config) -> Maybe a -> LD.Config -> LD.Conf
 updateConfig f Nothing config = config
 updateConfig f (Just x) config = f x config
 
--- TODO(mmk) We aren't handling the initialRetryDelayMs because the SDK doesn't seem to support it
 streamingConfig :: Maybe StreamingParams -> LD.Config -> LD.Config
 streamingConfig Nothing c = c
-streamingConfig (Just p) c = updateConfig LD.configSetStreamURI (getField @"baseUri" p) c
+streamingConfig (Just p) c = updateConfig LD.configSetStreamURI (getField @"baseUri" p)
+    $ updateConfig LD.configSetInitialRetryDelay (getField @"initialRetryDelayMs" p) c
 
 tagsConfig :: Maybe TagParams -> LD.Config -> LD.Config
 tagsConfig Nothing c = c

@@ -7,6 +7,7 @@ module LaunchDarkly.Server
     , configSetStreamURI
     , configSetEventsURI
     , configSetStreaming
+    , configSetInitialRetryDelay
     , configSetAllAttributesPrivate
     , configSetPrivateAttributeNames
     , configSetFlushIntervalSeconds
