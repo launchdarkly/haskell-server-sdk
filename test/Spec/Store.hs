@@ -34,14 +34,14 @@ testInitializationWithFeatures makeStore = TestCase $ do
     segmentA = makeTestSegment "a" 50
     flagA = makeTestFlag "a" 52
     flagsR = singleton "a" flagA
-    flagsV = singleton "a" (Versioned flagA 52)
-    segmentsV = singleton "a" (Versioned segmentA 50)
+    flagsV = singleton "a" (ItemDescriptor flagA 52)
+    segmentsV = singleton "a" (ItemDescriptor segmentA 50)
 
 testGetAndUpsertAndGetAndGetAllFlags :: IO (StoreHandle IO) -> Test
 testGetAndUpsertAndGetAndGetAllFlags makeStore = TestCase $ do
     store <- makeStore
     getFlagC store "a" >>= (pure Nothing @=?)
-    upsertFlagC store "a" (Versioned (pure flag) 52) >>= (pure () @=?)
+    upsertFlagC store "a" (ItemDescriptor (pure flag) 52) >>= (pure () @=?)
     getFlagC store "a" >>= (pure (pure flag) @=?)
     getAllFlagsC store >>= (pure (singleton "a" flag) @=?)
   where
@@ -51,7 +51,7 @@ testGetAndUpsertAndGetSegment :: IO (StoreHandle IO) -> Test
 testGetAndUpsertAndGetSegment makeStore = TestCase $ do
     store <- makeStore
     getSegmentC store "a" >>= (pure Nothing @=?)
-    upsertSegmentC store "a" (Versioned (pure segment) 52) >>= (pure () @=?)
+    upsertSegmentC store "a" (ItemDescriptor (pure segment) 52) >>= (pure () @=?)
     getSegmentC store "a" >>= (pure (pure segment) @=?)
   where
     segment = makeTestSegment "a" 52
@@ -59,14 +59,14 @@ testGetAndUpsertAndGetSegment makeStore = TestCase $ do
 testUpsertRespectsVersion :: IO (StoreHandle IO) -> Test
 testUpsertRespectsVersion makeStore = TestCase $ do
     store <- makeStore
-    upsertFlagC store "a" (Versioned (pure $ makeTestFlag "a" 1) 1) >>= (pure () @=?)
-    upsertFlagC store "a" (Versioned (pure $ makeTestFlag "a" 2) 2) >>= (pure () @=?)
+    upsertFlagC store "a" (ItemDescriptor (pure $ makeTestFlag "a" 1) 1) >>= (pure () @=?)
+    upsertFlagC store "a" (ItemDescriptor (pure $ makeTestFlag "a" 2) 2) >>= (pure () @=?)
     getFlagC store "a" >>= (pure (pure $ makeTestFlag "a" 2) @=?)
     getAllFlagsC store >>= (pure (singleton "a" $ makeTestFlag "a" 2) @=?)
-    upsertFlagC store "a" (Versioned (pure $ makeTestFlag "a" 1) 1) >>= (pure () @=?)
+    upsertFlagC store "a" (ItemDescriptor (pure $ makeTestFlag "a" 1) 1) >>= (pure () @=?)
     getFlagC store "a" >>= (pure (pure $ makeTestFlag "a" 2) @=?)
     getAllFlagsC store >>= (pure (singleton "a" $ makeTestFlag "a" 2) @=?)
-    upsertFlagC store "a" (Versioned Nothing 3) >>= (pure () @=?)
+    upsertFlagC store "a" (ItemDescriptor Nothing 3) >>= (pure () @=?)
     getFlagC store "a" >>= (pure Nothing @=?)
     getAllFlagsC store >>= (pure mempty @=?)
 

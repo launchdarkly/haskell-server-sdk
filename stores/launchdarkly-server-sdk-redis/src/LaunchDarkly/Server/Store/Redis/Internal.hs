@@ -15,7 +15,7 @@ import Data.Aeson (FromJSON, ToJSON, decode, encode)
 import Data.ByteString (ByteString)
 import Data.ByteString.Lazy (fromStrict, toStrict)
 import Data.Generics.Product (getField, setField)
-import Data.Maybe (isJust)
+import Data.Maybe (fromMaybe, isJust)
 import Data.Text (Text)
 import qualified Data.Text as T
 import Data.Text.Encoding (decodeUtf8, encodeUtf8)
@@ -40,14 +40,7 @@ import GHC.Generics (Generic)
 import GHC.Natural (Natural)
 
 import LaunchDarkly.AesonCompat (KeyMap, fromList, mapValues, objectKeys, toList)
-import LaunchDarkly.Server.Store (RawFeature (..), StoreInterface (..), StoreResult (..))
-
-data MinimalFeature = MinimalFeature
-    { key :: Text
-    , version :: Natural
-    , deleted :: Bool
-    }
-    deriving (Generic, ToJSON, FromJSON)
+import LaunchDarkly.Server.Store (PersistentDataStore (..), SerializedItemDescriptor (..), StoreResult (..), byteStringToVersionedData, serializeWithPlaceholder)
 
 -- | Opaque type used to configure the Redis store integration.
 data RedisStoreConfig = RedisStoreConfig
@@ -70,17 +63,17 @@ redisConfigSetNamespace :: Text -> RedisStoreConfig -> RedisStoreConfig
 redisConfigSetNamespace namespace' config = config {namespace = namespace'}
 
 -- |
--- Construct a `StoreInterface` that can then be used during SDK
+-- Construct a `PersistentDataStore` that can then be used during SDK
 -- configuration.
-makeRedisStore :: RedisStoreConfig -> IO StoreInterface
+makeRedisStore :: RedisStoreConfig -> IO PersistentDataStore
 makeRedisStore config =
     pure
-        StoreInterface
-            { storeInterfaceUpsertFeature = redisUpsert config
-            , storeInterfaceGetFeature = redisGetFeature config
-            , storeInterfaceInitialize = redisInitialize config
-            , storeInterfaceIsInitialized = redisIsInitialized config
-            , storeInterfaceAllFeatures = redisGetAll config
+        PersistentDataStore
+            { persistentDataStoreUpsertFeature = redisUpsert config
+            , persistentDataStoreGetFeature = redisGetFeature config
+            , persistentDataStoreInitialize = redisInitialize config
+            , persistentDataStoreIsInitialized = redisIsInitialized config
+            , persistentDataStoreAllFeatures = redisGetAll config
             }
 
 data RedisError = RedisError Text deriving (Typeable, Show, Exception)
@@ -101,33 +94,20 @@ run config action =
         , Handler $ \(RedisError err) -> pure $ Left err
         ]
 
-decodeMinimal :: ByteString -> Maybe MinimalFeature
-decodeMinimal = decode . fromStrict
+createSerializedItemDescriptor :: ByteString -> SerializedItemDescriptor
+createSerializedItemDescriptor byteString = SerializedItemDescriptor (Just byteString) 0 False
 
-rawToOpaque :: ByteString -> RawFeature
-rawToOpaque raw = case decodeMinimal raw of
-    Nothing -> RawFeature Nothing 0
-    Just decoded ->
-        RawFeature
-            (if getField @"deleted" decoded then Nothing else pure raw)
-            (getField @"version" decoded)
-
-opaqueToRep :: Text -> RawFeature -> ByteString
-opaqueToRep key opaque = case rawFeatureBuffer opaque of
-    Just buffer -> buffer
-    Nothing -> toStrict $ encode $ MinimalFeature key (rawFeatureVersion opaque) True
-
-redisInitialize :: RedisStoreConfig -> KeyMap (KeyMap RawFeature) -> StoreResult ()
+redisInitialize :: RedisStoreConfig -> KeyMap (KeyMap SerializedItemDescriptor) -> StoreResult ()
 redisInitialize config values = run config $ do
     del (map (makeKey config) $ objectKeys values) >>= void . exceptOnReply
     forM_ (toList values) $ \(kind, features) -> forM_ (toList features) $ \(key, feature) ->
-        (hset (makeKey config kind) (encodeUtf8 key) $ opaqueToRep key feature) >>= void . exceptOnReply
+        (hset (makeKey config kind) (encodeUtf8 key) $ serializeWithPlaceholder feature) >>= void . exceptOnReply
     set (makeKey config "$inited") "" >>= void . exceptOnReply
 
-redisUpsert :: RedisStoreConfig -> Text -> Text -> RawFeature -> StoreResult Bool
+redisUpsert :: RedisStoreConfig -> Text -> Text -> SerializedItemDescriptor -> StoreResult Bool
 redisUpsert = redisUpsertInternal (pure ())
 
-redisUpsertInternal :: IO () -> RedisStoreConfig -> Text -> Text -> RawFeature -> StoreResult Bool
+redisUpsertInternal :: IO () -> RedisStoreConfig -> Text -> Text -> SerializedItemDescriptor -> StoreResult Bool
 redisUpsertInternal hook config kind key opaque = run config tryUpsert
   where
     tryUpsert =
@@ -138,27 +118,25 @@ redisUpsertInternal hook config kind key opaque = run config tryUpsert
             >>= \x ->
                 (liftIO hook) >> case x of
                     Nothing -> doInsert
-                    (Just raw) -> case decodeMinimal raw of
+                    (Just byteString) -> case byteStringToVersionedData byteString of
                         Nothing -> pure True
-                        Just decoded ->
-                            if getField @"version" decoded >= rawFeatureVersion opaque
+                        Just decodedVersion ->
+                            if getField @"version" decodedVersion >= getField @"version" opaque
                                 then pure False
                                 else doInsert
     space = makeKey config kind
     doInsert =
-        multiExec (hset space (encodeUtf8 key) (opaqueToRep key opaque)) >>= \case
+        multiExec (hset space (encodeUtf8 key) (serializeWithPlaceholder opaque)) >>= \case
             TxSuccess _ -> pure True
             TxError err -> liftIO $ throwIO $ RedisError $ T.pack $ show err
             TxAborted -> tryUpsert
 
-redisGetFeature :: RedisStoreConfig -> Text -> Text -> StoreResult RawFeature
+redisGetFeature :: RedisStoreConfig -> Text -> Text -> StoreResult (Maybe SerializedItemDescriptor)
 redisGetFeature config kind key =
     run config $
         hget (makeKey config kind) (encodeUtf8 key)
             >>= exceptOnReply
-            >>= \case
-                Nothing -> pure $ RawFeature Nothing 0
-                (Just raw) -> pure $ rawToOpaque raw
+            >>= \result -> pure $ (pure . createSerializedItemDescriptor) =<< result
 
 redisIsInitialized :: RedisStoreConfig -> StoreResult Bool
 redisIsInitialized config =
@@ -167,9 +145,9 @@ redisIsInitialized config =
             >>= exceptOnReply
             >>= pure . isJust
 
-redisGetAll :: RedisStoreConfig -> Text -> StoreResult (KeyMap RawFeature)
+redisGetAll :: RedisStoreConfig -> Text -> StoreResult (KeyMap SerializedItemDescriptor)
 redisGetAll config kind =
     run config $
         hgetall (makeKey config kind)
             >>= exceptOnReply
-            >>= pure . mapValues rawToOpaque . fromList . map (\(k, v) -> (decodeUtf8 k, v))
+            >>= pure . mapValues createSerializedItemDescriptor . fromList . map (\(k, v) -> (decodeUtf8 k, v))

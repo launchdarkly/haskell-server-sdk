@@ -1,3 +1,5 @@
+{-# LANGUAGE NamedFieldPuns #-}
+
 module LaunchDarkly.Server.Store.Internal
     ( isInitialized
     , getAllFlags
@@ -8,45 +10,49 @@ module LaunchDarkly.Server.Store.Internal
     , initialize
     , StoreResult
     , StoreResultM
-    , StoreInterface (..)
-    , RawFeature (..)
+    , PersistentDataStore (..)
+    , SerializedItemDescriptor (..)
     , StoreHandle (..)
     , LaunchDarklyStoreRead (..)
     , LaunchDarklyStoreWrite (..)
-    , Versioned (..)
+    , ItemDescriptor (..)
     , makeStoreIO
     , insertFlag
     , deleteFlag
     , insertSegment
     , deleteSegment
     , initializeStore
-    , versionedToRaw
+    , createSerializedItemDescriptor
     , FeatureKey
     , FeatureNamespace
+    , serializeWithPlaceholder
+    , byteStringToVersionedData
     ) where
 
 import Control.Lens (Lens', (%~), (^.))
 import Control.Monad (void)
-import Data.Aeson (FromJSON, ToJSON, decode, encode)
+import Data.Aeson (FromJSON, ToJSON (toJSON), decode, encode)
 import Data.ByteString (ByteString)
 import Data.ByteString.Lazy (fromStrict, toStrict)
 import Data.Function ((&))
-import Data.Generics.Product (field, getField, setField)
+import Data.Generics.Product (HasField', field, getField, setField)
 import Data.IORef (IORef, atomicModifyIORef', newIORef, readIORef)
 import Data.Maybe (isJust)
-import Data.Text (Text)
+import Data.Text (Text, pack)
 import GHC.Generics (Generic)
 import GHC.Natural (Natural)
 import System.Clock (Clock (Monotonic), TimeSpec, getTime)
 
-import LaunchDarkly.AesonCompat (KeyMap, deleteKey, emptyObject, insertKey, lookupKey, mapMaybeValues, mapValues)
+import Data.Aeson.Types (Value (Bool))
+import Data.Either.Extra (eitherToMaybe)
+import LaunchDarkly.AesonCompat (KeyMap, deleteKey, emptyObject, insertKey, lookupKey, mapMaybeValues, mapValues, singleton)
 import LaunchDarkly.Server.Features (Flag, Segment)
 
 -- Store result not defined in terms of StoreResultM so we dont have to export.
 type StoreResultM m a = m (Either Text a)
 
 -- |
--- The result type for every `StoreInterface` function. Instead of throwing
+-- The result type for every `PersistentDataStore` function. Instead of throwing
 -- an exception, any store related error should return `Left`. Exceptions
 -- unrelated to the store should not be caught.
 type StoreResult a = IO (Either Text a)
@@ -58,18 +64,18 @@ class LaunchDarklyStoreRead store m where
     getInitializedC :: store -> StoreResultM m Bool
 
 class LaunchDarklyStoreWrite store m where
-    storeInitializeC :: store -> KeyMap (Versioned Flag) -> KeyMap (Versioned Segment) -> StoreResultM m ()
-    upsertSegmentC :: store -> Text -> Versioned (Maybe Segment) -> StoreResultM m ()
-    upsertFlagC :: store -> Text -> Versioned (Maybe Flag) -> StoreResultM m ()
+    storeInitializeC :: store -> KeyMap (ItemDescriptor Flag) -> KeyMap (ItemDescriptor Segment) -> StoreResultM m ()
+    upsertSegmentC :: store -> Text -> ItemDescriptor (Maybe Segment) -> StoreResultM m ()
+    upsertFlagC :: store -> Text -> ItemDescriptor (Maybe Flag) -> StoreResultM m ()
 
 data StoreHandle m = StoreHandle
     { storeHandleGetFlag :: !(Text -> StoreResultM m (Maybe Flag))
     , storeHandleGetSegment :: !(Text -> StoreResultM m (Maybe Segment))
     , storeHandleAllFlags :: !(StoreResultM m (KeyMap Flag))
     , storeHandleInitialized :: !(StoreResultM m Bool)
-    , storeHandleInitialize :: !(KeyMap (Versioned Flag) -> KeyMap (Versioned Segment) -> StoreResultM m ())
-    , storeHandleUpsertSegment :: !(Text -> Versioned (Maybe Segment) -> StoreResultM m ())
-    , storeHandleUpsertFlag :: !(Text -> Versioned (Maybe Flag) -> StoreResultM m ())
+    , storeHandleInitialize :: !(KeyMap (ItemDescriptor Flag) -> KeyMap (ItemDescriptor Segment) -> StoreResultM m ())
+    , storeHandleUpsertSegment :: !(Text -> ItemDescriptor (Maybe Segment) -> StoreResultM m ())
+    , storeHandleUpsertFlag :: !(Text -> ItemDescriptor (Maybe Flag) -> StoreResultM m ())
     , storeHandleExpireAll :: !(StoreResultM m ())
     }
     deriving (Generic)
@@ -93,21 +99,21 @@ initializeStore ::
     StoreResultM m ()
 initializeStore store flags segments = storeInitializeC store (makeVersioned flags) (makeVersioned segments)
   where
-    makeVersioned = mapValues (\f -> Versioned f (getField @"version" f))
+    makeVersioned = mapValues (\f -> ItemDescriptor f (getField @"version" f))
 
 insertFlag :: (LaunchDarklyStoreWrite store m, Monad m) => store -> Flag -> StoreResultM m ()
-insertFlag store flag = upsertFlagC store (getField @"key" flag) $ Versioned (pure flag) (getField @"version" flag)
+insertFlag store flag = upsertFlagC store (getField @"key" flag) $ ItemDescriptor (pure flag) (getField @"version" flag)
 
 deleteFlag :: (LaunchDarklyStoreWrite store m, Monad m) => store -> Text -> Natural -> StoreResultM m ()
-deleteFlag store key version = upsertFlagC store key $ Versioned Nothing version
+deleteFlag store key version = upsertFlagC store key $ ItemDescriptor Nothing version
 
 insertSegment :: (LaunchDarklyStoreWrite store m, Monad m) => store -> Segment -> StoreResultM m ()
-insertSegment store segment = upsertSegmentC store (getField @"key" segment) $ Versioned (pure segment) (getField @"version" segment)
+insertSegment store segment = upsertSegmentC store (getField @"key" segment) $ ItemDescriptor (pure segment) (getField @"version" segment)
 
 deleteSegment :: (LaunchDarklyStoreWrite store m, Monad m) => store -> Text -> Natural -> StoreResultM m ()
-deleteSegment store key version = upsertSegmentC store key $ Versioned Nothing version
+deleteSegment store key version = upsertSegmentC store key $ ItemDescriptor Nothing version
 
-makeStoreIO :: Maybe StoreInterface -> TimeSpec -> IO (StoreHandle IO)
+makeStoreIO :: Maybe PersistentDataStore -> TimeSpec -> IO (StoreHandle IO)
 makeStoreIO backend ttl = do
     state <-
         newIORef
@@ -137,16 +143,23 @@ data Expirable a = Expirable
     }
     deriving (Generic)
 
-data Versioned a = Versioned
+data ItemDescriptor a = ItemDescriptor
     { value :: !a
     , version :: !Natural
     }
     deriving (Generic)
 
+-- The CacheableItem is used to store results from a persistent store.
+--
+-- The type is a Maybe because it is possible that a persistent store will not
+-- have a record of a flag requested. We can store that result as a Nothing and
+-- prevent subsequent evaluations from reaching across the network.
+type CacheableItem a = Maybe (ItemDescriptor (Maybe a))
+
 data State = State
     { allFlags :: !(Expirable (KeyMap Flag))
-    , flags :: !(KeyMap (Expirable (Versioned (Maybe Flag))))
-    , segments :: !(KeyMap (Expirable (Versioned (Maybe Segment))))
+    , flags :: !(KeyMap (Expirable (CacheableItem Flag)))
+    , segments :: !(KeyMap (Expirable (CacheableItem Segment)))
     , initialized :: !(Expirable Bool)
     }
     deriving (Generic)
@@ -158,35 +171,68 @@ type FeatureKey = Text
 type FeatureNamespace = Text
 
 -- | The interface implemented by external stores for use by the SDK.
-data StoreInterface = StoreInterface
-    { storeInterfaceAllFeatures :: !(FeatureNamespace -> StoreResult (KeyMap RawFeature))
+data PersistentDataStore = PersistentDataStore
+    { persistentDataStoreAllFeatures :: !(FeatureNamespace -> StoreResult (KeyMap SerializedItemDescriptor))
     -- ^ A map of all features in a given namespace including deleted.
-    , storeInterfaceGetFeature :: !(FeatureNamespace -> FeatureKey -> StoreResult RawFeature)
+    , persistentDataStoreGetFeature :: !(FeatureNamespace -> FeatureKey -> StoreResult (Maybe SerializedItemDescriptor))
     -- ^ Return the value of a key in a namespace.
-    , storeInterfaceUpsertFeature :: !(FeatureNamespace -> FeatureKey -> RawFeature -> StoreResult Bool)
+    , persistentDataStoreUpsertFeature :: !(FeatureNamespace -> FeatureKey -> SerializedItemDescriptor -> StoreResult Bool)
     -- ^ Upsert a given feature. Versions should be compared before upsert.
     -- The result should indicate if the feature was replaced or not.
-    , storeInterfaceIsInitialized :: !(StoreResult Bool)
+    , persistentDataStoreIsInitialized :: !(StoreResult Bool)
     -- ^ Checks if the external store has been initialized, which may
     -- have been done by another instance of the SDK.
-    , storeInterfaceInitialize :: !(KeyMap (KeyMap RawFeature) -> StoreResult ())
+    , persistentDataStoreInitialize :: !(KeyMap (KeyMap SerializedItemDescriptor) -> StoreResult ())
     -- ^ A map of namespaces, and items in namespaces. The entire store state
     -- should be replaced with these values.
     }
 
--- | An abstract representation of a store object.
-data RawFeature = RawFeature
-    { rawFeatureBuffer :: !(Maybe ByteString)
+-- | A record representing an object that can be persisted in an external store.
+data SerializedItemDescriptor = SerializedItemDescriptor
+    { item :: !(Maybe ByteString)
     -- ^ A serialized item. If the item is deleted or does not exist this
     -- should be `Nothing`.
-    , rawFeatureVersion :: !Natural
+    , version :: !Natural
     -- ^ The version of a given item. If the item does not exist this should
     -- be zero.
+    , deleted :: !Bool
+    -- ^ True if this is a placeholder (tombstone) for a deleted item.
     }
+    deriving (Generic)
+
+-- |
+-- Generate a 'ByteString' representation of the 'SerializedItemDescriptor'.
+--
+-- If the 'SerializedItemDescriptor' has either a 'Nothing' value, or is marked
+-- as deleted, the ByteString representation will be a tombstone marker containing the version and deletion status.
+--
+-- Otherwise, the internal item representation is returned.
+serializeWithPlaceholder :: SerializedItemDescriptor -> ByteString
+serializeWithPlaceholder SerializedItemDescriptor {item = Nothing, version = version} = tombstonePlaceholder version
+serializeWithPlaceholder SerializedItemDescriptor {deleted = True, version = version} = tombstonePlaceholder version
+serializeWithPlaceholder SerializedItemDescriptor {item = Just item} = item
+
+-- Generate the tombstone placeholder ByteString representation.
+tombstonePlaceholder :: Natural -> ByteString
+tombstonePlaceholder version = singleton "deleted" (Bool True) & insertKey "version" (toJSON version) & encode & toStrict
+
+-- |
+-- Partially decode the provided ByteString into a 'VersionedData' struct.
+--
+-- This is useful for persistent stores who need to perform version comparsions
+-- before persisting data.
+byteStringToVersionedData :: ByteString -> Maybe VersionedData
+byteStringToVersionedData byteString = decode $ fromStrict byteString
+
+data VersionedData = VersionedData
+    { version :: Natural
+    , deleted :: Bool
+    }
+    deriving (Generic, ToJSON, FromJSON)
 
 data Store = Store
     { state :: !(IORef State)
-    , backend :: !(Maybe StoreInterface)
+    , backend :: !(Maybe PersistentDataStore)
     , timeToLive :: !TimeSpec
     }
     deriving (Generic)
@@ -212,79 +258,93 @@ isExpired store now item =
 getMonotonicTime :: IO TimeSpec
 getMonotonicTime = getTime Monotonic
 
-initialize :: Store -> KeyMap (Versioned Flag) -> KeyMap (Versioned Segment) -> StoreResult ()
+initialize :: Store -> KeyMap (ItemDescriptor Flag) -> KeyMap (ItemDescriptor Segment) -> StoreResult ()
 initialize store flags segments = case getField @"backend" store of
     Nothing -> do
         atomicModifyIORef' (getField @"state" store) $ \state ->
             (,()) $
                 state
-                    & setField @"flags" (mapValues (\f -> Expirable f True 0) $ c flags)
-                    & setField @"segments" (mapValues (\f -> Expirable f True 0) $ c segments)
+                    & setField @"flags" (mapValues (\f -> Expirable (Just f) True 0) $ c flags)
+                    & setField @"segments" (mapValues (\f -> Expirable (Just f) True 0) $ c segments)
                     & setField @"allFlags" (Expirable (mapValues (getField @"value") flags) True 0)
                     & setField @"initialized" (Expirable True False 0)
         pure $ Right ()
     Just backend ->
-        (storeInterfaceInitialize backend) raw >>= \case
+        (persistentDataStoreInitialize backend) serializedItemMap >>= \case
             Left err -> pure $ Left err
             Right () -> expireAllItems store >> pure (Right ())
   where
-    raw =
+    serializedItemMap =
         emptyObject
-            & insertKey "flags" (mapValues versionedToRaw $ c flags)
-            & insertKey "segments" (mapValues versionedToRaw $ c segments)
+            & insertKey "flags" (mapValues createSerializedItemDescriptor $ c flags)
+            & insertKey "segments" (mapValues createSerializedItemDescriptor $ c segments)
     c x = mapValues (\f -> f & field @"value" %~ Just) x
 
-rawToVersioned :: (FromJSON a) => RawFeature -> Maybe (Versioned (Maybe a))
-rawToVersioned raw = case rawFeatureBuffer raw of
-    Nothing -> pure $ Versioned Nothing (rawFeatureVersion raw)
-    Just buffer -> case decode $ fromStrict buffer of
-        Nothing -> Nothing
-        Just decoded -> pure $ Versioned decoded (rawFeatureVersion raw)
+serializedToItemDescriptor :: (FromJSON a, HasField' "version" a Natural) => SerializedItemDescriptor -> Either Text (ItemDescriptor (Maybe a))
+serializedToItemDescriptor serializedItem = case getField @"item" serializedItem of
+    Nothing -> pure $ ItemDescriptor Nothing (getField @"version" serializedItem)
+    Just buffer -> do
+        let versionedData = byteStringToVersionedData buffer
+         in case versionedData of
+                Nothing -> Left "failed decoding into VersionedData"
+                Just VersionedData {deleted = True, version = version} -> pure $ ItemDescriptor Nothing version
+                Just _ ->
+                    let decodeResult = decode $ fromStrict buffer
+                     in case decodeResult of
+                            Nothing -> Left "failed decoding into ItemDescriptor"
+                            Just decoded -> pure $ ItemDescriptor (Just decoded) (getField @"version" decoded)
 
-versionedToRaw :: (ToJSON a) => Versioned (Maybe a) -> RawFeature
-versionedToRaw versioned = case getField @"value" versioned of
-    Nothing -> RawFeature Nothing $ getField @"version" versioned
-    Just x -> RawFeature (pure $ toStrict $ encode x) $ getField @"version" versioned
+createSerializedItemDescriptor :: (ToJSON a) => ItemDescriptor (Maybe a) -> SerializedItemDescriptor
+createSerializedItemDescriptor ItemDescriptor {value = Nothing, version} = SerializedItemDescriptor {item = Nothing, version, deleted = True}
+createSerializedItemDescriptor ItemDescriptor {value = Just item, version} = SerializedItemDescriptor {item = Just $ toStrict $ encode item, version, deleted = False}
 
-tryGetBackend :: (FromJSON a) => StoreInterface -> Text -> Text -> StoreResult (Versioned (Maybe a))
+tryGetBackend :: (FromJSON a, HasField' "version" a Natural) => PersistentDataStore -> Text -> Text -> StoreResult (Maybe (ItemDescriptor (Maybe a)))
 tryGetBackend backend namespace key =
-    ((storeInterfaceGetFeature backend) namespace key) >>= \case
+    ((persistentDataStoreGetFeature backend) namespace key) >>= \case
         Left err -> pure $ Left err
-        Right raw -> case rawToVersioned raw of
-            Nothing -> pure $ Left "failed to decode from external store"
-            Just versioned -> pure $ Right versioned
+        Right Nothing -> pure $ Right Nothing
+        Right (Just serializedItem) -> case serializedToItemDescriptor serializedItem of
+            Left err -> pure $ Left err
+            Right versioned -> pure $ Right $ Just versioned
 
 getGeneric ::
-    FromJSON a =>
+    (FromJSON a, HasField' "version" a Natural) =>
     Store ->
     Text ->
     Text ->
-    Lens' State (KeyMap (Expirable (Versioned (Maybe a)))) ->
+    Lens' State (KeyMap (Expirable (CacheableItem a))) ->
     StoreResult (Maybe a)
 getGeneric store namespace key lens = do
     state <- readIORef $ getField @"state" store
     case getField @"backend" store of
         Nothing -> case lookupKey key (state ^. lens) of
             Nothing -> pure $ Right Nothing
-            Just x -> pure $ Right $ getField @"value" $ getField @"value" x
+            Just cacheItem -> pure $ Right $ (getField @"value") =<< (getField @"value" cacheItem)
         Just backend -> do
             now <- getMonotonicTime
             case lookupKey key (state ^. lens) of
                 Nothing -> updateFromBackend backend now
-                Just x ->
-                    if isExpired store now x
+                Just cacheItem ->
+                    if isExpired store now cacheItem
                         then updateFromBackend backend now
-                        else pure $ Right $ getField @"value" $ getField @"value" x
+                        else pure $ Right $ (getField @"value") =<< (getField @"value" cacheItem)
   where
     updateFromBackend backend now =
         tryGetBackend backend namespace key >>= \case
             Left err -> pure $ Left err
-            Right v -> do
+            Right Nothing -> do
                 atomicModifyIORef' (getField @"state" store) $ \stateRef ->
                     (,()) $
                         stateRef
                             & lens
-                                %~ (insertKey key (Expirable v False now))
+                                %~ (insertKey key (Expirable Nothing False now))
+                pure $ Right Nothing
+            Right (Just v) -> do
+                atomicModifyIORef' (getField @"state" store) $ \stateRef ->
+                    (,()) $
+                        stateRef
+                            & lens
+                                %~ (insertKey key (Expirable (Just v) False now))
                 pure $ Right $ getField @"value" v
 
 getFlag :: Store -> Text -> StoreResult (Maybe Flag)
@@ -298,8 +358,8 @@ upsertGeneric ::
     Store ->
     Text ->
     Text ->
-    Versioned (Maybe a) ->
-    Lens' State (KeyMap (Expirable (Versioned (Maybe a)))) ->
+    ItemDescriptor (Maybe a) ->
+    Lens' State (KeyMap (Expirable (CacheableItem a))) ->
     (Bool -> State -> State) ->
     StoreResult ()
 upsertGeneric store namespace key versioned lens action = do
@@ -308,7 +368,7 @@ upsertGeneric store namespace key versioned lens action = do
             void $ atomicModifyIORef' (getField @"state" store) $ \stateRef -> (,()) $ upsertMemory stateRef
             pure $ Right ()
         Just backend -> do
-            result <- (storeInterfaceUpsertFeature backend) namespace key (versionedToRaw versioned)
+            result <- (persistentDataStoreUpsertFeature backend) namespace key (createSerializedItemDescriptor versioned)
             case result of
                 Left err -> pure $ Left err
                 Right updated ->
@@ -319,22 +379,24 @@ upsertGeneric store namespace key versioned lens action = do
                             void $ atomicModifyIORef' (getField @"state" store) $ \stateRef ->
                                 (,()) $
                                     stateRef
-                                        & lens %~ (insertKey key (Expirable versioned False now))
+                                        & lens %~ (insertKey key (Expirable (Just versioned) False now))
                                         & action True
                             pure $ Right ()
   where
     upsertMemory state = case lookupKey key (state ^. lens) of
         Nothing -> updateMemory state
-        Just existing ->
-            if (getField @"version" $ getField @"value" existing) < getField @"version" versioned
-                then updateMemory state
-                else state
+        Just cacheItem -> case getField @"value" cacheItem of
+            Nothing -> updateMemory state
+            Just existing ->
+                if (getField @"version" existing) < getField @"version" versioned
+                    then updateMemory state
+                    else state
     updateMemory state =
         state
-            & lens %~ (insertKey key (Expirable versioned False 0))
+            & lens %~ (insertKey key (Expirable (Just versioned) False 0))
             & action False
 
-upsertFlag :: Store -> Text -> Versioned (Maybe Flag) -> StoreResult ()
+upsertFlag :: Store -> Text -> ItemDescriptor (Maybe Flag) -> StoreResult ()
 upsertFlag store key versioned = upsertGeneric store "flags" key versioned (field @"flags") postAction
   where
     postAction external state =
@@ -345,19 +407,19 @@ upsertFlag store key versioned = upsertGeneric store "flags" key versioned (fiel
         Nothing -> deleteKey key allFlags
         Just flag -> insertKey key flag allFlags
 
-upsertSegment :: Store -> Text -> Versioned (Maybe Segment) -> StoreResult ()
+upsertSegment :: Store -> Text -> ItemDescriptor (Maybe Segment) -> StoreResult ()
 upsertSegment store key versioned = upsertGeneric store "segments" key versioned (field @"segments") postAction
   where
     postAction _ state = state
 
-filterAndCacheFlags :: Store -> TimeSpec -> KeyMap RawFeature -> IO (KeyMap Flag)
-filterAndCacheFlags store now raw = do
-    let decoded = mapMaybeValues rawToVersioned raw
+filterAndCacheFlags :: Store -> TimeSpec -> KeyMap SerializedItemDescriptor -> IO (KeyMap Flag)
+filterAndCacheFlags store now serializedMap = do
+    let decoded = mapMaybeValues (eitherToMaybe . serializedToItemDescriptor) serializedMap
         allFlags = mapMaybeValues (getField @"value") decoded
     atomicModifyIORef' (getField @"state" store) $ \state ->
         (,()) $
             setField @"allFlags" (Expirable allFlags False now) $
-                setField @"flags" (mapValues (\x -> Expirable x False now) decoded) state
+                setField @"flags" (mapValues (\x -> Expirable (Just x) False now) decoded) state
     pure allFlags
 
 getAllFlags :: Store -> StoreResult (KeyMap Flag)
@@ -371,11 +433,11 @@ getAllFlags store = do
             if not (isExpired store now $ getField @"allFlags" state)
                 then memoryFlags
                 else do
-                    result <- (storeInterfaceAllFeatures backend) "flags"
+                    result <- (persistentDataStoreAllFeatures backend) "flags"
                     case result of
                         Left err -> pure (Left err)
-                        Right raw -> do
-                            filtered <- filterAndCacheFlags store now raw
+                        Right serializedMap -> do
+                            filtered <- filterAndCacheFlags store now serializedMap
                             pure (Right filtered)
 
 isInitialized :: Store -> StoreResult Bool
@@ -390,7 +452,7 @@ isInitialized store = do
                 now <- getMonotonicTime
                 if isExpired store now initialized
                     then do
-                        result <- storeInterfaceIsInitialized backend
+                        result <- persistentDataStoreIsInitialized backend
                         case result of
                             Left err -> pure $ Left err
                             Right i -> do

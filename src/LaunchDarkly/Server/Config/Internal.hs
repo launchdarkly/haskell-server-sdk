@@ -23,7 +23,7 @@ import LaunchDarkly.AesonCompat (KeyMap, emptyObject, insertKey, toList)
 import qualified LaunchDarkly.AesonCompat as AesonCompat
 import LaunchDarkly.Server.DataSource.Internal (DataSourceFactory)
 import LaunchDarkly.Server.Reference (Reference)
-import LaunchDarkly.Server.Store (StoreInterface)
+import LaunchDarkly.Server.Store (PersistentDataStore)
 
 -- | Config allows advanced configuration of the LaunchDarkly client.
 data Config = Config
@@ -31,7 +31,7 @@ data Config = Config
     , baseURI :: !Text
     , streamURI :: !Text
     , eventsURI :: !Text
-    , storeBackend :: !(Maybe StoreInterface)
+    , storeBackend :: !(Maybe PersistentDataStore)
     , storeTTLSeconds :: !Natural
     , streaming :: !Bool
     , initialRetryDelay :: !Int

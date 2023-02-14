@@ -143,11 +143,11 @@ test-suite haskell-server-sdk-test
       Spec.Integrations.FileData
       Spec.Integrations.TestData
       Spec.Operators
+      Spec.PersistentDataStore
       Spec.Redis
       Spec.Reference
       Spec.Segment
       Spec.Store
-      Spec.StoreInterface
       Spec.Streaming
       Util.Features
       LaunchDarkly.AesonCompat

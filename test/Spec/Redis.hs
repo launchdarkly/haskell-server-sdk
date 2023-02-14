@@ -31,7 +31,7 @@ testUpsertRace = TestCase $ do
     backend <- makeRedisStore config
     store <- makeStoreIO (pure backend) $ TimeSpec 0 0
     let hook = (insertFlag store $ makeTestFlag "a" 2) >>= (Right () @=?)
-    redisUpsertInternal hook config "flags" "a" (versionedToRaw $ Versioned (pure $ makeTestFlag "a" 1) 1)
+    redisUpsertInternal hook config "flags" "a" (createSerializedItemDescriptor $ ItemDescriptor (pure $ makeTestFlag "a" 1) 1)
         >>= (Right False @=?)
     getFlagC store "a" >>= (Right (pure $ makeTestFlag "a" 2) @=?)
 

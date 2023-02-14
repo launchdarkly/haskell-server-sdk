@@ -14,11 +14,11 @@ import qualified Spec.Features
 import qualified Spec.Integrations.FileData
 import qualified Spec.Integrations.TestData
 import qualified Spec.Operators
+import qualified Spec.PersistentDataStore
 import qualified Spec.Redis
 import qualified Spec.Reference
 import qualified Spec.Segment
 import qualified Spec.Store
-import qualified Spec.StoreInterface
 import qualified Spec.Streaming
 import System.Exit (ExitCode (ExitFailure), exitWith)
 
@@ -39,7 +39,7 @@ main = do
                 , Spec.Reference.allTests
                 , Spec.Segment.allTests
                 , Spec.Store.allTests
-                , Spec.StoreInterface.allTests
+                , Spec.PersistentDataStore.allTests
                 , Spec.Streaming.allTests
                 , TestLabel "Integration.FileData" Spec.Integrations.FileData.allTests
                 , TestLabel "Integration.TestData" Spec.Integrations.TestData.allTests

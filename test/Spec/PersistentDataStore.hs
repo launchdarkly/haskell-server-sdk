@@ -1,4 +1,4 @@
-module Spec.StoreInterface (allTests) where
+module Spec.PersistentDataStore (allTests) where
 
 import Control.Monad (void)
 import Data.ByteString ()
@@ -13,17 +13,17 @@ import Util.Features (makeTestFlag)
 import LaunchDarkly.AesonCompat (emptyObject, insertKey, singleton)
 import LaunchDarkly.Server.Store.Internal
 
-makeTestStore :: Maybe StoreInterface -> IO (StoreHandle IO)
+makeTestStore :: Maybe PersistentDataStore -> IO (StoreHandle IO)
 makeTestStore backend = makeStoreIO backend $ TimeSpec 10 0
 
-makeStoreInterface :: StoreInterface
+makeStoreInterface :: PersistentDataStore
 makeStoreInterface =
-    StoreInterface
-        { storeInterfaceAllFeatures = const $ assertFailure "allFeatures should not be called"
-        , storeInterfaceGetFeature = const $ const $ assertFailure "getFeatures should not be called"
-        , storeInterfaceUpsertFeature = const $ const $ const $ assertFailure "upsertFeature should not be called"
-        , storeInterfaceIsInitialized = assertFailure "isInitialized should not be called"
-        , storeInterfaceInitialize = const $ assertFailure "initialize should not be called"
+    PersistentDataStore
+        { persistentDataStoreAllFeatures = const $ assertFailure "allFeatures should not be called"
+        , persistentDataStoreGetFeature = const $ const $ assertFailure "getFeatures should not be called"
+        , persistentDataStoreUpsertFeature = const $ const $ const $ assertFailure "upsertFeature should not be called"
+        , persistentDataStoreIsInitialized = assertFailure "isInitialized should not be called"
+        , persistentDataStoreInitialize = const $ assertFailure "initialize should not be called"
         }
 
 testFailInit :: Test
@@ -32,7 +32,7 @@ testFailInit = TestCase $ do
         makeTestStore $
             pure $
                 makeStoreInterface
-                    { storeInterfaceInitialize = \_ -> pure $ Left "err"
+                    { persistentDataStoreInitialize = \_ -> pure $ Left "err"
                     }
     initializeStore store emptyObject emptyObject >>= (Left "err" @?=)
 
@@ -42,7 +42,7 @@ testFailGet = TestCase $ do
         makeTestStore $
             pure $
                 makeStoreInterface
-                    { storeInterfaceGetFeature = \_ _ -> pure $ Left "err"
+                    { persistentDataStoreGetFeature = \_ _ -> pure $ Left "err"
                     }
     getFlagC store "abc" >>= (Left "err" @?=)
 
@@ -52,7 +52,7 @@ testFailAll = TestCase $ do
         makeTestStore $
             pure $
                 makeStoreInterface
-                    { storeInterfaceAllFeatures = \_ -> pure $ Left "err"
+                    { persistentDataStoreAllFeatures = \_ -> pure $ Left "err"
                     }
     getAllFlagsC store >>= (Left "err" @?=)
 
@@ -62,7 +62,7 @@ testFailIsInitialized = TestCase $ do
         makeTestStore $
             pure $
                 makeStoreInterface
-                    { storeInterfaceIsInitialized = pure $ Left "err"
+                    { persistentDataStoreIsInitialized = pure $ Left "err"
                     }
     getInitializedC store >>= (Left "err" @?=)
 
@@ -72,7 +72,7 @@ testFailUpsert = TestCase $ do
         makeTestStore $
             pure $
                 makeStoreInterface
-                    { storeInterfaceUpsertFeature = \_ _ _ -> pure $ Left "err"
+                    { persistentDataStoreUpsertFeature = \_ _ _ -> pure $ Left "err"
                     }
     insertFlag store (makeTestFlag "test" 123) >>= (Left "err" @?=)
 
@@ -82,7 +82,7 @@ testFailGetInvalidJSON = TestCase $ do
         makeTestStore $
             pure $
                 makeStoreInterface
-                    { storeInterfaceGetFeature = \_ _ -> pure $ Right $ RawFeature (pure "invalid json") 0
+                    { persistentDataStoreGetFeature = \_ _ -> pure $ Right $ Just $ SerializedItemDescriptor (pure "invalid json") 0 False
                     }
     getFlagC store "abc" >>= (\v -> True @?= isLeft v)
 
@@ -93,12 +93,12 @@ testGetAllInvalidJSON = TestCase $ do
         makeTestStore $
             pure $
                 makeStoreInterface
-                    { storeInterfaceAllFeatures = \_ ->
+                    { persistentDataStoreAllFeatures = \_ ->
                         pure $
                             Right $
                                 emptyObject
-                                    & insertKey "abc" (versionedToRaw $ Versioned (pure flag) 52)
-                                    & insertKey "xyz" (RawFeature (pure "invalid json") 64)
+                                    & insertKey "abc" (createSerializedItemDescriptor $ ItemDescriptor (pure flag) 52)
+                                    & insertKey "xyz" (SerializedItemDescriptor (pure "invalid json") 64 False)
                     }
     getAllFlagsC store >>= (Right (singleton "abc" flag) @?=)
 
@@ -110,7 +110,7 @@ testInitializedCache = TestCase $ do
         makeTestStore $
             pure $
                 makeStoreInterface
-                    { storeInterfaceIsInitialized = do
+                    { persistentDataStoreIsInitialized = do
                         atomicModifyIORef' counter (\c -> (c + 1, ()))
                         Right <$> readIORef value
                     }
@@ -131,12 +131,12 @@ testInitializedCache = TestCase $ do
 testGetCache :: Test
 testGetCache = TestCase $ do
     counter <- newIORef 0
-    value <- newIORef $ RawFeature Nothing 0
+    value <- newIORef $ Just $ SerializedItemDescriptor Nothing 0 False
     store <-
         makeTestStore $
             pure $
                 makeStoreInterface
-                    { storeInterfaceGetFeature = \_ _ -> do
+                    { persistentDataStoreGetFeature = \_ _ -> do
                         atomicModifyIORef' counter (\c -> (c + 1, ()))
                         Right <$> readIORef value
                     }
@@ -146,7 +146,7 @@ testGetCache = TestCase $ do
     readIORef counter >>= (1 @=?)
     storeHandleExpireAll store >>= (Right () @=?)
     let flag = pure $ makeTestFlag "abc" 12
-    writeIORef value $ versionedToRaw $ Versioned flag 12
+    writeIORef value $ Just $ createSerializedItemDescriptor $ ItemDescriptor flag 12
     getFlagC store "abc" >>= (Right flag @=?)
     readIORef counter >>= (2 @=?)
     getFlagC store "abc" >>= (Right flag @=?)
@@ -161,10 +161,10 @@ testUpsertInvalidatesAllFlags = TestCase $ do
         makeTestStore $
             pure $
                 makeStoreInterface
-                    { storeInterfaceUpsertFeature = \_ _ _ -> do
+                    { persistentDataStoreUpsertFeature = \_ _ _ -> do
                         atomicModifyIORef' upsertCounter (\c -> (c + 1, ()))
                         readIORef upsertResult
-                    , storeInterfaceAllFeatures = \_ -> do
+                    , persistentDataStoreAllFeatures = \_ -> do
                         atomicModifyIORef' allCounter (\c -> (c + 1, ()))
                         pure $ Right emptyObject
                     }
@@ -188,7 +188,7 @@ testAllFlagsCache = TestCase $ do
         makeTestStore $
             pure $
                 makeStoreInterface
-                    { storeInterfaceAllFeatures = \_ -> do
+                    { persistentDataStoreAllFeatures = \_ -> do
                         atomicModifyIORef' counter (\c -> (c + 1, ()))
                         pure $ Right emptyObject
                     }
@@ -207,10 +207,10 @@ testAllFlagsUpdatesRegularCache = TestCase $ do
         makeTestStore $
             pure $
                 makeStoreInterface
-                    { storeInterfaceAllFeatures = \_ ->
+                    { persistentDataStoreAllFeatures = \_ ->
                         pure $
                             Right $
-                                singleton "abc" (versionedToRaw $ Versioned (pure flag) 12)
+                                singleton "abc" (createSerializedItemDescriptor $ ItemDescriptor (pure flag) 12)
                     }
     getAllFlagsC store >>= (Right (singleton "abc" flag) @=?)
     getFlagC store "abc" >>= (Right (pure flag) @=?)

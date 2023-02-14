@@ -42,7 +42,7 @@ import Network.HTTP.Client (Manager)
 import LaunchDarkly.Server.Config.Internal (ApplicationInfo, Config (..), makeApplicationInfo, withApplicationValue)
 import LaunchDarkly.Server.DataSource.Internal (DataSourceFactory)
 import LaunchDarkly.Server.Reference (Reference)
-import LaunchDarkly.Server.Store (StoreInterface)
+import LaunchDarkly.Server.Store (PersistentDataStore)
 
 -- | Create a default configuration from a given SDK key.
 makeConfig :: Text -> Config
@@ -95,7 +95,7 @@ configSetEventsURI :: Text -> Config -> Config
 configSetEventsURI = setField @"eventsURI" . dropWhileEnd ((==) '/')
 
 -- | Configures a handle to an external store such as Redis.
-configSetStoreBackend :: Maybe StoreInterface -> Config -> Config
+configSetStoreBackend :: Maybe PersistentDataStore -> Config -> Config
 configSetStoreBackend = setField @"storeBackend"
 
 -- |
