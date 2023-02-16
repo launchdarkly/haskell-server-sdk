@@ -6,6 +6,7 @@ module LaunchDarkly.Server.Network.Common
     , tryHTTP
     , addToAL
     , handleUnauthorized
+    , isHttpUnrecoverable
     ) where
 
 import Data.ByteString.Internal            (unpackChars)
@@ -56,3 +57,9 @@ getServerTime response
     where headers = responseHeaders response
           date = fromMaybe "" $ lookup hDate headers
           parsedTime = parseTimeM True defaultTimeLocale rfc822DateFormat (unpackChars date)
+
+isHttpUnrecoverable :: Int -> Bool
+isHttpUnrecoverable status
+    | status < 400 || status >= 500 = False
+    | status `elem` [400, 408, 429] = False
+    | otherwise = True
