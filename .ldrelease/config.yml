@@ -4,6 +4,10 @@ repo:
   public: haskell-server-sdk
   private: haskell-server-sdk-private
 
+branches:
+  - name: main
+  - name: 3.x
+
 jobs:
   # Have no fear! This is the officially sanctioned image as seen at
   # https://docs.haskellstack.org/en/stable/docker_integration/#image-repositories
