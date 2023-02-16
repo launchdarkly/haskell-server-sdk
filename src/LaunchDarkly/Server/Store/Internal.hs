@@ -198,7 +198,7 @@ data SerializedItemDescriptor = SerializedItemDescriptor
     , deleted :: !Bool
     -- ^ True if this is a placeholder (tombstone) for a deleted item.
     }
-    deriving (Generic)
+    deriving (Generic, Eq, Show)
 
 -- |
 -- Generate a 'ByteString' representation of the 'SerializedItemDescriptor'.

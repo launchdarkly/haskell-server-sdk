@@ -15,7 +15,6 @@ import qualified Spec.Integrations.FileData
 import qualified Spec.Integrations.TestData
 import qualified Spec.Operators
 import qualified Spec.PersistentDataStore
-import qualified Spec.Redis
 import qualified Spec.Reference
 import qualified Spec.Segment
 import qualified Spec.Store
@@ -35,7 +34,6 @@ main = do
                 , Spec.Evaluate.allTests
                 , Spec.Features.allTests
                 , Spec.Operators.allTests
-                , Spec.Redis.allTests
                 , Spec.Reference.allTests
                 , Spec.Segment.allTests
                 , Spec.Store.allTests

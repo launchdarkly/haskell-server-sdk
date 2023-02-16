@@ -12,7 +12,6 @@ import Util.Features (makeTestFlag, makeTestSegment)
 import LaunchDarkly.AesonCompat (emptyObject, singleton)
 import LaunchDarkly.Server.Features (Flag (..), VariationOrRollout (..))
 import LaunchDarkly.Server.Store.Internal
-import LaunchDarkly.Server.Store.Redis
 
 testInitializationEmpty :: IO (StoreHandle IO) -> Test
 testInitializationEmpty makeStore = TestCase $ do
