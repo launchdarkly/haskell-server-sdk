@@ -32,7 +32,7 @@ import LaunchDarkly.Server.Config.ClientContext (ClientContext (..))
 import LaunchDarkly.Server.Config.HttpConfiguration (HttpConfiguration (..), prepareRequest)
 import LaunchDarkly.Server.DataSource.Internal (DataSourceUpdates (..))
 import LaunchDarkly.Server.Features (Flag, Segment)
-import LaunchDarkly.Server.Network.Common (checkAuthorization, handleUnauthorized, throwIfNot200, tryHTTP, withResponseGeneric)
+import LaunchDarkly.Server.Network.Common (checkAuthorization, handleUnauthorized, isHttpUnrecoverable, throwIfNot200, tryHTTP, withResponseGeneric)
 import LaunchDarkly.Server.Store.Internal (StoreResult)
 
 data PutBody = PutBody
@@ -269,12 +269,6 @@ startNewConnection manager request dataSourceUpdates state@(StreamingState {acti
                 let timespan = min (30 * 1_000_000) ((initialRetryDelay * 1_000) * (2 ^ (att - 1)))
                     jitter = fst $ randomR (0, timespan `div` 2) gen
                  in pure $ (timespan - jitter)
-
-isHttpUnrecoverable :: Int -> Bool
-isHttpUnrecoverable status
-    | status < 400 || status >= 500 = False
-    | status `elem` [400, 408, 429] = False
-    | otherwise = True
 
 data StreamingState = StreamingState
     { initialConnection :: Bool -- Marker used to determine the first time the streamer connects.

@@ -16,7 +16,7 @@ import Data.Text.Encoding (decodeUtf8)
 import Data.Tuple (swap)
 import qualified Data.UUID as UUID
 import Network.HTTP.Client (Manager, Request (..), RequestBody (..), httpLbs, responseStatus)
-import Network.HTTP.Types.Status (status400, status408, status429, status500)
+import Network.HTTP.Types.Status (Status (statusCode), status400)
 import System.Random (newStdGen, random)
 import System.Timeout (timeout)
 
@@ -24,7 +24,7 @@ import LaunchDarkly.Server.Client.Internal (Client, Status (ShuttingDown))
 import LaunchDarkly.Server.Config.ClientContext
 import LaunchDarkly.Server.Config.HttpConfiguration (prepareRequest)
 import LaunchDarkly.Server.Events (EventState, processSummary)
-import LaunchDarkly.Server.Network.Common (addToAL, checkAuthorization, getServerTime, tryAuthorized, tryHTTP)
+import LaunchDarkly.Server.Network.Common (addToAL, checkAuthorization, getServerTime, isHttpUnrecoverable, tryAuthorized, tryHTTP)
 
 -- A true result indicates a retry does not need to be attempted
 processSend :: (MonadIO m, MonadLogger m, MonadMask m, MonadThrow m) => Manager -> Request -> m (Bool, Integer)
@@ -39,9 +39,9 @@ processSend manager req =
                     >> if code < status400
                         then pure (True, serverTime)
                         else
-                            if (elem code [status400, status408, status429]) || code >= status500
-                                then pure (False, serverTime)
-                                else $(logWarn) (T.append "got non recoverable event post response dropping payload: " $ T.pack $ show code) >> pure (True, serverTime)
+                            if isHttpUnrecoverable $ statusCode $ code
+                                then $(logWarn) (T.append "got non recoverable event post response dropping payload: " $ T.pack $ show code) >> pure (True, serverTime)
+                                else pure (False, serverTime)
 
 setEventHeaders :: Request -> Request
 setEventHeaders request =
