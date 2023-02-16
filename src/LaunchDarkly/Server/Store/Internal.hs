@@ -119,7 +119,7 @@ makeStoreIO backend ttl = do
         newIORef
             State
                 { allFlags = Expirable emptyObject True 0
-                , flags = emptyObject
+                , features = emptyObject
                 , segments = emptyObject
                 , initialized = Expirable False True 0
                 }
@@ -158,7 +158,7 @@ type CacheableItem a = Maybe (ItemDescriptor (Maybe a))
 
 data State = State
     { allFlags :: !(Expirable (KeyMap Flag))
-    , flags :: !(KeyMap (Expirable (CacheableItem Flag)))
+    , features :: !(KeyMap (Expirable (CacheableItem Flag)))
     , segments :: !(KeyMap (Expirable (CacheableItem Segment)))
     , initialized :: !(Expirable Bool)
     }
@@ -167,7 +167,7 @@ data State = State
 -- | Represents the key for a given feature.
 type FeatureKey = Text
 
--- | Represents a namespace such as flags or segments
+-- | Represents a namespace such as features or segments
 type FeatureNamespace = Text
 
 -- | The interface implemented by external stores for use by the SDK.
@@ -243,7 +243,7 @@ expireAllItems store = atomicModifyIORef' (getField @"state" store) $ \state ->
         state
             & field @"allFlags" %~ expire
             & field @"initialized" %~ expire
-            & field @"flags" %~ mapValues expire
+            & field @"features" %~ mapValues expire
             & field @"segments" %~ mapValues expire
   where
     expire = setField @"forceExpire" True
@@ -264,7 +264,7 @@ initialize store flags segments = case getField @"backend" store of
         atomicModifyIORef' (getField @"state" store) $ \state ->
             (,()) $
                 state
-                    & setField @"flags" (mapValues (\f -> Expirable (Just f) True 0) $ c flags)
+                    & setField @"features" (mapValues (\f -> Expirable (Just f) True 0) $ c flags)
                     & setField @"segments" (mapValues (\f -> Expirable (Just f) True 0) $ c segments)
                     & setField @"allFlags" (Expirable (mapValues (getField @"value") flags) True 0)
                     & setField @"initialized" (Expirable True False 0)
@@ -276,7 +276,7 @@ initialize store flags segments = case getField @"backend" store of
   where
     serializedItemMap =
         emptyObject
-            & insertKey "flags" (mapValues createSerializedItemDescriptor $ c flags)
+            & insertKey "features" (mapValues createSerializedItemDescriptor $ c flags)
             & insertKey "segments" (mapValues createSerializedItemDescriptor $ c segments)
     c x = mapValues (\f -> f & field @"value" %~ Just) x
 
@@ -348,7 +348,7 @@ getGeneric store namespace key lens = do
                 pure $ Right $ getField @"value" v
 
 getFlag :: Store -> Text -> StoreResult (Maybe Flag)
-getFlag store key = getGeneric store "flags" key (field @"flags")
+getFlag store key = getGeneric store "features" key (field @"features")
 
 getSegment :: Store -> Text -> StoreResult (Maybe Segment)
 getSegment store key = getGeneric store "segments" key (field @"segments")
@@ -397,7 +397,7 @@ upsertGeneric store namespace key versioned lens action = do
             & action False
 
 upsertFlag :: Store -> Text -> ItemDescriptor (Maybe Flag) -> StoreResult ()
-upsertFlag store key versioned = upsertGeneric store "flags" key versioned (field @"flags") postAction
+upsertFlag store key versioned = upsertGeneric store "features" key versioned (field @"features") postAction
   where
     postAction external state =
         if external
@@ -419,7 +419,7 @@ filterAndCacheFlags store now serializedMap = do
     atomicModifyIORef' (getField @"state" store) $ \state ->
         (,()) $
             setField @"allFlags" (Expirable allFlags False now) $
-                setField @"flags" (mapValues (\x -> Expirable (Just x) False now) decoded) state
+                setField @"features" (mapValues (\x -> Expirable (Just x) False now) decoded) state
     pure allFlags
 
 getAllFlags :: Store -> StoreResult (KeyMap Flag)
@@ -433,7 +433,7 @@ getAllFlags store = do
             if not (isExpired store now $ getField @"allFlags" state)
                 then memoryFlags
                 else do
-                    result <- (persistentDataStoreAllFeatures backend) "flags"
+                    result <- (persistentDataStoreAllFeatures backend) "features"
                     case result of
                         Left err -> pure (Left err)
                         Right serializedMap -> do
