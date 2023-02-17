@@ -135,8 +135,8 @@ workflows:
       - build-test-linux:
           matrix:
               parameters:
-                resolver: ["lts-14.1", "lts-16.31", "lts-18.27", "lts-19.13"]
+                resolver: ["lts-16.31", "lts-18.28", "lts-19.33", "lts-20.11"]
       - build-test-osx:
           matrix:
               parameters:
-                resolver: ["lts-14.1", "lts-16.31", "lts-18.27", "lts-19.13"]
+                resolver: ["lts-16.31", "lts-18.28", "lts-19.33", "lts-20.11"]
