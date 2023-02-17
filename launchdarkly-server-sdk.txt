@@ -7,7 +7,7 @@
 --   Please see the README on GitHub at
 --   <a>https://github.com/launchdarkly/haskell-server-sdk#readme</a>
 @package launchdarkly-server-sdk
-@version 3.1.0
+@version 3.1.1
 
 module LaunchDarkly.AesonCompat
 type KeyMap = HashMap Text
