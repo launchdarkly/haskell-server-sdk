@@ -2,6 +2,11 @@
 
 All notable changes to the LaunchDarkly Haskell Server-side SDK will be documented in this file. This project adheres to [Semantic Versioning](http://semver.org).
 
+## [3.1.1] - 2023-02-17
+### Fixed:
+- The polling thread will be shutdown if the LaunchDarkly polling API returns an unrecoverable response code.
+- Updated dependency versions in the Redis store package to mirror the SDK requirements.
+
 ## [3.1.0] - 2023-01-27
 ### Added:
 - New `ApplicationInfo` type, for configuration of application metadata that may be used in LaunchDarkly analytics or other product features. This does not affect feature flag evaluations.
