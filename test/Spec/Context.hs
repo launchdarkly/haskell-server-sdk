@@ -3,15 +3,14 @@ module Spec.Context (allTests) where
 import Test.HUnit
 
 import Control.Monad.Cont (liftIO)
-import Data.Aeson (Value (..), decode, encode, toJSON)
+import Data.Aeson (Value (..), decode, encode)
 import Data.Function ((&))
 import Data.Maybe (fromJust)
 import qualified Data.Set as S
 import Data.Text (Text)
 import qualified Data.Vector as V
-import LaunchDarkly.AesonCompat (deleteKey, fromList, lookupKey)
+import LaunchDarkly.AesonCompat (fromList, lookupKey)
 import LaunchDarkly.Server.Config (configSetAllAttributesPrivate, makeConfig)
-import LaunchDarkly.Server.Config.Internal
 import LaunchDarkly.Server.Context
 import LaunchDarkly.Server.Context.Internal (redactContext)
 import qualified LaunchDarkly.Server.Reference as R

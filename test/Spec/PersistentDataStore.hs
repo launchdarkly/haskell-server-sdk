@@ -1,6 +1,5 @@
 module Spec.PersistentDataStore (allTests) where
 
-import Control.Monad (void)
 import Data.ByteString ()
 import Data.Either (isLeft)
 import Data.Function ((&))

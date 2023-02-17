@@ -8,14 +8,12 @@ import Test.HUnit
 import Util.Features
 
 import LaunchDarkly.Server.Client
-import LaunchDarkly.Server.Client.Internal
 import LaunchDarkly.Server.Config
 import LaunchDarkly.Server.Context (makeContext, withAttribute)
 import LaunchDarkly.Server.Evaluate
 import LaunchDarkly.Server.Features
 import LaunchDarkly.Server.Operators
 import LaunchDarkly.Server.Reference (makeLiteral)
-import LaunchDarkly.Server.Store
 import LaunchDarkly.Server.Store.Internal
 
 makeEmptyStore = do

@@ -1,6 +1,5 @@
 module Main where
 
-import Control.Monad (void)
 import Test.HUnit (Counts (..), Test (TestLabel, TestList), runTestTT)
 
 import Control.Monad.Cont (when)

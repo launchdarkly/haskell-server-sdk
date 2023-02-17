@@ -1,16 +1,10 @@
 module Spec.Store (allTests, testWithStore) where
 
-import Control.Monad (void)
-import Data.Text (Text)
-import GHC.Int (Int64)
-import GHC.Natural (Natural)
-import System.Clock (TimeSpec (..))
 import Test.HUnit
 
 import Util.Features (makeTestFlag, makeTestSegment)
 
 import LaunchDarkly.AesonCompat (emptyObject, singleton)
-import LaunchDarkly.Server.Features (Flag (..), VariationOrRollout (..))
 import LaunchDarkly.Server.Store.Internal
 
 testInitializationEmpty :: IO (StoreHandle IO) -> Test

@@ -14,7 +14,7 @@ import Data.Maybe (fromMaybe, isJust)
 import Data.Scientific (Scientific, toRealFloat)
 import Data.SemVer (Version, fromText, metadata, toText)
 import Data.Text (Text, isInfixOf, isPrefixOf, isSuffixOf, unpack)
-import Data.Text as T
+import qualified Data.Text as T
 import Data.Text.Encoding (encodeUtf8)
 import Data.Time.Clock (UTCTime)
 import Data.Time.Clock.POSIX (POSIXTime, posixSecondsToUTCTime)

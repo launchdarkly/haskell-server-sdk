@@ -38,7 +38,7 @@ import Data.Function ((&))
 import Data.Generics.Product (HasField', field, getField, setField)
 import Data.IORef (IORef, atomicModifyIORef', newIORef, readIORef)
 import Data.Maybe (isJust)
-import Data.Text (Text, pack)
+import Data.Text (Text)
 import GHC.Generics (Generic)
 import GHC.Natural (Natural)
 import System.Clock (Clock (Monotonic), TimeSpec, getTime)
@@ -225,8 +225,8 @@ byteStringToVersionedData :: ByteString -> Maybe VersionedData
 byteStringToVersionedData byteString = decode $ fromStrict byteString
 
 data VersionedData = VersionedData
-    { version :: Natural
-    , deleted :: Bool
+    { version :: !Natural
+    , deleted :: !Bool
     }
     deriving (Generic, ToJSON, FromJSON)
 

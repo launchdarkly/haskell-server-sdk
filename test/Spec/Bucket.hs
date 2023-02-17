@@ -2,12 +2,8 @@ module Spec.Bucket (allTests) where
 
 import Data.Aeson.Types (Value (..))
 import Data.Function ((&))
-import Data.HashMap.Strict (HashMap)
-import qualified Data.HashMap.Strict as HM
 import Test.HUnit
 
-import LaunchDarkly.AesonCompat (singleton)
-import LaunchDarkly.Server.Client
 import LaunchDarkly.Server.Context (makeContext, withAttribute)
 import LaunchDarkly.Server.Evaluate
 import LaunchDarkly.Server.Features

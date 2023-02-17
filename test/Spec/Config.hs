@@ -2,7 +2,7 @@ module Spec.Config (allTests) where
 
 import Control.Lens ((&))
 import LaunchDarkly.Server (makeApplicationInfo)
-import LaunchDarkly.Server.Config.Internal (getApplicationInfoHeader, makeApplicationInfo, withApplicationValue)
+import LaunchDarkly.Server.Config.Internal (getApplicationInfoHeader, withApplicationValue)
 import Test.HUnit
 
 testEmptyApplicationInfoGeneratesNoHeader :: Test

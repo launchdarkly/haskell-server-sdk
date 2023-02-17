@@ -1,28 +1,15 @@
 module Spec.Client (allTests) where
 
-import Data.Aeson (Value (..))
 import Data.Function ((&))
 import Data.Generics.Product (getField)
-import Data.HashMap.Strict (HashMap)
-import qualified Data.HashMap.Strict as HM
-import qualified Data.HashSet as HS
 import Test.HUnit
 
 import LaunchDarkly.Server.Client
-import LaunchDarkly.Server.Client.Internal
 import LaunchDarkly.Server.Config
 import LaunchDarkly.Server.Context
-import LaunchDarkly.Server.Details
-import LaunchDarkly.Server.Evaluate
-import LaunchDarkly.Server.Features
-import LaunchDarkly.Server.Operators
-import LaunchDarkly.Server.Store
 import LaunchDarkly.Server.Store.Internal
 
 import Data.Text (Text)
-import LaunchDarkly.AesonCompat (fromList)
-import LaunchDarkly.Server.Reference (makeLiteral, makeReference)
-import Util.Features
 
 makeEmptyStore :: IO (StoreHandle IO)
 makeEmptyStore = do
