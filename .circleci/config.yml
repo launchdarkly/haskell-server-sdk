@@ -28,8 +28,13 @@ jobs:
           name: Resolve/Update Dependencies
           command: stack --no-terminal setup
       - run:
-          name: Build
+          name: Build library
           command: stack --no-terminal build
+      - run:
+          name: Build Redis store
+          command: |
+            cd ./stores/launchdarkly-server-sdk-redis/
+            stack --no-terminal build
       - run:
           name: Install and run hlint
           command:
@@ -143,7 +148,7 @@ jobs:
           command: |
             cd ..
             cabal update
-            cabal install hpack-0.35.0
+            cabal install hpack-0.35.1
             cd -
       - run:
           name: Verify the generated .cabal file is up-to-date
