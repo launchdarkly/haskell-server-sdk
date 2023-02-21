@@ -1,4 +1,24 @@
 {-# LANGUAGE CPP #-}
+
+-- |
+-- The LaunchDarkly SDK supports a subset of Aeson 1.x and 2.x. These two
+-- versions differ in their type signatures, but are otherwise largely
+-- compatible. To support both versions, we provide this compatibility module.
+--
+-- Depending on the version of Aeson you have installed, this module will
+-- expose a KeyMap type that is either
+--
+-- - In the case of 1.x, a HashMap T.Text, or
+-- - In the case of 2.x, the new KeyMap type
+--
+-- The compatibility layer exposes common map operations that the SDK needs and
+-- may prove useful to customers. In nearly all instances, these are simple
+-- aliases for the underlying Aeson equivalents.
+--
+-- The Aeson 2.x KeyMap is keyed by a new Key type that does not exist in 1.x.
+-- To keep the API as consistent as possible, all functions requiring a key
+-- will provide a Text value. In the 2.x compatibility layer, we will convert
+-- it to a from the appropriate Key type as necessary.
 module LaunchDarkly.AesonCompat where
 
 #if MIN_VERSION_aeson(2,0,0)
@@ -10,7 +30,7 @@ import qualified Data.Map.Strict as M
 #else
 import qualified Data.HashMap.Strict as HM
 #endif
-import qualified Data.Text                  as T
+import qualified Data.Text as T
 
 #if MIN_VERSION_aeson(2,0,0)
 type KeyMap = KeyMap.KeyMap
@@ -68,6 +88,9 @@ mapMaybeValues = KeyMap.mapMaybe
 
 keyMapUnion :: KeyMap.KeyMap v -> KeyMap.KeyMap v -> KeyMap.KeyMap v
 keyMapUnion = KeyMap.union
+
+foldrWithKey :: (T.Text -> v -> a -> a) -> a -> KeyMap.KeyMap v -> a
+foldrWithKey f accum initial = KeyMap.foldrWithKey (\k v a -> f (keyToText k) v a) accum initial
 #else
 type KeyMap = HM.HashMap T.Text
 
@@ -124,4 +147,7 @@ mapMaybeValues = HM.mapMaybe
 
 keyMapUnion :: HM.HashMap T.Text v -> HM.HashMap T.Text v -> HM.HashMap T.Text v
 keyMapUnion = HM.union
+
+foldrWithKey :: (T.Text -> v -> a -> a) -> a -> HM.HashMap T.Text v -> a
+foldrWithKey = HM.foldrWithKey
 #endif

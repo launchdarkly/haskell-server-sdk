@@ -1,7 +1,5 @@
 module LaunchDarkly.Server.Config.Internal
-    ( Config(..)
-    , mapConfig
-    , ConfigI(..)
+    ( Config (..)
     , shouldSendEvents
     , ApplicationInfo
     , makeApplicationInfo
@@ -9,58 +7,56 @@ module LaunchDarkly.Server.Config.Internal
     , getApplicationInfoHeader
     ) where
 
-import Control.Monad.Logger               (LoggingT)
-import Data.Generics.Product              (getField)
-import Data.Text                          (Text)
+import Control.Monad.Logger (LoggingT)
+import Data.Generics.Product (getField)
+import Data.Set (Set)
+import Data.Text (Text)
 import qualified Data.Text as T
-import Data.Set                           (Set)
-import GHC.Natural                        (Natural)
-import GHC.Generics                       (Generic)
-import Network.HTTP.Client                (Manager)
+import GHC.Generics (Generic)
+import GHC.Natural (Natural)
+import Network.HTTP.Client (Manager)
 
-import LaunchDarkly.Server.Store               (StoreInterface)
-import LaunchDarkly.Server.DataSource.Internal (DataSourceFactory)
-import LaunchDarkly.AesonCompat (KeyMap, insertKey, emptyObject, toList)
-import qualified LaunchDarkly.AesonCompat as AesonCompat
-import Data.List (sortBy)
 import Control.Lens ((&))
+import Data.List (sortBy)
 import Data.Ord (comparing)
-
-mapConfig :: (ConfigI -> ConfigI) -> Config -> Config
-mapConfig f (Config c) = Config $ f c
-
-shouldSendEvents :: ConfigI -> Bool
-shouldSendEvents config = (not $ getField @"offline" config) && (getField @"sendEvents" config)
+import LaunchDarkly.AesonCompat (KeyMap, emptyObject, insertKey, toList)
+import qualified LaunchDarkly.AesonCompat as AesonCompat
+import LaunchDarkly.Server.DataSource.Internal (DataSourceFactory)
+import LaunchDarkly.Server.Reference (Reference)
+import LaunchDarkly.Server.Store (PersistentDataStore)
 
 -- | Config allows advanced configuration of the LaunchDarkly client.
-newtype Config = Config ConfigI
-
-data ConfigI = ConfigI
-    { key                   :: !Text
-    , baseURI               :: !Text
-    , streamURI             :: !Text
-    , eventsURI             :: !Text
-    , storeBackend          :: !(Maybe StoreInterface)
-    , storeTTLSeconds       :: !Natural
-    , streaming             :: !Bool
-    , allAttributesPrivate  :: !Bool
-    , privateAttributeNames :: !(Set Text)
-    , flushIntervalSeconds  :: !Natural
-    , pollIntervalSeconds   :: !Natural
-    , userKeyLRUCapacity    :: !Natural
-    , inlineUsersInEvents   :: !Bool
-    , eventsCapacity        :: !Natural
-    , logger                :: !(LoggingT IO () -> IO ())
-    , sendEvents            :: !Bool
-    , offline               :: !Bool
+data Config = Config
+    { key :: !Text
+    , baseURI :: !Text
+    , streamURI :: !Text
+    , eventsURI :: !Text
+    , storeBackend :: !(Maybe PersistentDataStore)
+    , storeTTLSeconds :: !Natural
+    , streaming :: !Bool
+    , initialRetryDelay :: !Int
+    , allAttributesPrivate :: !Bool
+    , privateAttributeNames :: !(Set Reference)
+    , flushIntervalSeconds :: !Natural
+    , pollIntervalSeconds :: !Natural
+    , contextKeyLRUCapacity :: !Natural
+    , eventsCapacity :: !Natural
+    , logger :: !(LoggingT IO () -> IO ())
+    , sendEvents :: !Bool
+    , offline :: !Bool
     , requestTimeoutSeconds :: !Natural
-    , useLdd                :: !Bool
-    , dataSourceFactory     :: !(Maybe DataSourceFactory)
-    , manager               :: !(Maybe Manager)
-    , applicationInfo       :: !(Maybe ApplicationInfo)
-    } deriving (Generic)
+    , useLdd :: !Bool
+    , dataSourceFactory :: !(Maybe DataSourceFactory)
+    , manager :: !(Maybe Manager)
+    , applicationInfo :: !(Maybe ApplicationInfo)
+    }
+    deriving (Generic)
 
--- | An object that allows configuration of application metadata.
+shouldSendEvents :: Config -> Bool
+shouldSendEvents config = (not $ getField @"offline" config) && (getField @"sendEvents" config)
+
+-- |
+-- An object that allows configuration of application metadata.
 --
 -- Application metadata may be used in LaunchDarkly analytics or other product
 -- features, but does not affect feature flag evaluations.
@@ -72,7 +68,8 @@ newtype ApplicationInfo = ApplicationInfo (KeyMap Text) deriving (Show, Eq)
 makeApplicationInfo :: ApplicationInfo
 makeApplicationInfo = ApplicationInfo emptyObject
 
--- | Set a new name / value pair into the application info instance.
+-- |
+-- Set a new name / value pair into the application info instance.
 --
 -- Values have the following restrictions:
 -- - Cannot be empty
@@ -84,16 +81,18 @@ withApplicationValue :: Text -> Text -> ApplicationInfo -> ApplicationInfo
 withApplicationValue _ "" info = info
 withApplicationValue name value info@(ApplicationInfo map)
     | (name `elem` ["id", "version"]) == False = info
-    | T.length(value) > 64 = info
-    | (all (`elem` ['a'..'z'] ++ ['A' .. 'Z'] ++ ['0' .. '9'] ++ ['.', '-', '_']) (T.unpack value)) == False = info
+    | T.length (value) > 64 = info
+    | (all (`elem` ['a' .. 'z'] ++ ['A' .. 'Z'] ++ ['0' .. '9'] ++ ['.', '-', '_']) (T.unpack value)) == False = info
     | otherwise = ApplicationInfo $ insertKey name value map
 
 getApplicationInfoHeader :: ApplicationInfo -> Maybe Text
 getApplicationInfoHeader (ApplicationInfo values)
     | AesonCompat.null values = Nothing
-    | otherwise = toList values
-        & sortBy (comparing fst)
-        & map makeTag
-        & T.unwords
-        & Just
-    where makeTag (key, value) = "application-" <> key <> "/" <> value
+    | otherwise =
+        toList values
+            & sortBy (comparing fst)
+            & map makeTag
+            & T.unwords
+            & Just
+  where
+    makeTag (key, value) = "application-" <> key <> "/" <> value

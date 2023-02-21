@@ -28,6 +28,7 @@ extra-source-files:
     test-data/filesource/no-data.json
     test-data/filesource/segment-only.json
     test-data/filesource/segment-with-duplicate-key.json
+    test-data/filesource/targets.json
     test-data/filesource/value-only.json
     test-data/filesource/value-with-duplicate-key.json
 
@@ -41,7 +42,8 @@ library
       LaunchDarkly.Server
       LaunchDarkly.Server.Client
       LaunchDarkly.Server.Config
-      LaunchDarkly.Server.User
+      LaunchDarkly.Server.Context
+      LaunchDarkly.Server.Reference
       LaunchDarkly.Server.Store
       LaunchDarkly.Server.Integrations.FileData
       LaunchDarkly.Server.Integrations.TestData
@@ -51,6 +53,7 @@ library
       LaunchDarkly.Server.Config.ClientContext
       LaunchDarkly.Server.Config.HttpConfiguration
       LaunchDarkly.Server.Config.Internal
+      LaunchDarkly.Server.Context.Internal
       LaunchDarkly.Server.DataSource.Internal
       LaunchDarkly.Server.Details
       LaunchDarkly.Server.Evaluate
@@ -63,7 +66,6 @@ library
       LaunchDarkly.Server.Network.Streaming
       LaunchDarkly.Server.Operators
       LaunchDarkly.Server.Store.Internal
-      LaunchDarkly.Server.User.Internal
       Paths_launchdarkly_server_sdk
   hs-source-dirs:
       src
@@ -92,38 +94,38 @@ library
       TypeOperators
   ghc-options: -fwarn-unused-imports -Wall -Wno-name-shadowing
   build-depends:
-      aeson >=1.4.4.0 && <1.6 || >=2.0.1.0 && <2.2
-    , attoparsec >=0.13.2.2 && <0.15
-    , base >=4.12 && <5
-    , base16-bytestring >=0.1.1.6 && <1.1
-    , bytestring >=0.10.8.2 && <0.12
+      aeson >=1.4.7.1 && <1.6 || >=2.0.1.0 && <2.2
+    , attoparsec >=0.13.2.4 && <0.15
+    , base >=4.13 && <5
+    , base16-bytestring >=0.1.1.7 && <1.1
+    , bytestring >=0.10.10.1 && <0.12
     , clock ==0.8.*
-    , containers >=0.6.0.1 && <0.7
+    , containers >=0.6.2.1 && <0.7
     , cryptohash >=0.11.9 && <0.12
-    , exceptions >=0.10.2 && <0.11
-    , extra >=1.6.17 && <1.8
-    , generic-lens >=1.1.0.0 && <2.3
-    , hashtables >=1.2.3.4 && <1.4
-    , hedis >=0.12.7 && <0.16
-    , http-client >=0.6.4 && <0.8
+    , exceptions >=0.10.4 && <0.11
+    , extra >=1.7.9 && <1.8
+    , generic-lens >=2.0.0.0 && <2.3
+    , hashtables >=1.2.4.1 && <1.4
+    , http-client >=0.6.4.1 && <0.8
     , http-client-tls >=0.3.5.3 && <0.4
     , http-types >=0.12.3 && <0.13
     , iso8601-time >=0.1.5 && <0.2
-    , lens >=4.17.1 && <5.3
+    , lens >=4.18.1 && <5.3
     , lrucache >=1.2.0.1 && <1.3
-    , monad-logger >=0.3.30 && <0.4
+    , memory >=0.15.0
+    , monad-logger >=0.3.36 && <0.4
+    , monad-loops ==0.4.*
     , mtl >=2.2.2 && <2.4
-    , pcre-light >=0.4.0.4 && <0.5
+    , pcre-light >=0.4.1.0 && <0.5
     , random >=1.1 && <1.3
-    , retry >=0.8.0.1 && <0.10
     , scientific >=0.3.6.2 && <0.4
     , semver >=0.3.4 && <0.5
-    , text >=1.2.3.1 && <2.1
-    , time >=1.8.0.2 && <1.13
+    , text >=1.2.4.0 && <2.1
+    , time >=1.9.3 && <1.13
     , unordered-containers >=0.2.10.0 && <0.3
     , uuid >=1.3.13 && <1.4
-    , vector >=0.12.0.3 && <0.13
-    , yaml >=0.11.1 && <0.12
+    , vector >=0.12.1.2 && <0.13
+    , yaml >=0.11.5.0 && <0.12
   default-language: Haskell2010
 
 test-suite haskell-server-sdk-test
@@ -131,19 +133,20 @@ test-suite haskell-server-sdk-test
   main-is: Spec.hs
   other-modules:
       Spec.Bucket
+      Spec.Client
       Spec.Config
+      Spec.Context
       Spec.DataSource
       Spec.Evaluate
       Spec.Features
       Spec.Integrations.FileData
       Spec.Integrations.TestData
       Spec.Operators
-      Spec.Redis
+      Spec.PersistentDataStore
+      Spec.Reference
       Spec.Segment
       Spec.Store
-      Spec.StoreInterface
       Spec.Streaming
-      Spec.User
       Util.Features
       LaunchDarkly.AesonCompat
       LaunchDarkly.Server
@@ -154,6 +157,8 @@ test-suite haskell-server-sdk-test
       LaunchDarkly.Server.Config.ClientContext
       LaunchDarkly.Server.Config.HttpConfiguration
       LaunchDarkly.Server.Config.Internal
+      LaunchDarkly.Server.Context
+      LaunchDarkly.Server.Context.Internal
       LaunchDarkly.Server.DataSource.Internal
       LaunchDarkly.Server.Details
       LaunchDarkly.Server.Evaluate
@@ -167,17 +172,13 @@ test-suite haskell-server-sdk-test
       LaunchDarkly.Server.Network.Polling
       LaunchDarkly.Server.Network.Streaming
       LaunchDarkly.Server.Operators
+      LaunchDarkly.Server.Reference
       LaunchDarkly.Server.Store
       LaunchDarkly.Server.Store.Internal
-      LaunchDarkly.Server.User
-      LaunchDarkly.Server.User.Internal
-      LaunchDarkly.Server.Store.Redis
-      LaunchDarkly.Server.Store.Redis.Internal
       Paths_launchdarkly_server_sdk
   hs-source-dirs:
       test
       src
-      stores/launchdarkly-server-sdk-redis/src
   default-extensions:
       AllowAmbiguousTypes
       DataKinds
@@ -201,39 +202,39 @@ test-suite haskell-server-sdk-test
       TupleSections
       TypeApplications
       TypeOperators
-  ghc-options: -rtsopts -threaded -with-rtsopts=-N -Wno-name-shadowing
+  ghc-options: -rtsopts -threaded -with-rtsopts=-N -Wno-name-shadowing -fwarn-unused-imports
   build-depends:
       HUnit
-    , aeson >=1.4.4.0 && <1.6 || >=2.0.1.0 && <2.2
-    , attoparsec >=0.13.2.2 && <0.15
-    , base >=4.12 && <5
-    , base16-bytestring >=0.1.1.6 && <1.1
-    , bytestring >=0.10.8.2 && <0.12
+    , aeson >=1.4.7.1 && <1.6 || >=2.0.1.0 && <2.2
+    , attoparsec >=0.13.2.4 && <0.15
+    , base >=4.13 && <5
+    , base16-bytestring >=0.1.1.7 && <1.1
+    , bytestring >=0.10.10.1 && <0.12
     , clock ==0.8.*
-    , containers >=0.6.0.1 && <0.7
+    , containers >=0.6.2.1 && <0.7
     , cryptohash >=0.11.9 && <0.12
-    , exceptions >=0.10.2 && <0.11
-    , extra >=1.6.17 && <1.8
-    , generic-lens >=1.1.0.0 && <2.3
-    , hashtables >=1.2.3.4 && <1.4
-    , hedis >=0.12.7 && <0.16
-    , http-client >=0.6.4 && <0.8
+    , exceptions >=0.10.4 && <0.11
+    , extra >=1.7.9 && <1.8
+    , generic-lens >=2.0.0.0 && <2.3
+    , hashtables >=1.2.4.1 && <1.4
+    , http-client >=0.6.4.1 && <0.8
     , http-client-tls >=0.3.5.3 && <0.4
     , http-types >=0.12.3 && <0.13
     , iso8601-time >=0.1.5 && <0.2
-    , lens >=4.17.1 && <5.3
+    , lens >=4.18.1 && <5.3
     , lrucache >=1.2.0.1 && <1.3
-    , monad-logger >=0.3.30 && <0.4
+    , memory >=0.15.0
+    , monad-logger >=0.3.36 && <0.4
+    , monad-loops ==0.4.*
     , mtl >=2.2.2 && <2.4
-    , pcre-light >=0.4.0.4 && <0.5
+    , pcre-light >=0.4.1.0 && <0.5
     , random >=1.1 && <1.3
-    , retry >=0.8.0.1 && <0.10
     , scientific >=0.3.6.2 && <0.4
     , semver >=0.3.4 && <0.5
-    , text >=1.2.3.1 && <2.1
-    , time >=1.8.0.2 && <1.13
+    , text >=1.2.4.0 && <2.1
+    , time >=1.9.3 && <1.13
     , unordered-containers >=0.2.10.0 && <0.3
     , uuid >=1.3.13 && <1.4
-    , vector >=0.12.0.3 && <0.13
-    , yaml >=0.11.1 && <0.12
+    , vector >=0.12.1.2 && <0.13
+    , yaml >=0.11.5.0 && <0.12
   default-language: Haskell2010

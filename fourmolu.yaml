@@ -1,0 +1,3 @@
+import-export-style: leading
+record-brace-space: true
+haddock-style: single-line

@@ -1,7 +1,0 @@
-resolver: lts-16.31
-
-packages:
-- .
-
-extra-deps:
-- ../../

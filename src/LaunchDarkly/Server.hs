@@ -1,75 +1,10 @@
--- | This module re-exports the User, Client, and Config modules.
-
+-- | This module re-exports the Client, Config, and Context modules.
 module LaunchDarkly.Server
-    ( Config
-    , makeConfig
-    , configSetKey
-    , configSetBaseURI
-    , configSetStreamURI
-    , configSetEventsURI
-    , configSetStreaming
-    , configSetAllAttributesPrivate
-    , configSetPrivateAttributeNames
-    , configSetFlushIntervalSeconds
-    , configSetPollIntervalSeconds
-    , configSetUserKeyLRUCapacity
-    , configSetInlineUsersInEvents
-    , configSetEventsCapacity
-    , configSetLogger
-    , configSetManager
-    , configSetSendEvents
-    , configSetOffline
-    , configSetRequestTimeoutSeconds
-    , configSetStoreBackend
-    , configSetStoreTTL
-    , configSetUseLdd
-    , configSetDataSourceFactory
-    , configSetApplicationInfo
-    , ApplicationInfo
-    , makeApplicationInfo
-    , withApplicationValue
-    , User
-    , makeUser
-    , userSetKey
-    , userSetSecondary
-    , userSetIP
-    , userSetCountry
-    , userSetEmail
-    , userSetFirstName
-    , userSetLastName
-    , userSetAvatar
-    , userSetName
-    , userSetAnonymous
-    , userSetCustom
-    , userSetPrivateAttributeNames
-    , Client
-    , makeClient
-    , clientVersion
-    , boolVariation
-    , boolVariationDetail
-    , stringVariation
-    , stringVariationDetail
-    , intVariation
-    , intVariationDetail
-    , doubleVariation
-    , doubleVariationDetail
-    , jsonVariation
-    , jsonVariationDetail
-    , EvaluationDetail(..)
-    , EvaluationReason(..)
-    , EvalErrorKind(..)
-    , allFlags
-    , allFlagsState
-    , AllFlagsState
-    , close
-    , flushEvents
-    , identify
-    , track
-    , alias
-    , Status(..)
-    , getStatus
+    ( module LaunchDarkly.Server.Client
+    , module LaunchDarkly.Server.Config
+    , module LaunchDarkly.Server.Context
     ) where
 
-import LaunchDarkly.Server.User
-import LaunchDarkly.Server.Config
 import LaunchDarkly.Server.Client
+import LaunchDarkly.Server.Config
+import LaunchDarkly.Server.Context

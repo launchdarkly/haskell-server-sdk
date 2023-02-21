@@ -5,10 +5,11 @@ import Data.Text (Text)
 import qualified LaunchDarkly.Server as LD
 import Data.Aeson.Types (Value(..))
 import Data.HashMap.Strict (HashMap)
-import Data.Aeson (FromJSON, ToJSON, parseJSON, withObject, (.:), (.:?), (.!=))
+import Data.Aeson (FromJSON, ToJSON, toJSON, parseJSON, object, withObject, (.:), (.:?), (.!=))
 import GHC.Generics (Generic)
 import Data.Set (Set)
 import GHC.Natural (Natural)
+import Data.Maybe (fromMaybe)
 
 data CreateClientParams = CreateClientParams
     { tag :: !Text
@@ -20,6 +21,7 @@ data ConfigurationParams = ConfigurationParams
     , startWaitTimeMs :: !(Maybe Int)
     , initCanFail :: !(Maybe Bool)
     , streaming :: !(Maybe StreamingParams)
+    , polling :: !(Maybe PollingParams)
     , events :: !(Maybe EventParams)
     , tags :: !(Maybe TagParams)
     } deriving (FromJSON, ToJSON, Show, Generic)
@@ -29,6 +31,11 @@ data StreamingParams = StreamingParams
     , initialRetryDelayMs :: !(Maybe Int)
     } deriving (FromJSON, ToJSON, Show, Generic)
 
+data PollingParams = PollingParams
+    { baseUri :: !(Maybe Text)
+    , pollIntervalMs :: !(Maybe Natural)
+    } deriving (FromJSON, ToJSON, Show, Generic)
+
 data EventParams = EventParams
     { baseUri :: !(Maybe Text)
     , capacity :: !(Maybe Natural)
@@ -36,7 +43,6 @@ data EventParams = EventParams
     , allAttributesPrivate :: !(Maybe Bool)
     , globalPrivateAttributes :: !(Maybe (Set Text))
     , flushIntervalMs :: !(Maybe Natural)
-    , inlineUsers :: !(Maybe Bool)
     } deriving (FromJSON, ToJSON, Show, Generic)
 
 data TagParams = TagParams
@@ -50,12 +56,14 @@ data CommandParams = CommandParams
     , evaluateAll :: !(Maybe EvaluateAllFlagsParams)
     , customEvent :: !(Maybe CustomEventParams)
     , identifyEvent :: !(Maybe IdentifyEventParams)
-    , aliasEvent :: !(Maybe AliasEventParams)
+    , contextBuild :: !(Maybe ContextBuildParams)
+    , contextConvert :: !(Maybe ContextConvertParams)
+    , secureModeHash :: !(Maybe SecureModeHashParams)
     } deriving (FromJSON, Generic)
 
 data EvaluateFlagParams = EvaluateFlagParams
     { flagKey :: !Text
-    , user :: !LD.User
+    , context :: !LD.Context
     , valueType :: !Text
     , defaultValue :: !Value
     , detail :: !Bool
@@ -68,7 +76,7 @@ data EvaluateFlagResponse = EvaluateFlagResponse
     } deriving (ToJSON, Show, Generic)
 
 data EvaluateAllFlagsParams = EvaluateAllFlagsParams
-    { user :: !LD.User
+    { context :: !LD.Context
     , withReasons :: !Bool
     , clientSideOnly :: !Bool
     , detailsOnlyForTrackedFlags :: !Bool
@@ -80,7 +88,7 @@ data EvaluateAllFlagsResponse = EvaluateAllFlagsResponse
 
 data CustomEventParams = CustomEventParams
     { eventKey :: !Text
-    , user :: !LD.User
+    , context :: !LD.Context
     , dataValue :: !(Maybe Value)
     , omitNullData :: !(Maybe Bool)
     , metricValue :: !(Maybe Double)
@@ -89,44 +97,48 @@ data CustomEventParams = CustomEventParams
 instance FromJSON CustomEventParams where
     parseJSON = withObject "CustomEvent" $ \o -> do
         eventKey <- o .: "eventKey"
-        user <- o .: "user"
+        context <- o .: "context"
         dataValue <- o .:? "data"
         omitNullData <- o .:? "omitNullData"
         metricValue <- o .:? "metricValue"
         return $ CustomEventParams { .. }
 
 data IdentifyEventParams = IdentifyEventParams
-    { user :: !LD.User
+    { context :: !LD.Context
     } deriving (FromJSON, Generic)
 
-data AliasEventParams = AliasEventParams
-    { user :: !LD.User
-    , previousUser :: !LD.User
+data ContextBuildParams = ContextBuildParams
+    { single :: !(Maybe ContextBuildParam)
+    , multi :: !(Maybe [ContextBuildParam])
     } deriving (FromJSON, Generic)
 
-instance FromJSON LD.User where
-    parseJSON = withObject "User" $ \o -> do
-        key <- o .: "key"
-        secondary <- o .:? "secondary"
-        ip <- o .:? "ip"
-        country <- o .:? "country"
-        email <- o .:? "email"
-        firstName <- o .:? "firstName"
-        lastName <- o .:? "lastName"
-        avatar <- o .:? "avatar"
-        name <- o .:? "name"
-        anonymous <- o .:? "anonymous" .!= False
-        custom <- o .:? "custom" .!= mempty
-        privateAttributeNames <- o .:? "privateAttributeNames" .!= mempty
-        return $ LD.makeUser key
-            & LD.userSetSecondary secondary
-            & LD.userSetIP ip
-            & LD.userSetCountry country
-            & LD.userSetEmail email
-            & LD.userSetFirstName firstName
-            & LD.userSetLastName lastName
-            & LD.userSetAvatar avatar
-            & LD.userSetName name
-            & LD.userSetAnonymous anonymous
-            & LD.userSetCustom custom
-            & LD.userSetPrivateAttributeNames privateAttributeNames
+data ContextBuildParam = ContextBuildParam
+    { kind :: !(Maybe Text)
+    , key :: !Text
+    , name :: !(Maybe Text)
+    , anonymous :: !(Maybe Bool)
+    , private :: !(Maybe (Set Text))
+    , custom :: !(Maybe (HashMap Text Value))
+    } deriving (FromJSON, Generic)
+
+data ContextConvertParams = ContextConvertParams
+    { input :: !Text
+    } deriving (FromJSON, Generic)
+
+data ContextResponse = ContextResponse
+    { output :: !(Maybe Text)
+    , errorMessage :: !(Maybe Text)
+    } deriving (Generic)
+
+instance ToJSON ContextResponse where
+    toJSON (ContextResponse { output = Just o, errorMessage = Nothing }) = object [ ("output", String o) ]
+    toJSON (ContextResponse { output = _, errorMessage = Just e }) = object [ ("error", String e) ]
+    toJSON _ = object [ ("error", String "Invalid context response was generated") ]
+
+data SecureModeHashParams = SecureModeHashParams
+    { context :: !(Maybe LD.Context)
+    } deriving (FromJSON, Generic)
+
+data SecureModeHashResponse = SecureModeHashResponse
+    { result :: !Text
+    } deriving (ToJSON, Show, Generic)

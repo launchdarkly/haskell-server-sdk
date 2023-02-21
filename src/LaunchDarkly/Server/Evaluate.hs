@@ -1,187 +1,298 @@
+{-# LANGUAGE NamedFieldPuns #-}
+{-# LANGUAGE ViewPatterns #-}
+
 module LaunchDarkly.Server.Evaluate where
 
-import           Control.Lens                        ((%~))
-import           Control.Monad                       (mzero, msum)
-import           Control.Monad.Extra                 (ifM, anyM, allM, firstJustM)
-import           Crypto.Hash.SHA1                    (hash)
-import           Data.Scientific                     (Scientific, floatingOrInteger)
-import           Data.Either                         (either, fromLeft)
-import           Data.Function                       ((&))
-import           Data.Aeson.Types                    (Value(..))
-import           Data.Maybe                          (maybe, fromJust, isJust, fromMaybe)
-import           Data.Text                           (Text)
-import           Data.Generics.Product               (getField, field)
-import           Data.List                           (genericIndex, null, find)
-import qualified Data.Vector as                      V
-import qualified Data.Text as                        T
-import qualified Data.ByteString as                  B
-import qualified Data.ByteString.Base16 as           B16
-import           Data.Text.Encoding                  (encodeUtf8)
-import           GHC.Natural                         (Natural)
-import           Data.Word                           (Word8)
-import           Data.ByteString                     (ByteString)
+import Control.Lens ((%~))
+import Control.Monad (msum, mzero)
+import Control.Monad.Extra (firstJustM)
+import Crypto.Hash.SHA1 (hash)
+import Data.Aeson.Types (Value (..))
+import Data.ByteString (ByteString)
+import qualified Data.ByteString as B
+import qualified Data.ByteString.Base16 as B16
+import Data.Either (fromLeft)
+import Data.Function ((&))
+import Data.Generics.Product (field, getField)
+import Data.HashSet (HashSet)
+import qualified Data.HashSet as HS
+import Data.List (genericIndex)
+import Data.Maybe (fromJust, fromMaybe, isJust)
+import Data.Scientific (Scientific, floatingOrInteger)
+import Data.Text (Text)
+import qualified Data.Text as T
+import Data.Text.Encoding (encodeUtf8)
+import qualified Data.Vector as V
+import Data.Word (Word8)
+import GHC.Natural (Natural)
 
-import           LaunchDarkly.Server.Client.Internal (ClientI, Status(Initialized), getStatusI)
-import           LaunchDarkly.Server.User.Internal   (UserI, valueOf)
-import           LaunchDarkly.Server.Features        (Flag, Segment, Prerequisite, SegmentRule, Clause, VariationOrRollout, Rule, RolloutKind(RolloutKindExperiment))
-import           LaunchDarkly.Server.Store.Internal  (LaunchDarklyStoreRead, getFlagC, getSegmentC)
-import           LaunchDarkly.Server.Operators       (Op(OpSegmentMatch), getOperation)
-import           LaunchDarkly.Server.Events          (EvalEvent, newUnknownFlagEvent, newSuccessfulEvalEvent, processEvalEvents)
-import           LaunchDarkly.Server.Details         (EvaluationDetail(..), EvaluationReason(..), EvalErrorKind(..))
+import Data.Either.Extra (mapRight)
+import Data.Foldable (foldlM)
+import Data.List.Extra (firstJust)
+import LaunchDarkly.Server.Client.Internal (Client, Status (Initialized), getStatusI)
+import LaunchDarkly.Server.Context (getIndividualContext, getValueForReference)
+import LaunchDarkly.Server.Context.Internal (Context (Invalid), getKey, getKinds)
+import LaunchDarkly.Server.Details (EvalErrorKind (..), EvaluationDetail (..), EvaluationReason (..))
+import LaunchDarkly.Server.Events (EvalEvent, newSuccessfulEvalEvent, newUnknownFlagEvent, processEvalEvents)
+import LaunchDarkly.Server.Features (Clause, Flag, Prerequisite, RolloutKind (RolloutKindExperiment), Rule, Segment (..), SegmentRule, SegmentTarget (..), Target, VariationOrRollout)
+import LaunchDarkly.Server.Operators (Op (OpSegmentMatch), getOperation)
+import LaunchDarkly.Server.Reference (getComponents, getError, isValid, makeLiteral, makeReference)
+import LaunchDarkly.Server.Store.Internal (LaunchDarklyStoreRead, getFlagC, getSegmentC)
 
 setFallback :: EvaluationDetail Value -> Value -> EvaluationDetail Value
 setFallback detail fallback = case getField @"variationIndex" detail of
-    Nothing -> detail { value = fallback }; _ -> detail
+    Nothing -> detail {value = fallback}
+    _ -> detail
 
 setValue :: EvaluationDetail Value -> a -> EvaluationDetail a
-setValue x v = x { value = v }
+setValue x v = x {value = v}
 
 isError :: EvaluationReason -> Bool
 isError reason = case reason of (EvaluationReasonError _) -> True; _ -> False
 
-evaluateTyped :: ClientI -> Text -> UserI -> a -> (a -> Value) -> Bool -> (Value -> Maybe a) -> IO (EvaluationDetail a)
-evaluateTyped client key user fallback wrap includeReason convert = getStatusI client >>= \status -> if status /= Initialized
-    then pure $ EvaluationDetail fallback Nothing $ EvaluationReasonError EvalErrorClientNotReady
-    else evaluateInternalClient client key user (wrap fallback) includeReason >>= \r -> pure $ maybe
-        (EvaluationDetail fallback Nothing $ if isError (getField @"reason" r)
-            then (getField @"reason" r) else EvaluationReasonError EvalErrorWrongType)
-        (setValue r) (convert $ getField @"value" r)
+evaluateTyped :: Client -> Text -> Context -> a -> (a -> Value) -> Bool -> (Value -> Maybe a) -> IO (EvaluationDetail a)
+evaluateTyped client key context fallback wrap includeReason convert =
+    getStatusI client >>= \status ->
+        if status /= Initialized
+            then pure $ EvaluationDetail fallback Nothing $ EvaluationReasonError EvalErrorClientNotReady
+            else
+                evaluateInternalClient client key context (wrap fallback) includeReason >>= \detail ->
+                    pure $
+                        maybe
+                            (EvaluationDetail fallback Nothing $ if isError (getField @"reason" detail) then (getField @"reason" detail) else EvaluationReasonError EvalErrorWrongType)
+                            (setValue detail)
+                            (convert $ getField @"value" detail)
 
-evaluateInternalClient :: ClientI -> Text -> UserI -> Value -> Bool -> IO (EvaluationDetail Value)
-evaluateInternalClient client key user fallback includeReason = do
-    (reason, unknown, events) <- getFlagC (getField @"store" client) key >>= \case
-        Left err          -> do
-            let event = newUnknownFlagEvent key fallback (EvaluationReasonError $ EvalErrorExternalStore err)
-            pure (errorDetail $ EvalErrorExternalStore err, True, pure event)
-        Right Nothing     -> do
-            let event = newUnknownFlagEvent key fallback (EvaluationReasonError EvalErrorFlagNotFound)
-            pure (errorDefault EvalErrorFlagNotFound fallback, True, pure event)
-        Right (Just flag) -> do
-            (reason, events) <- evaluateDetail flag user $ getField @"store" client
-            let reason' = setFallback reason fallback
-            pure (reason', False, flip (:) events $ newSuccessfulEvalEvent flag (getField @"variationIndex" reason')
-                (getField @"value" reason') (Just fallback) (getField @"reason" reason') Nothing)
-    processEvalEvents (getField @"config" client) (getField @"events" client) user includeReason events unknown
-    pure reason
+evaluateInternalClient :: Client -> Text -> Context -> Value -> Bool -> IO (EvaluationDetail Value)
+evaluateInternalClient _ _ (Invalid _) fallback _ = pure $ errorDefault EvalErrorInvalidContext fallback
+evaluateInternalClient client key context fallback includeReason = do
+    (detail, unknown, events) <-
+        getFlagC (getField @"store" client) key >>= \case
+            Left err -> do
+                let event = newUnknownFlagEvent key fallback (EvaluationReasonError $ EvalErrorExternalStore err) context
+                pure (errorDetail $ EvalErrorExternalStore err, True, pure event)
+            Right Nothing -> do
+                let event = newUnknownFlagEvent key fallback (EvaluationReasonError EvalErrorFlagNotFound) context
+                pure (errorDefault EvalErrorFlagNotFound fallback, True, pure event)
+            Right (Just flag) -> do
+                (detail, events) <- evaluateDetail flag context HS.empty $ getField @"store" client
+                let detail' = setFallback detail fallback
+                pure
+                    ( detail'
+                    , False
+                    , flip (:) events $
+                        newSuccessfulEvalEvent
+                            flag
+                            (getField @"variationIndex" detail')
+                            (getField @"value" detail')
+                            (Just fallback)
+                            (getField @"reason" detail')
+                            Nothing
+                            context
+                    )
+    processEvalEvents (getField @"config" client) (getField @"events" client) context includeReason events unknown
+    pure detail
 
 getOffValue :: Flag -> EvaluationReason -> EvaluationDetail Value
 getOffValue flag reason = case getField @"offVariation" flag of
     Just offVariation -> getVariation flag offVariation reason
-    Nothing -> EvaluationDetail { value = Null, variationIndex = mzero, reason = reason }
+    Nothing -> EvaluationDetail {value = Null, variationIndex = mzero, reason = reason}
 
 getVariation :: Flag -> Integer -> EvaluationReason -> EvaluationDetail Value
 getVariation flag index reason
-    | idx < 0 = EvaluationDetail { value = Null, variationIndex = mzero, reason = EvaluationReasonError EvalErrorKindMalformedFlag }
-    | idx >= length variations = EvaluationDetail { value = Null, variationIndex = mzero, reason = EvaluationReasonError EvalErrorKindMalformedFlag }
-    | otherwise = EvaluationDetail { value = genericIndex variations index, variationIndex = pure index, reason = reason }
-  where idx = fromIntegral index
-        variations = getField @"variations" flag
+    | idx < 0 = EvaluationDetail {value = Null, variationIndex = mzero, reason = EvaluationReasonError EvalErrorKindMalformedFlag}
+    | idx >= length variations = EvaluationDetail {value = Null, variationIndex = mzero, reason = EvaluationReasonError EvalErrorKindMalformedFlag}
+    | otherwise = EvaluationDetail {value = genericIndex variations index, variationIndex = pure index, reason = reason}
+  where
+    idx = fromIntegral index
+    variations = getField @"variations" flag
 
-evaluateDetail :: (Monad m, LaunchDarklyStoreRead store m) => Flag -> UserI -> store
-    -> m (EvaluationDetail Value, [EvalEvent])
-evaluateDetail flag user store = if getField @"on" flag
-    then checkPrerequisites flag user store >>= \case
-        (Nothing, events)     -> evaluateInternal flag user store >>= (\x -> pure (x, events))
-        (Just reason, events) -> pure (getOffValue flag reason, events)
-    else pure (getOffValue flag EvaluationReasonOff, [])
+evaluateDetail :: (Monad m, LaunchDarklyStoreRead store m) => Flag -> Context -> HS.HashSet Text -> store -> m (EvaluationDetail Value, [EvalEvent])
+evaluateDetail flag@(getField @"on" -> False) _ _ _ = pure (getOffValue flag EvaluationReasonOff, [])
+evaluateDetail flag context seenFlags store
+    | HS.member (getField @"key" flag) seenFlags = pure (getOffValue flag $ EvaluationReasonError EvalErrorKindMalformedFlag, [])
+    | otherwise =
+        checkPrerequisites flag context (HS.insert (getField @"key" flag) seenFlags) store >>= \case
+            (Nothing, events) -> evaluateInternal flag context store >>= (\x -> pure (x, events))
+            (Just detail, events) -> pure (detail, events)
 
 status :: Prerequisite -> EvaluationDetail a -> Flag -> Bool
-status prereq result prereqFlag = getField @"on" prereqFlag && (getField @"variationIndex" result) ==
-    pure (getField @"variation" prereq)
-
-checkPrerequisite :: (Monad m, LaunchDarklyStoreRead store m) => store -> UserI -> Flag -> Prerequisite
-    -> m (Maybe EvaluationReason, [EvalEvent])
-checkPrerequisite store user flag prereq = getFlagC store (getField @"key" prereq) >>= \case
-    Left err                -> pure (pure $ EvaluationReasonError $ EvalErrorExternalStore err, [])
-    Right Nothing           -> pure (pure $ EvaluationReasonPrerequisiteFailed (getField @"key" prereq), [])
-    Right (Just prereqFlag) -> evaluateDetail prereqFlag user store >>= \(r, events) -> let
-        event = newSuccessfulEvalEvent prereqFlag (getField @"variationIndex" r) (getField @"value" r) Nothing
-            (getField @"reason" r) (Just $ getField @"key" flag)
-        in if status prereq r prereqFlag then pure (Nothing, event : events) else
-            pure (pure $ EvaluationReasonPrerequisiteFailed (getField @"key" prereq), event : events)
+status prereq result prereqFlag =
+    getField @"on" prereqFlag
+        && (getField @"variationIndex" result)
+            == pure (getField @"variation" prereq)
 
 sequenceUntil :: Monad m => (a -> Bool) -> [m a] -> m [a]
-sequenceUntil _ []     = return []
-sequenceUntil p (m:ms) = m >>= \a -> if p a then return [a] else
-    sequenceUntil p ms >>= \as -> return (a:as)
+sequenceUntil _ [] = return []
+sequenceUntil p (m : ms) =
+    m >>= \a ->
+        if p a
+            then return [a]
+            else sequenceUntil p ms >>= \as -> return (a : as)
 
-checkPrerequisites :: (Monad m, LaunchDarklyStoreRead store m) => Flag -> UserI -> store
-    -> m (Maybe EvaluationReason, [EvalEvent])
-checkPrerequisites flag user store = let p = getField @"prerequisites" flag in if null p then pure (Nothing, []) else do
-    evals <- sequenceUntil (isJust . fst) $ map (checkPrerequisite store user flag) p
-    pure (msum $ map fst evals, concatMap snd evals)
+checkPrerequisites :: (Monad m, LaunchDarklyStoreRead store m) => Flag -> Context -> HS.HashSet Text -> store -> m (Maybe (EvaluationDetail Value), [EvalEvent])
+checkPrerequisites flag context seenFlags store =
+    let p = getField @"prerequisites" flag
+     in if null p
+            then pure (Nothing, [])
+            else do
+                evals <- sequenceUntil (isJust . fst) $ map (checkPrerequisite store context flag seenFlags) p
+                pure (msum $ map fst evals, concatMap snd evals)
 
-evaluateInternal :: (Monad m, LaunchDarklyStoreRead store m) => Flag -> UserI -> store -> m (EvaluationDetail Value)
-evaluateInternal flag user store = result where
-    checkTarget target = if elem (getField @"key" user) (getField @"values" target)
-        then Just $ getVariation flag (getField @"variation" target) EvaluationReasonTargetMatch else Nothing
-    checkRule (ruleIndex, rule) = ifM (ruleMatchesUser rule user store)
-        (pure $ Just $ getValueForVariationOrRollout flag (getField @"variationOrRollout" rule) user
-            EvaluationReasonRuleMatch { ruleIndex = ruleIndex, ruleId = getField @"id" rule, inExperiment = False })
-        (pure Nothing)
-    fallthrough = getValueForVariationOrRollout flag (getField @"fallthrough" flag) user (EvaluationReasonFallthrough False)
-    result = let
-        ruleMatch   = checkRule <$> zip [0..] (getField @"rules" flag)
-        targetMatch = return . checkTarget <$> getField @"targets" flag
-        in fromMaybe fallthrough <$> firstJustM Prelude.id (ruleMatch ++ targetMatch)
+checkPrerequisite :: (Monad m, LaunchDarklyStoreRead store m) => store -> Context -> Flag -> HS.HashSet Text -> Prerequisite -> m (Maybe (EvaluationDetail Value), [EvalEvent])
+checkPrerequisite store context flag seenFlags prereq =
+    if HS.member (getField @"key" prereq) seenFlags
+        then pure (Just $ errorDetail EvalErrorKindMalformedFlag, [])
+        else
+            getFlagC store (getField @"key" prereq) >>= \case
+                Left err -> pure (pure $ getOffValue flag $ EvaluationReasonError $ EvalErrorExternalStore err, [])
+                Right Nothing -> pure (pure $ getOffValue flag $ EvaluationReasonPrerequisiteFailed (getField @"key" prereq), [])
+                Right (Just prereqFlag) -> evaluateDetail prereqFlag context seenFlags store >>= (process prereqFlag)
+  where
+    process prereqFlag (detail, events)
+        | isError (getField @"reason" detail) = pure (Just $ errorDetail EvalErrorKindMalformedFlag, mempty)
+        | otherwise =
+            let event = newSuccessfulEvalEvent prereqFlag (getField @"variationIndex" detail) (getField @"value" detail) Nothing (getField @"reason" detail) (Just $ getField @"key" flag) context
+             in if status prereq detail prereqFlag
+                    then pure (Nothing, event : events)
+                    else pure (pure $ getOffValue flag $ EvaluationReasonPrerequisiteFailed (getField @"key" prereq), event : events)
+
+evaluateInternal :: (Monad m, LaunchDarklyStoreRead store m) => Flag -> Context -> store -> m (EvaluationDetail Value)
+evaluateInternal flag context store = result
+  where
+    fallthrough = getValueForVariationOrRollout flag (getField @"fallthrough" flag) context (EvaluationReasonFallthrough False)
+    result =
+        let
+            targetEvaluationResults = pure <$> checkTargets context flag
+            ruleEvaluationResults = (checkRule flag context store) <$> zip [0 ..] (getField @"rules" flag)
+         in
+            fromMaybe fallthrough <$> firstJustM Prelude.id (targetEvaluationResults ++ ruleEvaluationResults)
+
+checkRule :: (Monad m, LaunchDarklyStoreRead store m) => Flag -> Context -> store -> (Natural, Rule) -> m (Maybe (EvaluationDetail Value))
+checkRule flag context store (ruleIndex, rule) =
+    ruleMatchesContext rule context store
+        >>= pure . \case
+            Left _ -> Just $ errorDetail EvalErrorKindMalformedFlag
+            Right True -> Just $ getValueForVariationOrRollout flag (getField @"variationOrRollout" rule) context EvaluationReasonRuleMatch {ruleIndex = ruleIndex, ruleId = getField @"id" rule, inExperiment = False}
+            Right False -> Nothing
+
+checkTargets :: Context -> Flag -> [Maybe (EvaluationDetail Value)]
+checkTargets context flag =
+    let userTargets = getField @"targets" flag
+        contextTargets = getField @"contextTargets" flag
+     in case contextTargets of
+            [] -> checkTarget context "user" flag <$> userTargets
+            _ -> checkContextTargets context flag userTargets contextTargets
+
+checkContextTargets :: Context -> Flag -> [Target] -> [Target] -> [Maybe (EvaluationDetail Value)]
+checkContextTargets context flag userTargets contextTargets =
+    checkContextTarget context flag userTargets <$> contextTargets
+
+checkContextTarget :: Context -> Flag -> [Target] -> Target -> Maybe (EvaluationDetail Value)
+checkContextTarget context flag userTargets contextTarget =
+    let contextKind = getField @"contextKind" contextTarget
+        values = getField @"values" contextTarget
+     in if contextKind == "user" && HS.null values
+            then -- If the context target doesn't have any values specified, we are supposed to fall back to the user targets
+                firstJust Prelude.id $ (checkTarget context "user" flag) <$> userTargets
+            else checkTarget context contextKind flag contextTarget
+
+checkTarget :: Context -> Text -> Flag -> Target -> Maybe (EvaluationDetail Value)
+checkTarget context contextKind flag target =
+    case getIndividualContext contextKind context of
+        Nothing -> Nothing
+        Just ctx ->
+            if elem (getKey ctx) (getField @"values" target)
+                then Just $ getVariation flag (getField @"variation" target) EvaluationReasonTargetMatch
+                else Nothing
 
 errorDefault :: EvalErrorKind -> Value -> EvaluationDetail Value
-errorDefault kind v = EvaluationDetail { value = v, variationIndex = mzero, reason = EvaluationReasonError kind }
+errorDefault kind v = EvaluationDetail {value = v, variationIndex = mzero, reason = EvaluationReasonError kind}
 
 errorDetail :: EvalErrorKind -> EvaluationDetail Value
 errorDetail kind = errorDefault kind Null
 
-getValueForVariationOrRollout :: Flag -> VariationOrRollout -> UserI -> EvaluationReason -> EvaluationDetail Value
-getValueForVariationOrRollout flag vr user reason =
-    case variationIndexForUser vr user (getField @"key" flag) (getField @"salt" flag) of
-        (Nothing, _)           -> errorDetail EvalErrorKindMalformedFlag
+getValueForVariationOrRollout :: Flag -> VariationOrRollout -> Context -> EvaluationReason -> EvaluationDetail Value
+getValueForVariationOrRollout flag vr context reason =
+    case variationIndexForContext vr context (getField @"key" flag) (getField @"salt" flag) of
+        (Nothing, _) -> errorDetail EvalErrorKindMalformedFlag
         (Just x, inExperiment) -> (getVariation flag x reason) & field @"reason" %~ setInExperiment inExperiment
 
 setInExperiment :: Bool -> EvaluationReason -> EvaluationReason
 setInExperiment inExperiment reason = case reason of
-    EvaluationReasonFallthrough _         -> EvaluationReasonFallthrough inExperiment
+    EvaluationReasonFallthrough _ -> EvaluationReasonFallthrough inExperiment
     EvaluationReasonRuleMatch index idx _ -> EvaluationReasonRuleMatch index idx inExperiment
-    x                                     -> x
+    x -> x
 
-ruleMatchesUser :: Monad m => LaunchDarklyStoreRead store m => Rule -> UserI -> store -> m Bool
-ruleMatchesUser rule user store =
-    allM (\clause -> clauseMatchesUser store clause user) (getField @"clauses" rule)
+ruleMatchesContext :: Monad m => LaunchDarklyStoreRead store m => Rule -> Context -> store -> m (Either Text Bool)
+ruleMatchesContext rule context store = foldlM (checkRule store context) (Right True) clauses
+  where
+    clauses = getField @"clauses" rule
+    checkRule :: Monad m => LaunchDarklyStoreRead store m => store -> Context -> Either Text Bool -> Clause -> m (Either Text Bool)
+    checkRule _ _ (Left e) _ = pure $ Left e
+    checkRule _ _ (Right False) _ = pure $ Right False
+    checkRule store context _ clause = clauseMatchesContext store clause context HS.empty
 
-variationIndexForUser :: VariationOrRollout -> UserI -> Text -> Text -> (Maybe Integer, Bool)
-variationIndexForUser vor user key salt
+variationIndexForContext :: VariationOrRollout -> Context -> Text -> Text -> (Maybe Integer, Bool)
+variationIndexForContext vor context key salt
     | (Just variation) <- getField @"variation" vor = (pure variation, False)
-    | (Just rollout) <- getField @"rollout" vor = let
-        isExperiment = (getField @"kind" rollout) == RolloutKindExperiment
-        variations = getField @"variations" rollout
-        bucket = bucketUser user key (fromMaybe "key" $ getField @"bucketBy" rollout) salt (getField @"seed" rollout)
-        c acc i = acc >>= \acc -> let t = acc + ((getField @"weight" i) / 100000.0) in
-            if bucket < t then Left (Just $ getField @"variation" i, (not $ getField @"untracked" i) && isExperiment) else Right t
-        in if null variations then (Nothing, False) else fromLeft
-            (Just $ getField @"variation" $ last variations, (not $ getField @"untracked" $ last variations) && isExperiment) $
-            foldl c (Right (0.0 :: Float)) variations
+    | (Just rollout) <- getField @"rollout" vor =
+        let
+            isRolloutExperiment = (getField @"kind" rollout) == RolloutKindExperiment
+            bucketBy = fromMaybe "key" $ if isRolloutExperiment then Nothing else getField @"bucketBy" rollout
+            variations = getField @"variations" rollout
+            bucket = bucketContext context (getField @"contextKind" rollout) key bucketBy salt (getField @"seed" rollout)
+            isExperiment = isRolloutExperiment && (isJust bucket)
+            c acc i =
+                acc >>= \acc ->
+                    let t = acc + ((getField @"weight" i) / 100000.0)
+                     in case bucket of
+                            Just v | v >= t -> Right t
+                            _ -> Left (Just $ getField @"variation" i, (not $ getField @"untracked" i) && isExperiment)
+         in
+            if null variations
+                then (Nothing, False)
+                else
+                    fromLeft
+                        (Just $ getField @"variation" $ last variations, (not $ getField @"untracked" $ last variations) && isExperiment)
+                        $ foldl c (Right (0.0 :: Float)) variations
     | otherwise = (Nothing, False)
 
 -- Bucketing -------------------------------------------------------------------
 
 hexCharToNumber :: Word8 -> Maybe Natural
-hexCharToNumber w = fmap fromIntegral $ if
-    | 48 <= w && w <= 57  -> pure $ w - 48
-    | 65 <= w && w <= 70  -> pure $ w - 55
-    | 97 <= w && w <= 102 -> pure $ w - 87
-    | otherwise           -> Nothing
+hexCharToNumber w =
+    fmap fromIntegral $
+        if
+                | 48 <= w && w <= 57 -> pure $ w - 48
+                | 65 <= w && w <= 70 -> pure $ w - 55
+                | 97 <= w && w <= 102 -> pure $ w - 87
+                | otherwise -> Nothing
 
 hexStringToNumber :: ByteString -> Maybe Natural
-hexStringToNumber bytes = B.foldl' step (Just 0) bytes where
+hexStringToNumber bytes = B.foldl' step (Just 0) bytes
+  where
     step acc x = acc >>= \acc' -> hexCharToNumber x >>= pure . (+) (acc' * 16)
 
-bucketUser :: UserI -> Text -> Text -> Text -> Maybe Int -> Float
-bucketUser user key attribute salt seed = fromMaybe 0 $ do
-    let secondarySuffix = maybe "" (T.append ".") $ getField @"secondary" user
-    i <- valueOf user attribute >>= bucketableStringValue >>= \x -> pure $ B.take 15 $ B16.encode $ hash $ encodeUtf8 $
-        case seed of
-            Nothing    -> T.concat [key, ".", salt, ".", x, secondarySuffix]
-            Just seed' -> T.concat [T.pack $ show seed', ".", x, secondarySuffix]
-    pure $ ((fromIntegral $ fromJust $ hexStringToNumber i) :: Float) / (0xFFFFFFFFFFFFFFF)
+bucketContext :: Context -> Maybe Text -> Text -> Text -> Text -> Maybe Int -> Maybe Float
+bucketContext context kind key attribute salt seed =
+    let bucketBy = case kind of
+            Nothing -> makeLiteral attribute
+            Just _ -> makeReference attribute
+     in case getIndividualContext (fromMaybe "user" kind) context of
+            Nothing -> Nothing
+            Just ctx ->
+                let bucketableString = bucketableStringValue $ getValueForReference bucketBy ctx
+                 in Just $ calculateBucketValue bucketableString key salt seed
+
+calculateBucketValue :: (Maybe Text) -> Text -> Text -> Maybe Int -> Float
+calculateBucketValue Nothing _ _ _ = 0
+calculateBucketValue (Just text) key salt seed =
+    let seed' = case seed of
+            Nothing -> T.concat [key, ".", salt, ".", text]
+            Just seed' -> T.concat [T.pack $ show seed', ".", text]
+        byteString = B.take 15 $ B16.encode $ hash $ encodeUtf8 $ seed'
+     in ((fromIntegral $ fromJust $ hexStringToNumber byteString) :: Float) / 0xFFFFFFFFFFFFFFF
 
 floatingOrInteger' :: Scientific -> Either Double Integer
 floatingOrInteger' = floatingOrInteger
@@ -189,51 +300,98 @@ floatingOrInteger' = floatingOrInteger
 bucketableStringValue :: Value -> Maybe Text
 bucketableStringValue (String x) = pure x
 bucketableStringValue (Number s) = either (const Nothing) (pure . T.pack . show) (floatingOrInteger' s)
-bucketableStringValue _          = Nothing
+bucketableStringValue _ = Nothing
 
 -- Clause ----------------------------------------------------------------------
 
 maybeNegate :: Clause -> Bool -> Bool
 maybeNegate clause value = if getField @"negate" clause then not value else value
 
-matchAny :: (Value -> Value -> Bool) -> Value -> [Value] -> Bool
-matchAny op value = any (op value)
+-- For a given clause, determine if the provided value matches that clause.
+--
+-- The operation to be check and the values to compare against are both extract from within the Clause itself.
+matchAnyClauseValue :: Clause -> Value -> Bool
+matchAnyClauseValue clause contextValue = any (f contextValue) v
+  where
+    f = getOperation $ getField @"op" clause
+    v = getField @"values" clause
 
-clauseMatchesUserNoSegments :: Clause -> UserI -> Bool
-clauseMatchesUserNoSegments clause user = case valueOf user $ getField @"attribute" clause of
-    Nothing        -> False
-    Just (Null)    -> False
-    Just (Array a) -> maybeNegate clause $ V.any (\x -> matchAny f x v) a
-    Just x         -> maybeNegate clause $ matchAny f x v
-    where
-        f = getOperation $ getField @"op" clause
-        v = getField @"values" clause
+-- If attribute is "kind", then we treat operator and values as a match expression against a list of all individual
+-- kinds in the context. That is, for a multi-kind context with kinds of "org" and "user", it is a match if either
+-- of those strings is a match with Operator and Values.
+clauseMatchesByKind :: Clause -> Context -> Bool
+clauseMatchesByKind clause context = foldr f False (getKinds context)
+  where
+    f kind result
+        | result == True = True
+        | otherwise = matchAnyClauseValue clause (String kind)
 
-clauseMatchesUser :: (Monad m, LaunchDarklyStoreRead store m) => store -> Clause -> UserI -> m Bool
-clauseMatchesUser store clause user
-    | getField @"op" clause == OpSegmentMatch = do
-        let values = [ x | String x <- getField @"values" clause]
-        x <- anyM (\k -> getSegmentC store k >>= pure . checkSegment) values
-        pure $ maybeNegate clause x
-    | otherwise = pure $ clauseMatchesUserNoSegments clause user
-    where
-        checkSegment :: Either Text (Maybe Segment) -> Bool
-        checkSegment (Right (Just segment)) = segmentContainsUser segment user
-        checkSegment _                      = False
+clauseMatchesContextNoSegments :: Clause -> Context -> Either Text Bool
+clauseMatchesContextNoSegments clause context
+    | isValid (getField @"attribute" clause) == False = Left $ getError $ getField @"attribute" clause
+    | ["kind"] == getComponents (getField @"attribute" clause) = Right $ maybeNegate clause $ clauseMatchesByKind clause context
+    | otherwise = case getIndividualContext (getField @"contextKind" clause) context of
+        Nothing -> Right False
+        Just ctx -> case getValueForReference (getField @"attribute" clause) ctx of
+            Null -> Right False
+            Array a -> Right $ maybeNegate clause $ V.any (matchAnyClauseValue clause) a
+            x -> Right $ maybeNegate clause $ matchAnyClauseValue clause x
+
+clauseMatchesContext :: (Monad m, LaunchDarklyStoreRead store m) => store -> Clause -> Context -> HS.HashSet Text -> m (Either Text Bool)
+clauseMatchesContext store clause context seenSegments
+    | getField @"op" clause == OpSegmentMatch =
+        let values = [x | String x <- getField @"values" clause]
+         in foldlM (checkSegment store context seenSegments) (Right False) values >>= pure . mapRight (maybeNegate clause)
+    | otherwise = pure $ clauseMatchesContextNoSegments clause context
+
+checkSegment :: (Monad m, LaunchDarklyStoreRead store m) => store -> Context -> HS.HashSet Text -> Either Text Bool -> Text -> m (Either Text Bool)
+checkSegment _ _ _ (Left e) _ = pure $ Left e
+checkSegment _ _ _ (Right True) _ = pure $ Right True
+checkSegment store context seenSegments _ value =
+    getSegmentC store value >>= \case
+        Right (Just segment) -> segmentContainsContext store segment context seenSegments
+        _ -> pure $ Right False
 
 -- Segment ---------------------------------------------------------------------
 
-segmentRuleMatchesUser :: SegmentRule -> UserI -> Text -> Text -> Bool
-segmentRuleMatchesUser rule user key salt = (&&)
-    (all (flip clauseMatchesUserNoSegments user) (getField @"clauses" rule))
-    (flip (maybe True) (getField @"weight" rule) $ \weight ->
-        bucketUser user key (fromMaybe "key" $ getField @"bucketBy" rule) salt Nothing < weight / 100000.0)
+segmentRuleMatchesContext :: (Monad m, LaunchDarklyStoreRead store m) => store -> SegmentRule -> Context -> Text -> Text -> HS.HashSet Text -> m (Either Text Bool)
+segmentRuleMatchesContext store rule context key salt seenSegments =
+    foldlM (checkClause store) (Right True) (getField @"clauses" rule) >>= \result ->
+        pure $ case result of
+            Left _ -> result
+            Right False -> result
+            _ ->
+                Right $
+                    ( flip (maybe True) (getField @"weight" rule) $ \weight ->
+                        let bucket = bucketContext context (getField @"rolloutContextKind" rule) key (fromMaybe "key" $ getField @"bucketBy" rule) salt Nothing
+                         in case bucket of
+                                Just v | v >= (weight / 100000.0) -> False
+                                _ -> True
+                    )
+  where
+    checkClause :: (Monad m, LaunchDarklyStoreRead store m) => store -> Either Text Bool -> Clause -> m (Either Text Bool)
+    checkClause _ (Left e) _ = pure $ Left e
+    checkClause _ (Right False) _ = pure $ Right False
+    checkClause store _ clause = clauseMatchesContext store clause context seenSegments
 
-segmentContainsUser :: Segment -> UserI -> Bool
-segmentContainsUser segment user
-    | elem (getField @"key" user) (getField @"included" segment) = True
-    | elem (getField @"key" user) (getField @"excluded" segment) = False
-    | Just _ <- find
-        (\r -> segmentRuleMatchesUser r user (getField @"key" segment) (getField @"salt" segment))
-        (getField @"rules" segment) = True
-    | otherwise = False
+segmentContainsContext :: (Monad m, LaunchDarklyStoreRead store m) => store -> Segment -> Context -> HS.HashSet Text -> m (Either Text Bool)
+segmentContainsContext store (Segment {included, includedContexts, excluded, excludedContexts, key, salt, rules}) context seenSegments
+    | HS.member key seenSegments = pure $ Left "segment rule caused a circular reference; this is probably a temporary condition"
+    | contextKeyInTargetList included "user" context = pure $ Right True
+    | (any (flip contextKeyInSegmentTarget context) includedContexts) = pure $ Right True
+    | contextKeyInTargetList excluded "user" context = pure $ Right False
+    | (any (flip contextKeyInSegmentTarget context) excludedContexts) = pure $ Right False
+    | otherwise = foldlM (checkRules store) (Right False) rules
+  where
+    checkRules :: (Monad m, LaunchDarklyStoreRead store m) => store -> Either Text Bool -> SegmentRule -> m (Either Text Bool)
+    checkRules _ (Left e) _ = pure $ Left e
+    checkRules _ (Right True) _ = pure $ Right True
+    checkRules store _ rule = segmentRuleMatchesContext store rule context key salt (HS.insert key seenSegments)
+
+contextKeyInSegmentTarget :: SegmentTarget -> Context -> Bool
+contextKeyInSegmentTarget (SegmentTarget {values, contextKind}) = contextKeyInTargetList values contextKind
+
+contextKeyInTargetList :: (HashSet Text) -> Text -> Context -> Bool
+contextKeyInTargetList targets kind context = case getIndividualContext kind context of
+    Just ctx -> elem (getKey ctx) targets
+    Nothing -> False

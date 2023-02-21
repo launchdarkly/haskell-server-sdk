@@ -1,5 +1,9 @@
 version: 2
 
+publications:
+  - url: https://hackage.haskell.org/package/launchdarkly-server-sdk
+    description: Hackage
+
 repo:
   public: haskell-server-sdk
   private: haskell-server-sdk-private
