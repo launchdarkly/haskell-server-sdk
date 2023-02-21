@@ -2,6 +2,52 @@
 
 All notable changes to the LaunchDarkly Haskell Server-side SDK will be documented in this file. This project adheres to [Semantic Versioning](http://semver.org).
 
+## [4.0.0] - 2023-02-21
+The latest version of this SDK supports LaunchDarkly's new custom contexts feature. Contexts are an evolution of a previously-existing concept, "users." Contexts let you create targeting rules for feature flags based on a variety of different information, including attributes pertaining to users, organizations, devices, and more. You can even combine contexts to create "multi-contexts."
+
+This feature is only available to members of LaunchDarkly's Early Access Program (EAP). If you're in the EAP, you can use contexts by updating your SDK to the latest version and, if applicable, updating your Relay Proxy. Outdated SDK versions do not support contexts, and will cause unpredictable flag evaluation behavior.
+
+If you are not in the EAP, only use single contexts of kind "user", or continue to use the user type if available. If you try to create contexts, the context will be sent to LaunchDarkly, but any data not related to the user object will be ignored.
+
+For detailed information about this version, please refer to the list below. For information on how to upgrade from the previous version, please read the [migration guide](https://docs.launchdarkly.com/sdk/server-side/haskell/migration-3-to-4).
+
+### Added:
+- The type `Context` from the `LaunchDarkly.Server.Context` module defines the new context model.
+- All SDK methods that took a hash representing the user now accept an `LDContext`.
+- Added support for [Secure Mode](https://docs.launchdarkly.com/sdk/features/secure-mode#haskell).
+
+### Changed _(breaking changes from 3.x)_:
+- The `secondary` attribute which existed in the user hash is no longer a supported feature. If you set an attribute with that name in `Context`, it will simply be a custom attribute like any other.
+- Analytics event data now uses a new JSON schema due to differences between the context model and the old user model.
+
+### Changed (requirements/dependencies/build):
+- The minimum supported Stackage resolver is LTS 16.31.
+
+### Changed (behavioral changes):
+- The default polling URL has changed from `https://app.launchdarkly.com` to `https://sdk.launchdarkly.com`.
+- Several optimizations within the flag evaluation logic have improved the performance of evaluations. For instance, target lists are now stored internally as sets for faster matching.
+
+### Removed:
+- Removed the `User` type and all associated functions from the `LaunchDarkly.Server.User` module.
+- Removed support for the `secondary` meta-attribute in the user hash.
+- The `alias` method no longer exists because alias events are not needed in the new context model.
+- The `configSetInlineUsersInEvents` configuration option no longer exists because it is not relevant in the new context model.
+- Removed all types and options that were deprecated as of the most recent 3.x release.
+- The old Redis store integration has been removed from this repository and published to its own separate package. You can learn more by reviewing the [Haskell redis docs](https://docs.launchdarkly.com/sdk/features/storing-data/redis#haskell) or reviewing the published package on [Hackage](https://hackage.haskell.org/package/launchdarkly-server-sdk-redis-hedis).
+
+### Deprecated:
+
+The following methods in `TestData` have been deprecated and replaced with new context-aware options.
+- `variationForAllUsers` was replaced with `variationForAll`
+- `valueForAllUsers` was replaced with `valueForAll`
+- `variationForUser` was replaced with `variationForKey`
+- `ifMatch` was replaced with `ifMatchContext`
+- `ifNotMatch` was replaced with `ifNotMatchContext`
+- `andMatch` was replaced with `andMatchContext`
+- `andNotMatch` was replaced with `andNotMatchContext`
+
+The config method `configSetUserKeyLRUCapacity` has been deprecated and replaced with `configSetContextKeyLRUCapacity`.
+
 ## [3.1.1] - 2023-02-17
 ### Fixed:
 - The polling thread will be shutdown if the LaunchDarkly polling API returns an unrecoverable response code.
