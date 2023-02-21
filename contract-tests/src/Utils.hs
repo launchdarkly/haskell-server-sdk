@@ -21,7 +21,7 @@ waitClient client = do
   status <- LD.getStatus client
   case status of
     LD.Initialized -> return ()
-    _ -> threadDelay (1 * 1000) >> waitClient client
+    _ -> threadDelay (1 * 1_000) >> waitClient client
 
 createConfig :: ConfigurationParams -> LD.Config
 createConfig p = LD.makeConfig (getField @"credential" p)
