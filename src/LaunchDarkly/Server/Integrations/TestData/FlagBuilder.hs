@@ -428,6 +428,8 @@ ifMatchContext kind attribute values fb =
     newFlagRuleBuilder fb
         & andMatchContext kind attribute values
 
+{-# DEPRECATED ifMatch "Use ifMatchContext instead" #-}
+
 -- |
 -- Starts defining a flag rule, using the "is one of" operator.
 --
@@ -477,6 +479,8 @@ ifNotMatchContext ::
 ifNotMatchContext kind attibute values fb =
     newFlagRuleBuilder fb
         & andNotMatchContext kind attibute values
+
+{-# DEPRECATED ifNotMatch "Use ifNotMatchContext instead" #-}
 
 -- |
 -- Starts defining a flag rule, using the "is not one of" operator.
@@ -589,6 +593,8 @@ andMatchContext ::
 andMatchContext kind attribute values ruleBuilder =
     ruleBuilder {frbClauses = Clause attribute kind values False : frbClauses ruleBuilder}
 
+{-# DEPRECATED andMatch "Use andMatchContext instead" #-}
+
 -- |
 -- Adds another clause, using the "is one of" operator.
 --
@@ -638,6 +644,8 @@ andNotMatchContext ::
     FlagRuleBuilder
 andNotMatchContext kind attribute values ruleBuilder =
     ruleBuilder {frbClauses = Clause attribute kind values True : frbClauses ruleBuilder}
+
+{-# DEPRECATED andNotMatch "Use andNotMatchContext instead" #-}
 
 -- |
 -- Adds another clause, using the "is not one of" operator.
