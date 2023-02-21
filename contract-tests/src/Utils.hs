@@ -1,3 +1,5 @@
+{-# LANGUAGE NumericUnderscores #-}
+
 module Utils where
 
 import Control.Lens ((&))
@@ -6,8 +8,10 @@ import qualified LaunchDarkly.Server as LD
 import qualified LaunchDarkly.Server.Reference as R
 import qualified Data.Set as S
 import Types
+import GHC.Natural (Natural, quotNatural)
 import Data.Generics.Product (getField)
 import Data.Text (Text)
+import Data.Maybe (fromMaybe)
 
 createClient :: CreateClientParams -> IO LD.Client
 createClient p = LD.makeClient $ createConfig $ getField @"configuration" p
@@ -22,6 +26,7 @@ waitClient client = do
 createConfig :: ConfigurationParams -> LD.Config
 createConfig p = LD.makeConfig (getField @"credential" p)
     & streamingConfig (getField @"streaming" p)
+    & pollingConfig (getField @"polling" p)
     & tagsConfig (getField @"tags" p)
     & eventConfig (getField @"events" p)
 
@@ -33,6 +38,12 @@ streamingConfig :: Maybe StreamingParams -> LD.Config -> LD.Config
 streamingConfig Nothing c = c
 streamingConfig (Just p) c = updateConfig LD.configSetStreamURI (getField @"baseUri" p)
     $ updateConfig LD.configSetInitialRetryDelay (getField @"initialRetryDelayMs" p) c
+
+pollingConfig :: Maybe PollingParams -> LD.Config -> LD.Config
+pollingConfig Nothing c = c
+pollingConfig (Just p) c = updateConfig LD.configSetBaseURI (getField @"baseUri" p)
+    $ updateConfig LD.configSetStreaming (Just False)
+    $ updateConfig LD.configSetPollIntervalSeconds ((`quotNatural` 1_000) <$> getField @"pollIntervalMs" p) c
 
 tagsConfig :: Maybe TagParams -> LD.Config -> LD.Config
 tagsConfig Nothing c = c

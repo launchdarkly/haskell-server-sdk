@@ -21,6 +21,7 @@ data ConfigurationParams = ConfigurationParams
     , startWaitTimeMs :: !(Maybe Int)
     , initCanFail :: !(Maybe Bool)
     , streaming :: !(Maybe StreamingParams)
+    , polling :: !(Maybe PollingParams)
     , events :: !(Maybe EventParams)
     , tags :: !(Maybe TagParams)
     } deriving (FromJSON, ToJSON, Show, Generic)
@@ -28,6 +29,11 @@ data ConfigurationParams = ConfigurationParams
 data StreamingParams = StreamingParams
     { baseUri :: !(Maybe Text)
     , initialRetryDelayMs :: !(Maybe Int)
+    } deriving (FromJSON, ToJSON, Show, Generic)
+
+data PollingParams = PollingParams
+    { baseUri :: !(Maybe Text)
+    , pollIntervalMs :: !(Maybe Natural)
     } deriving (FromJSON, ToJSON, Show, Generic)
 
 data EventParams = EventParams

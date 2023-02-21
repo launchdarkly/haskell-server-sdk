@@ -33,9 +33,9 @@ jobs:
       - run:
           name: make test output directory
           command: mkdir /tmp/test-results
-      - run: make build-contract-tests STACKOPS='--resolver=<<parameters.resolver>>'
+      - run: make build-contract-tests STACKOPTS='--resolver=<<parameters.resolver>>'
       - run:
-          command: make start-contract-test-service STACKOPS='--resolver=<<parameters.resolver>>'
+          command: make start-contract-test-service STACKOPTS='--resolver=<<parameters.resolver>>'
           background: true
       - run:
           name: run contract tests

@@ -3,13 +3,13 @@ TEMP_TEST_OUTPUT=/tmp/contract-test-service.log
 # TEST_HARNESS_PARAMS can be set to add -skip parameters for any contract tests that cannot yet pass
 # Explanation of current skips:
 TEST_HARNESS_PARAMS=
-STACKOPS =
+STACKOPTS =
 
 build-contract-tests:
-	@cd contract-tests && stack build "$(STACKOPS)"
+	@cd contract-tests && stack build "$(STACKOPTS)"
 
 start-contract-test-service:
-	@cd contract-tests && stack exec contract-tests "$(STACKOPS)"
+	@cd contract-tests && stack exec contract-tests "$(STACKOPTS)"
 
 start-contract-test-service-bg:
 	@echo "Test service output will be captured in $(TEMP_TEST_OUTPUT)"

@@ -38,6 +38,7 @@ getAppStatus = json AppStatus
     , clientVersion = LD.clientVersion
     , capabilities =
         [ "server-side"
+        , "server-side-polling"
         , "strongly-typed"
         , "all-flags-with-reasons"
         , "all-flags-client-side-only"
