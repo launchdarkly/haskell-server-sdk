@@ -9,7 +9,6 @@ import Data.Functor ((<&>))
 import Data.Text (Text)
 import GHC.Generics (Generic)
 
-import Control.Monad.Logger
 import LaunchDarkly.Server
 import LaunchDarkly.Server.DataSource.Internal
 import qualified LaunchDarkly.Server.Integrations.TestData as TestData
@@ -30,7 +29,7 @@ testConfig :: DataSourceFactory -> Config
 testConfig factory =
     configSetSendEvents False $
         configSetDataSourceFactory (Just factory) $
-            configSetLogger (runStdoutLoggingT . filterLogger (\_ lvl -> lvl /= LevelDebug)) $
+            configSetLoggerFilteringDebug $
                 makeConfig "sdk-key"
 
 testVariationForAll :: Test

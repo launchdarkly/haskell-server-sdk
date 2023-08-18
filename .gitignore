@@ -2,3 +2,4 @@ contract-tests/contract-tests.cabal
 **/.stack-work/*
 dist-newstyle/
 stack.yaml.lock
+.ghc.environment.*

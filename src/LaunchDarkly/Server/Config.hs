@@ -18,6 +18,7 @@ module LaunchDarkly.Server.Config
     , configSetUserKeyLRUCapacity
     , configSetEventsCapacity
     , configSetLogger
+    , configSetLoggerFilteringDebug
     , configSetManager
     , configSetSendEvents
     , configSetOffline
@@ -32,7 +33,7 @@ module LaunchDarkly.Server.Config
     , withApplicationValue
     ) where
 
-import Control.Monad.Logger (LoggingT, runStdoutLoggingT)
+import Control.Monad.Logger (LogLevel (LevelDebug), LoggingT, filterLogger, runStdoutLoggingT)
 import Data.Generics.Product (setField)
 import Data.Set (Set)
 import Data.Text (Text, dropWhileEnd)
@@ -170,6 +171,13 @@ configSetEventsCapacity = setField @"eventsCapacity"
 -- | Set the logger to be used by the client.
 configSetLogger :: (LoggingT IO () -> IO ()) -> Config -> Config
 configSetLogger = setField @"logger"
+
+-- | Set the logger to be used by the client with the 'LevelDebug' messages
+-- filtered out.
+configSetLoggerFilteringDebug :: Config -> Config
+configSetLoggerFilteringDebug =
+    configSetLogger
+        (runStdoutLoggingT . filterLogger (\_ lvl -> lvl /= LevelDebug))
 
 -- |
 -- Sets whether to send analytics events back to LaunchDarkly. By default,

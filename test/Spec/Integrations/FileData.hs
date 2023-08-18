@@ -4,7 +4,6 @@ where
 import Test.HUnit
 
 import Control.Exception
-import Control.Monad.Logger
 import Data.Generics.Product (getField)
 import qualified Data.HashSet as HS
 import LaunchDarkly.AesonCompat (emptyObject)
@@ -35,7 +34,7 @@ testConfig :: DataSourceFactory -> Config
 testConfig factory =
     configSetSendEvents False $
         configSetDataSourceFactory (Just factory) $
-            configSetLogger (runStdoutLoggingT . filterLogger (\_ lvl -> lvl /= LevelDebug)) $
+            configSetLoggerFilteringDebug $
                 makeConfig "sdk-key"
 
 testAllProperties :: Test
