@@ -102,6 +102,7 @@ jobs:
             cabal update
             cabal install hpack-0.35.1 --overwrite-policy=always
             cabal install fourmolu-0.10.1.0 --overwrite-policy=always
+            cabal install hlint-3.5 --overwrite-policy=always
             cd -
       - run:
           name: Verify the generated .cabal file is up-to-date
@@ -115,9 +116,8 @@ jobs:
               exit -1
             fi
       - run:
-          name: Install and run hlint
-          command:
-            curl -sSL https://raw.github.com/ndmitchell/hlint/master/misc/run.sh | sh -s .
+          name: Run hlint
+          command: hlint .
       - run:
           name: Run formatting check
           command: fourmolu --mode check src test
