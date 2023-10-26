@@ -189,9 +189,7 @@ readWithException body =
         Just bytes -> if bytes == B.empty then throwIO ReadEClosed else pure (decodeUtf8 bytes)
 
 readStream :: (MonadIO m, MonadLogger m, MonadMask m) => IO ByteString -> DataSourceUpdates -> m Bool
-readStream body dataSourceUpdates = do
-    $(logError) "starting readStream"
-    loop "" False
+readStream body dataSourceUpdates = loop "" False
   where
     loop initial processedEvent =
         tryReadE (parseWith (liftIO $ readWithException body) parseEvent initial) >>= \case
