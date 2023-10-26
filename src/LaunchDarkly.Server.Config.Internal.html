@@ -26,7 +26,7 @@
 </span><span id="line-26"></span><span class="hs-keyword">import</span><span> </span><span class="annot"><a href="LaunchDarkly.Server.Store.html"><span class="hs-identifier">LaunchDarkly.Server.Store</span></a></span><span> </span><span class="hs-special">(</span><span class="annot"><a href="LaunchDarkly.Server.Store.Internal.html#PersistentDataStore"><span class="hs-identifier">PersistentDataStore</span></a></span><span class="hs-special">)</span><span>
 </span><span id="line-27"></span><span>
 </span><span id="line-28"></span><span class="hs-comment">-- | Config allows advanced configuration of the LaunchDarkly client.</span><span>
-</span><span id="line-29"></span><span id="local-6989586621679668741"><span id="local-6989586621679668742"></span></span><span class="hs-keyword">data</span><span> </span><span id="Config"><span class="annot"><a href="LaunchDarkly.Server.Config.Internal.html#Config"><span class="hs-identifier hs-var">Config</span></a></span></span><span> </span><span class="hs-glyph">=</span><span> </span><span id="Config"><span class="annot"><a href="LaunchDarkly.Server.Config.Internal.html#Config"><span class="hs-identifier hs-var">Config</span></a></span></span><span>
+</span><span id="line-29"></span><span id="local-6989586621679668424"><span id="local-6989586621679668425"></span></span><span class="hs-keyword">data</span><span> </span><span id="Config"><span class="annot"><a href="LaunchDarkly.Server.Config.Internal.html#Config"><span class="hs-identifier hs-var">Config</span></a></span></span><span> </span><span class="hs-glyph">=</span><span> </span><span id="Config"><span class="annot"><a href="LaunchDarkly.Server.Config.Internal.html#Config"><span class="hs-identifier hs-var">Config</span></a></span></span><span>
 </span><span id="line-30"></span><span>    </span><span class="hs-special">{</span><span> </span><span id="%24sel%3Akey%3AConfig"><span class="annot"><span class="annottext">Config -&gt; Text
 </span><a href="LaunchDarkly.Server.Config.Internal.html#%24sel%3Akey%3AConfig"><span class="hs-identifier hs-var hs-var">key</span></a></span></span><span> </span><span class="hs-glyph">::</span><span> </span><span class="hs-glyph">!</span><span class="annot"><span class="hs-identifier hs-type">Text</span></span><span>
 </span><span id="line-31"></span><span>    </span><span class="hs-special">,</span><span> </span><span id="%24sel%3AbaseURI%3AConfig"><span class="annot"><span class="annottext">Config -&gt; Text
@@ -84,18 +84,18 @@ $cfrom :: forall x. Config -&gt; Rep Config x
 </span><span id="line-54"></span><span>
 </span><span id="line-55"></span><span class="annot"><a href="LaunchDarkly.Server.Config.Internal.html#shouldSendEvents"><span class="hs-identifier hs-type">shouldSendEvents</span></a></span><span> </span><span class="hs-glyph">::</span><span> </span><span class="annot"><a href="LaunchDarkly.Server.Config.Internal.html#Config"><span class="hs-identifier hs-type">Config</span></a></span><span> </span><span class="hs-glyph">-&gt;</span><span> </span><span class="annot"><span class="hs-identifier hs-type">Bool</span></span><span>
 </span><span id="line-56"></span><span id="shouldSendEvents"><span class="annot"><span class="annottext">shouldSendEvents :: Config -&gt; Bool
-</span><a href="LaunchDarkly.Server.Config.Internal.html#shouldSendEvents"><span class="hs-identifier hs-var hs-var">shouldSendEvents</span></a></span></span><span> </span><span id="local-6989586621679668714"><span class="annot"><span class="annottext">config :: Config
-</span><a href="#local-6989586621679668714"><span class="hs-identifier hs-var">config</span></a></span></span><span> </span><span class="hs-glyph">=</span><span> </span><span class="hs-special">(</span><span class="annot"><span class="annottext">Bool -&gt; Bool
+</span><a href="LaunchDarkly.Server.Config.Internal.html#shouldSendEvents"><span class="hs-identifier hs-var hs-var">shouldSendEvents</span></a></span></span><span> </span><span id="local-6989586621679668397"><span class="annot"><span class="annottext">config :: Config
+</span><a href="#local-6989586621679668397"><span class="hs-identifier hs-var">config</span></a></span></span><span> </span><span class="hs-glyph">=</span><span> </span><span class="hs-special">(</span><span class="annot"><span class="annottext">Bool -&gt; Bool
 </span><span class="hs-identifier hs-var">not</span></span><span> </span><span class="annot"><span class="annottext">(Bool -&gt; Bool) -&gt; Bool -&gt; Bool
 forall a b. (a -&gt; b) -&gt; a -&gt; b
 </span><span class="hs-operator hs-var">$</span></span><span> </span><span class="annot"><span class="annottext">Config -&gt; Bool
 forall (f :: Symbol) a s. HasField' f s a =&gt; s -&gt; a
 </span><span class="hs-identifier hs-var">getField</span></span><span> </span><span class="hs-glyph">@</span><span class="annot"><span class="hs-string">&quot;offline&quot;</span></span><span> </span><span class="annot"><span class="annottext">Config
-</span><a href="#local-6989586621679668714"><span class="hs-identifier hs-var">config</span></a></span><span class="hs-special">)</span><span> </span><span class="annot"><span class="annottext">Bool -&gt; Bool -&gt; Bool
+</span><a href="#local-6989586621679668397"><span class="hs-identifier hs-var">config</span></a></span><span class="hs-special">)</span><span> </span><span class="annot"><span class="annottext">Bool -&gt; Bool -&gt; Bool
 </span><span class="hs-operator hs-var">&amp;&amp;</span></span><span> </span><span class="hs-special">(</span><span class="annot"><span class="annottext">Config -&gt; Bool
 forall (f :: Symbol) a s. HasField' f s a =&gt; s -&gt; a
 </span><span class="hs-identifier hs-var">getField</span></span><span> </span><span class="hs-glyph">@</span><span class="annot"><span class="hs-string">&quot;sendEvents&quot;</span></span><span> </span><span class="annot"><span class="annottext">Config
-</span><a href="#local-6989586621679668714"><span class="hs-identifier hs-var">config</span></a></span><span class="hs-special">)</span><span>
+</span><a href="#local-6989586621679668397"><span class="hs-identifier hs-var">config</span></a></span><span class="hs-special">)</span><span>
 </span><span id="line-57"></span><span>
 </span><span id="line-58"></span><span class="hs-comment">-- |</span><span>
 </span><span id="line-59"></span><span class="hs-comment">-- An object that allows configuration of application metadata.</span><span>
@@ -104,7 +104,7 @@ forall (f :: Symbol) a s. HasField' f s a =&gt; s -&gt; a
 </span><span id="line-62"></span><span class="hs-comment">-- features, but does not affect feature flag evaluations.</span><span>
 </span><span id="line-63"></span><span class="hs-comment">--</span><span>
 </span><span id="line-64"></span><span class="hs-comment">-- To use these properties, provide an instance of ApplicationInfo to the 'Config' with 'configSetApplicationInfo'.</span><span>
-</span><span id="line-65"></span><span class="hs-keyword">newtype</span><span> </span><span id="ApplicationInfo"><span class="annot"><a href="LaunchDarkly.Server.Config.Internal.html#ApplicationInfo"><span class="hs-identifier hs-var">ApplicationInfo</span></a></span></span><span> </span><span class="hs-glyph">=</span><span> </span><span id="ApplicationInfo"><span class="annot"><a href="LaunchDarkly.Server.Config.Internal.html#ApplicationInfo"><span class="hs-identifier hs-var">ApplicationInfo</span></a></span></span><span> </span><span class="hs-special">(</span><span class="annot"><a href="LaunchDarkly.AesonCompat.html#KeyMap"><span class="hs-identifier hs-type">KeyMap</span></a></span><span> </span><span class="annot"><span class="hs-identifier hs-type">Text</span></span><span class="hs-special">)</span><span> </span><span class="hs-keyword">deriving</span><span> </span><span class="hs-special">(</span><span id="local-6989586621679668705"><span id="local-6989586621679668707"><span id="local-6989586621679668709"><span class="annot"><span class="annottext">Int -&gt; ApplicationInfo -&gt; ShowS
+</span><span id="line-65"></span><span class="hs-keyword">newtype</span><span> </span><span id="ApplicationInfo"><span class="annot"><a href="LaunchDarkly.Server.Config.Internal.html#ApplicationInfo"><span class="hs-identifier hs-var">ApplicationInfo</span></a></span></span><span> </span><span class="hs-glyph">=</span><span> </span><span id="ApplicationInfo"><span class="annot"><a href="LaunchDarkly.Server.Config.Internal.html#ApplicationInfo"><span class="hs-identifier hs-var">ApplicationInfo</span></a></span></span><span> </span><span class="hs-special">(</span><span class="annot"><a href="LaunchDarkly.AesonCompat.html#KeyMap"><span class="hs-identifier hs-type">KeyMap</span></a></span><span> </span><span class="annot"><span class="hs-identifier hs-type">Text</span></span><span class="hs-special">)</span><span> </span><span class="hs-keyword">deriving</span><span> </span><span class="hs-special">(</span><span id="local-6989586621679668388"><span id="local-6989586621679668390"><span id="local-6989586621679668392"><span class="annot"><span class="annottext">Int -&gt; ApplicationInfo -&gt; ShowS
 [ApplicationInfo] -&gt; ShowS
 ApplicationInfo -&gt; String
 (Int -&gt; ApplicationInfo -&gt; ShowS)
@@ -119,7 +119,7 @@ show :: ApplicationInfo -&gt; String
 $cshow :: ApplicationInfo -&gt; String
 showsPrec :: Int -&gt; ApplicationInfo -&gt; ShowS
 $cshowsPrec :: Int -&gt; ApplicationInfo -&gt; ShowS
-</span><span class="hs-identifier hs-var hs-var hs-var hs-var hs-var hs-var hs-var hs-var">Show</span></span></span></span></span><span class="hs-special">,</span><span> </span><span id="local-6989586621679668700"><span id="local-6989586621679668702"><span class="annot"><span class="annottext">ApplicationInfo -&gt; ApplicationInfo -&gt; Bool
+</span><span class="hs-identifier hs-var hs-var hs-var hs-var hs-var hs-var hs-var hs-var">Show</span></span></span></span></span><span class="hs-special">,</span><span> </span><span id="local-6989586621679668383"><span id="local-6989586621679668385"><span class="annot"><span class="annottext">ApplicationInfo -&gt; ApplicationInfo -&gt; Bool
 (ApplicationInfo -&gt; ApplicationInfo -&gt; Bool)
 -&gt; (ApplicationInfo -&gt; ApplicationInfo -&gt; Bool)
 -&gt; Eq ApplicationInfo
@@ -149,28 +149,28 @@ forall v. KeyMap v
 </span><span id="line-79"></span><span class="hs-comment">-- Invalid values or unsupported keys will be ignored.</span><span>
 </span><span id="line-80"></span><span class="annot"><a href="LaunchDarkly.Server.Config.Internal.html#withApplicationValue"><span class="hs-identifier hs-type">withApplicationValue</span></a></span><span> </span><span class="hs-glyph">::</span><span> </span><span class="annot"><span class="hs-identifier hs-type">Text</span></span><span> </span><span class="hs-glyph">-&gt;</span><span> </span><span class="annot"><span class="hs-identifier hs-type">Text</span></span><span> </span><span class="hs-glyph">-&gt;</span><span> </span><span class="annot"><a href="LaunchDarkly.Server.Config.Internal.html#ApplicationInfo"><span class="hs-identifier hs-type">ApplicationInfo</span></a></span><span> </span><span class="hs-glyph">-&gt;</span><span> </span><span class="annot"><a href="LaunchDarkly.Server.Config.Internal.html#ApplicationInfo"><span class="hs-identifier hs-type">ApplicationInfo</span></a></span><span>
 </span><span id="line-81"></span><span id="withApplicationValue"><span class="annot"><span class="annottext">withApplicationValue :: Text -&gt; Text -&gt; ApplicationInfo -&gt; ApplicationInfo
-</span><a href="LaunchDarkly.Server.Config.Internal.html#withApplicationValue"><span class="hs-identifier hs-var hs-var">withApplicationValue</span></a></span></span><span> </span><span class="hs-identifier">_</span><span> </span><span class="hs-string">&quot;&quot;</span><span> </span><span id="local-6989586621679668698"><span class="annot"><span class="annottext">info :: ApplicationInfo
-</span><a href="#local-6989586621679668698"><span class="hs-identifier hs-var">info</span></a></span></span><span> </span><span class="hs-glyph">=</span><span> </span><span class="annot"><span class="annottext">ApplicationInfo
-</span><a href="#local-6989586621679668698"><span class="hs-identifier hs-var">info</span></a></span><span>
-</span><span id="line-82"></span><span class="annot"><a href="LaunchDarkly.Server.Config.Internal.html#withApplicationValue"><span class="hs-identifier hs-var">withApplicationValue</span></a></span><span> </span><span id="local-6989586621679668697"><span class="annot"><span class="annottext">name :: Text
-</span><a href="#local-6989586621679668697"><span class="hs-identifier hs-var">name</span></a></span></span><span> </span><span id="local-6989586621679668696"><span class="annot"><span class="annottext">value :: Text
-</span><a href="#local-6989586621679668696"><span class="hs-identifier hs-var">value</span></a></span></span><span> </span><span id="local-6989586621679668695"><span class="annot"><span class="annottext">info :: ApplicationInfo
-</span><a href="#local-6989586621679668695"><span class="hs-identifier hs-var">info</span></a></span></span><span class="hs-glyph">@</span><span class="hs-special">(</span><span class="annot"><a href="LaunchDarkly.Server.Config.Internal.html#ApplicationInfo"><span class="hs-identifier hs-type">ApplicationInfo</span></a></span><span> </span><span id="local-6989586621679668694"><span class="annot"><span class="annottext">map :: KeyMap Text
-</span><a href="#local-6989586621679668694"><span class="hs-identifier hs-var">map</span></a></span></span><span class="hs-special">)</span><span>
+</span><a href="LaunchDarkly.Server.Config.Internal.html#withApplicationValue"><span class="hs-identifier hs-var hs-var">withApplicationValue</span></a></span></span><span> </span><span class="hs-identifier">_</span><span> </span><span class="hs-string">&quot;&quot;</span><span> </span><span id="local-6989586621679668381"><span class="annot"><span class="annottext">info :: ApplicationInfo
+</span><a href="#local-6989586621679668381"><span class="hs-identifier hs-var">info</span></a></span></span><span> </span><span class="hs-glyph">=</span><span> </span><span class="annot"><span class="annottext">ApplicationInfo
+</span><a href="#local-6989586621679668381"><span class="hs-identifier hs-var">info</span></a></span><span>
+</span><span id="line-82"></span><span class="annot"><a href="LaunchDarkly.Server.Config.Internal.html#withApplicationValue"><span class="hs-identifier hs-var">withApplicationValue</span></a></span><span> </span><span id="local-6989586621679668380"><span class="annot"><span class="annottext">name :: Text
+</span><a href="#local-6989586621679668380"><span class="hs-identifier hs-var">name</span></a></span></span><span> </span><span id="local-6989586621679668379"><span class="annot"><span class="annottext">value :: Text
+</span><a href="#local-6989586621679668379"><span class="hs-identifier hs-var">value</span></a></span></span><span> </span><span id="local-6989586621679668378"><span class="annot"><span class="annottext">info :: ApplicationInfo
+</span><a href="#local-6989586621679668378"><span class="hs-identifier hs-var">info</span></a></span></span><span class="hs-glyph">@</span><span class="hs-special">(</span><span class="annot"><a href="LaunchDarkly.Server.Config.Internal.html#ApplicationInfo"><span class="hs-identifier hs-type">ApplicationInfo</span></a></span><span> </span><span id="local-6989586621679668377"><span class="annot"><span class="annottext">map :: KeyMap Text
+</span><a href="#local-6989586621679668377"><span class="hs-identifier hs-var">map</span></a></span></span><span class="hs-special">)</span><span>
 </span><span id="line-83"></span><span>    </span><span class="hs-glyph">|</span><span> </span><span class="hs-special">(</span><span class="annot"><span class="annottext">Text
-</span><a href="#local-6989586621679668697"><span class="hs-identifier hs-var">name</span></a></span><span> </span><span class="annot"><span class="annottext">Text -&gt; [Text] -&gt; Bool
+</span><a href="#local-6989586621679668380"><span class="hs-identifier hs-var">name</span></a></span><span> </span><span class="annot"><span class="annottext">Text -&gt; [Text] -&gt; Bool
 forall (t :: * -&gt; *) a. (Foldable t, Eq a) =&gt; a -&gt; t a -&gt; Bool
 </span><span class="hs-operator hs-var">`elem`</span></span><span> </span><span class="hs-special">[</span><span class="annot"><span class="hs-string">&quot;id&quot;</span></span><span class="hs-special">,</span><span> </span><span class="annot"><span class="hs-string">&quot;version&quot;</span></span><span class="hs-special">]</span><span class="hs-special">)</span><span> </span><span class="annot"><span class="annottext">Bool -&gt; Bool -&gt; Bool
 forall a. Eq a =&gt; a -&gt; a -&gt; Bool
 </span><span class="hs-operator hs-var">==</span></span><span> </span><span class="annot"><span class="annottext">Bool
 </span><span class="hs-identifier hs-var">False</span></span><span> </span><span class="hs-glyph">=</span><span> </span><span class="annot"><span class="annottext">ApplicationInfo
-</span><a href="#local-6989586621679668695"><span class="hs-identifier hs-var">info</span></a></span><span>
+</span><a href="#local-6989586621679668378"><span class="hs-identifier hs-var">info</span></a></span><span>
 </span><span id="line-84"></span><span>    </span><span class="hs-glyph">|</span><span> </span><span class="annot"><span class="annottext">Text -&gt; Int
 </span><span class="hs-identifier hs-var">T.length</span></span><span> </span><span class="hs-special">(</span><span class="annot"><span class="annottext">Text
-</span><a href="#local-6989586621679668696"><span class="hs-identifier hs-var">value</span></a></span><span class="hs-special">)</span><span> </span><span class="annot"><span class="annottext">Int -&gt; Int -&gt; Bool
+</span><a href="#local-6989586621679668379"><span class="hs-identifier hs-var">value</span></a></span><span class="hs-special">)</span><span> </span><span class="annot"><span class="annottext">Int -&gt; Int -&gt; Bool
 forall a. Ord a =&gt; a -&gt; a -&gt; Bool
 </span><span class="hs-operator hs-var">&gt;</span></span><span> </span><span class="annot"><span class="hs-number">64</span></span><span> </span><span class="hs-glyph">=</span><span> </span><span class="annot"><span class="annottext">ApplicationInfo
-</span><a href="#local-6989586621679668695"><span class="hs-identifier hs-var">info</span></a></span><span>
+</span><a href="#local-6989586621679668378"><span class="hs-identifier hs-var">info</span></a></span><span>
 </span><span id="line-85"></span><span>    </span><span class="hs-glyph">|</span><span> </span><span class="hs-special">(</span><span class="annot"><span class="annottext">(Char -&gt; Bool) -&gt; String -&gt; Bool
 forall (t :: * -&gt; *) a. Foldable t =&gt; (a -&gt; Bool) -&gt; t a -&gt; Bool
 </span><span class="hs-identifier hs-var">all</span></span><span> </span><span class="hs-special">(</span><span class="annot"><span class="annottext">Char -&gt; String -&gt; Bool
@@ -183,11 +183,11 @@ forall a. [a] -&gt; [a] -&gt; [a]
 forall a. [a] -&gt; [a] -&gt; [a]
 </span><span class="hs-operator hs-var">++</span></span><span> </span><span class="hs-special">[</span><span class="annot"><span class="hs-char">'.'</span></span><span class="hs-special">,</span><span> </span><span class="annot"><span class="hs-char">'-'</span></span><span class="hs-special">,</span><span> </span><span class="annot"><span class="hs-char">'_'</span></span><span class="hs-special">]</span><span class="hs-special">)</span><span> </span><span class="hs-special">(</span><span class="annot"><span class="annottext">Text -&gt; String
 </span><span class="hs-identifier hs-var">T.unpack</span></span><span> </span><span class="annot"><span class="annottext">Text
-</span><a href="#local-6989586621679668696"><span class="hs-identifier hs-var">value</span></a></span><span class="hs-special">)</span><span class="hs-special">)</span><span> </span><span class="annot"><span class="annottext">Bool -&gt; Bool -&gt; Bool
+</span><a href="#local-6989586621679668379"><span class="hs-identifier hs-var">value</span></a></span><span class="hs-special">)</span><span class="hs-special">)</span><span> </span><span class="annot"><span class="annottext">Bool -&gt; Bool -&gt; Bool
 forall a. Eq a =&gt; a -&gt; a -&gt; Bool
 </span><span class="hs-operator hs-var">==</span></span><span> </span><span class="annot"><span class="annottext">Bool
 </span><span class="hs-identifier hs-var">False</span></span><span> </span><span class="hs-glyph">=</span><span> </span><span class="annot"><span class="annottext">ApplicationInfo
-</span><a href="#local-6989586621679668695"><span class="hs-identifier hs-var">info</span></a></span><span>
+</span><a href="#local-6989586621679668378"><span class="hs-identifier hs-var">info</span></a></span><span>
 </span><span id="line-86"></span><span>    </span><span class="hs-glyph">|</span><span> </span><span class="annot"><span class="annottext">Bool
 </span><span class="hs-identifier hs-var">otherwise</span></span><span> </span><span class="hs-glyph">=</span><span> </span><span class="annot"><span class="annottext">KeyMap Text -&gt; ApplicationInfo
 </span><a href="LaunchDarkly.Server.Config.Internal.html#ApplicationInfo"><span class="hs-identifier hs-var">ApplicationInfo</span></a></span><span> </span><span class="annot"><span class="annottext">(KeyMap Text -&gt; ApplicationInfo) -&gt; KeyMap Text -&gt; ApplicationInfo
@@ -195,18 +195,18 @@ forall a b. (a -&gt; b) -&gt; a -&gt; b
 </span><span class="hs-operator hs-var">$</span></span><span> </span><span class="annot"><span class="annottext">Text -&gt; Text -&gt; KeyMap Text -&gt; KeyMap Text
 forall v. Text -&gt; v -&gt; HashMap Text v -&gt; HashMap Text v
 </span><a href="LaunchDarkly.AesonCompat.html#insertKey"><span class="hs-identifier hs-var">insertKey</span></a></span><span> </span><span class="annot"><span class="annottext">Text
-</span><a href="#local-6989586621679668697"><span class="hs-identifier hs-var">name</span></a></span><span> </span><span class="annot"><span class="annottext">Text
-</span><a href="#local-6989586621679668696"><span class="hs-identifier hs-var">value</span></a></span><span> </span><span class="annot"><span class="annottext">KeyMap Text
-</span><a href="#local-6989586621679668694"><span class="hs-identifier hs-var">map</span></a></span><span>
+</span><a href="#local-6989586621679668380"><span class="hs-identifier hs-var">name</span></a></span><span> </span><span class="annot"><span class="annottext">Text
+</span><a href="#local-6989586621679668379"><span class="hs-identifier hs-var">value</span></a></span><span> </span><span class="annot"><span class="annottext">KeyMap Text
+</span><a href="#local-6989586621679668377"><span class="hs-identifier hs-var">map</span></a></span><span>
 </span><span id="line-87"></span><span>
 </span><span id="line-88"></span><span class="annot"><a href="LaunchDarkly.Server.Config.Internal.html#getApplicationInfoHeader"><span class="hs-identifier hs-type">getApplicationInfoHeader</span></a></span><span> </span><span class="hs-glyph">::</span><span> </span><span class="annot"><a href="LaunchDarkly.Server.Config.Internal.html#ApplicationInfo"><span class="hs-identifier hs-type">ApplicationInfo</span></a></span><span> </span><span class="hs-glyph">-&gt;</span><span> </span><span class="annot"><span class="hs-identifier hs-type">Maybe</span></span><span> </span><span class="annot"><span class="hs-identifier hs-type">Text</span></span><span>
 </span><span id="line-89"></span><span id="getApplicationInfoHeader"><span class="annot"><span class="annottext">getApplicationInfoHeader :: ApplicationInfo -&gt; Maybe Text
-</span><a href="LaunchDarkly.Server.Config.Internal.html#getApplicationInfoHeader"><span class="hs-identifier hs-var hs-var">getApplicationInfoHeader</span></a></span></span><span> </span><span class="hs-special">(</span><span class="annot"><a href="LaunchDarkly.Server.Config.Internal.html#ApplicationInfo"><span class="hs-identifier hs-type">ApplicationInfo</span></a></span><span> </span><span id="local-6989586621679668688"><span class="annot"><span class="annottext">values :: KeyMap Text
-</span><a href="#local-6989586621679668688"><span class="hs-identifier hs-var">values</span></a></span></span><span class="hs-special">)</span><span>
+</span><a href="LaunchDarkly.Server.Config.Internal.html#getApplicationInfoHeader"><span class="hs-identifier hs-var hs-var">getApplicationInfoHeader</span></a></span></span><span> </span><span class="hs-special">(</span><span class="annot"><a href="LaunchDarkly.Server.Config.Internal.html#ApplicationInfo"><span class="hs-identifier hs-type">ApplicationInfo</span></a></span><span> </span><span id="local-6989586621679668371"><span class="annot"><span class="annottext">values :: KeyMap Text
+</span><a href="#local-6989586621679668371"><span class="hs-identifier hs-var">values</span></a></span></span><span class="hs-special">)</span><span>
 </span><span id="line-90"></span><span>    </span><span class="hs-glyph">|</span><span> </span><span class="annot"><span class="annottext">KeyMap Text -&gt; Bool
 forall v. KeyMap v -&gt; Bool
 </span><a href="LaunchDarkly.AesonCompat.html#null"><span class="hs-identifier hs-var">AesonCompat.null</span></a></span><span> </span><span class="annot"><span class="annottext">KeyMap Text
-</span><a href="#local-6989586621679668688"><span class="hs-identifier hs-var">values</span></a></span><span> </span><span class="hs-glyph">=</span><span> </span><span class="annot"><span class="annottext">Maybe Text
+</span><a href="#local-6989586621679668371"><span class="hs-identifier hs-var">values</span></a></span><span> </span><span class="hs-glyph">=</span><span> </span><span class="annot"><span class="annottext">Maybe Text
 forall a. Maybe a
 </span><span class="hs-identifier hs-var">Nothing</span></span><span>
 </span><span id="line-91"></span><span>    </span><span class="hs-glyph">|</span><span> </span><span class="annot"><span class="annottext">Bool
@@ -214,7 +214,7 @@ forall a. Maybe a
 </span><span id="line-92"></span><span>        </span><span class="annot"><span class="annottext">KeyMap Text -&gt; [(Text, Text)]
 forall v. HashMap Text v -&gt; [(Text, v)]
 </span><a href="LaunchDarkly.AesonCompat.html#toList"><span class="hs-identifier hs-var">toList</span></a></span><span> </span><span class="annot"><span class="annottext">KeyMap Text
-</span><a href="#local-6989586621679668688"><span class="hs-identifier hs-var">values</span></a></span><span>
+</span><a href="#local-6989586621679668371"><span class="hs-identifier hs-var">values</span></a></span><span>
 </span><span id="line-93"></span><span>            </span><span class="annot"><span class="annottext">[(Text, Text)]
 -&gt; ([(Text, Text)] -&gt; [(Text, Text)]) -&gt; [(Text, Text)]
 forall a b. a -&gt; (a -&gt; b) -&gt; b
@@ -232,7 +232,7 @@ forall a b. a -&gt; (a -&gt; b) -&gt; b
 forall a b. (a -&gt; b) -&gt; [a] -&gt; [b]
 </span><span class="hs-identifier hs-var">map</span></span><span> </span><span class="annot"><span class="annottext">(Text, Text) -&gt; Text
 forall a. (Semigroup a, IsString a) =&gt; (a, a) -&gt; a
-</span><a href="#local-6989586621679668686"><span class="hs-identifier hs-var">makeTag</span></a></span><span>
+</span><a href="#local-6989586621679668369"><span class="hs-identifier hs-var">makeTag</span></a></span><span>
 </span><span id="line-95"></span><span>            </span><span class="annot"><span class="annottext">[Text] -&gt; ([Text] -&gt; Text) -&gt; Text
 forall a b. a -&gt; (a -&gt; b) -&gt; b
 </span><span class="hs-operator hs-var">&amp;</span></span><span> </span><span class="annot"><span class="annottext">[Text] -&gt; Text
@@ -243,16 +243,16 @@ forall a b. a -&gt; (a -&gt; b) -&gt; b
 forall a. a -&gt; Maybe a
 </span><span class="hs-identifier hs-var">Just</span></span><span>
 </span><span id="line-97"></span><span>  </span><span class="hs-keyword">where</span><span>
-</span><span id="line-98"></span><span>    </span><span id="local-6989586621679668686"><span class="annot"><span class="annottext">makeTag :: (a, a) -&gt; a
-</span><a href="#local-6989586621679668686"><span class="hs-identifier hs-var hs-var">makeTag</span></a></span></span><span> </span><span class="hs-special">(</span><span id="local-6989586621679668684"><span class="annot"><span class="annottext">key :: a
-</span><a href="#local-6989586621679668684"><span class="hs-identifier hs-var">key</span></a></span></span><span class="hs-special">,</span><span> </span><span id="local-6989586621679668683"><span class="annot"><span class="annottext">value :: a
-</span><a href="#local-6989586621679668683"><span class="hs-identifier hs-var">value</span></a></span></span><span class="hs-special">)</span><span> </span><span class="hs-glyph">=</span><span> </span><span class="annot"><span class="hs-string">&quot;application-&quot;</span></span><span> </span><span class="annot"><span class="annottext">a -&gt; a -&gt; a
+</span><span id="line-98"></span><span>    </span><span id="local-6989586621679668369"><span class="annot"><span class="annottext">makeTag :: (a, a) -&gt; a
+</span><a href="#local-6989586621679668369"><span class="hs-identifier hs-var hs-var">makeTag</span></a></span></span><span> </span><span class="hs-special">(</span><span id="local-6989586621679668367"><span class="annot"><span class="annottext">key :: a
+</span><a href="#local-6989586621679668367"><span class="hs-identifier hs-var">key</span></a></span></span><span class="hs-special">,</span><span> </span><span id="local-6989586621679668366"><span class="annot"><span class="annottext">value :: a
+</span><a href="#local-6989586621679668366"><span class="hs-identifier hs-var">value</span></a></span></span><span class="hs-special">)</span><span> </span><span class="hs-glyph">=</span><span> </span><span class="annot"><span class="hs-string">&quot;application-&quot;</span></span><span> </span><span class="annot"><span class="annottext">a -&gt; a -&gt; a
 forall a. Semigroup a =&gt; a -&gt; a -&gt; a
 </span><span class="hs-operator hs-var">&lt;&gt;</span></span><span> </span><span class="annot"><span class="annottext">a
-</span><a href="#local-6989586621679668684"><span class="hs-identifier hs-var">key</span></a></span><span> </span><span class="annot"><span class="annottext">a -&gt; a -&gt; a
+</span><a href="#local-6989586621679668367"><span class="hs-identifier hs-var">key</span></a></span><span> </span><span class="annot"><span class="annottext">a -&gt; a -&gt; a
 forall a. Semigroup a =&gt; a -&gt; a -&gt; a
 </span><span class="hs-operator hs-var">&lt;&gt;</span></span><span> </span><span class="annot"><span class="hs-string">&quot;/&quot;</span></span><span> </span><span class="annot"><span class="annottext">a -&gt; a -&gt; a
 forall a. Semigroup a =&gt; a -&gt; a -&gt; a
 </span><span class="hs-operator hs-var">&lt;&gt;</span></span><span> </span><span class="annot"><span class="annottext">a
-</span><a href="#local-6989586621679668683"><span class="hs-identifier hs-var">value</span></a></span><span>
+</span><a href="#local-6989586621679668366"><span class="hs-identifier hs-var">value</span></a></span><span>
 </span><span id="line-99"></span></pre></body></html>

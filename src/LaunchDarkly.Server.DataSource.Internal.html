@@ -63,20 +63,20 @@ forall (f :: * -&gt; *) a. Applicative f =&gt; a -&gt; f a
 </span><span id="line-40"></span><span>
 </span><span id="line-41"></span><span class="annot"><a href="LaunchDarkly.Server.DataSource.Internal.html#defaultDataSourceUpdates"><span class="hs-identifier hs-type">defaultDataSourceUpdates</span></a></span><span> </span><span class="hs-glyph">::</span><span> </span><span class="annot"><span class="hs-identifier hs-type">IORef</span></span><span> </span><span class="annot"><a href="LaunchDarkly.Server.Client.Status.html#Status"><span class="hs-identifier hs-type">Status</span></a></span><span> </span><span class="hs-glyph">-&gt;</span><span> </span><span class="annot"><a href="LaunchDarkly.Server.Store.Internal.html#StoreHandle"><span class="hs-identifier hs-type">StoreHandle</span></a></span><span> </span><span class="annot"><span class="hs-identifier hs-type">IO</span></span><span> </span><span class="hs-glyph">-&gt;</span><span> </span><span class="annot"><a href="LaunchDarkly.Server.DataSource.Internal.html#DataSourceUpdates"><span class="hs-identifier hs-type">DataSourceUpdates</span></a></span><span>
 </span><span id="line-42"></span><span id="defaultDataSourceUpdates"><span class="annot"><span class="annottext">defaultDataSourceUpdates :: IORef Status -&gt; StoreHandle IO -&gt; DataSourceUpdates
-</span><a href="LaunchDarkly.Server.DataSource.Internal.html#defaultDataSourceUpdates"><span class="hs-identifier hs-var hs-var">defaultDataSourceUpdates</span></a></span></span><span> </span><span id="local-6989586621679668226"><span class="annot"><span class="annottext">status :: IORef Status
-</span><a href="#local-6989586621679668226"><span class="hs-identifier hs-var">status</span></a></span></span><span> </span><span id="local-6989586621679668225"><span class="annot"><span class="annottext">store :: StoreHandle IO
-</span><a href="#local-6989586621679668225"><span class="hs-identifier hs-var">store</span></a></span></span><span> </span><span class="hs-glyph">=</span><span>
-</span><span id="line-43"></span><span>    </span><span class="hs-keyword">let</span><span> </span><span id="local-6989586621679668224"><span class="annot"><span class="annottext">modifyStatus :: Status -&gt; IO ()
-</span><a href="#local-6989586621679668224"><span class="hs-identifier hs-var hs-var">modifyStatus</span></a></span></span><span> </span><span id="local-6989586621679668223"><span class="annot"><span class="annottext">status' :: Status
-</span><a href="#local-6989586621679668223"><span class="hs-identifier hs-var">status'</span></a></span></span><span> </span><span class="hs-glyph">=</span><span> </span><span class="annot"><span class="annottext">IORef Status -&gt; (Status -&gt; (Status, ())) -&gt; IO ()
+</span><a href="LaunchDarkly.Server.DataSource.Internal.html#defaultDataSourceUpdates"><span class="hs-identifier hs-var hs-var">defaultDataSourceUpdates</span></a></span></span><span> </span><span id="local-6989586621679667909"><span class="annot"><span class="annottext">status :: IORef Status
+</span><a href="#local-6989586621679667909"><span class="hs-identifier hs-var">status</span></a></span></span><span> </span><span id="local-6989586621679667908"><span class="annot"><span class="annottext">store :: StoreHandle IO
+</span><a href="#local-6989586621679667908"><span class="hs-identifier hs-var">store</span></a></span></span><span> </span><span class="hs-glyph">=</span><span>
+</span><span id="line-43"></span><span>    </span><span class="hs-keyword">let</span><span> </span><span id="local-6989586621679667907"><span class="annot"><span class="annottext">modifyStatus :: Status -&gt; IO ()
+</span><a href="#local-6989586621679667907"><span class="hs-identifier hs-var hs-var">modifyStatus</span></a></span></span><span> </span><span id="local-6989586621679667906"><span class="annot"><span class="annottext">status' :: Status
+</span><a href="#local-6989586621679667906"><span class="hs-identifier hs-var">status'</span></a></span></span><span> </span><span class="hs-glyph">=</span><span> </span><span class="annot"><span class="annottext">IORef Status -&gt; (Status -&gt; (Status, ())) -&gt; IO ()
 forall a b. IORef a -&gt; (a -&gt; (a, b)) -&gt; IO b
 </span><span class="hs-identifier hs-var">atomicModifyIORef'</span></span><span> </span><span class="annot"><span class="annottext">IORef Status
-</span><a href="#local-6989586621679668226"><span class="hs-identifier hs-var">status</span></a></span><span> </span><span class="hs-special">(</span><span class="annot"><span class="annottext">(Status -&gt; (Status, ()))
+</span><a href="#local-6989586621679667909"><span class="hs-identifier hs-var">status</span></a></span><span> </span><span class="hs-special">(</span><span class="annot"><span class="annottext">(Status -&gt; (Status, ()))
 -&gt; (Status -&gt; Status) -&gt; Status -&gt; (Status, ())
 forall (f :: * -&gt; *) a b. Functor f =&gt; (a -&gt; b) -&gt; f a -&gt; f b
 </span><span class="hs-identifier hs-var">fmap</span></span><span> </span><span class="hs-special">(</span><span class="annot"><span class="hs-special">,</span></span><span class="hs-special">(</span><span class="hs-special">)</span><span class="hs-special">)</span><span> </span><span class="hs-special">(</span><span class="annot"><span class="annottext">Status -&gt; Status -&gt; Status
 </span><a href="LaunchDarkly.Server.Client.Status.html#transitionStatus"><span class="hs-identifier hs-var">transitionStatus</span></a></span><span> </span><span class="annot"><span class="annottext">Status
-</span><a href="#local-6989586621679668223"><span class="hs-identifier hs-var">status'</span></a></span><span class="hs-special">)</span><span class="hs-special">)</span><span>
+</span><a href="#local-6989586621679667906"><span class="hs-identifier hs-var">status'</span></a></span><span class="hs-special">)</span><span class="hs-special">)</span><span>
 </span><span id="line-44"></span><span>     </span><span class="hs-keyword">in</span><span> </span><span class="annot"><span class="annottext">$WDataSourceUpdates :: (KeyMap Flag -&gt; KeyMap Segment -&gt; IO (Either Text ()))
 -&gt; (Flag -&gt; IO (Either Text ()))
 -&gt; (Segment -&gt; IO (Either Text ()))
@@ -92,37 +92,37 @@ forall store (m :: * -&gt; *).
 (LaunchDarklyStoreWrite store m, Monad m) =&gt;
 store -&gt; KeyMap Flag -&gt; KeyMap Segment -&gt; StoreResultM m ()
 </span><a href="LaunchDarkly.Server.Store.Internal.html#initializeStore"><span class="hs-identifier hs-var">initializeStore</span></a></span><span> </span><span class="annot"><span class="annottext">StoreHandle IO
-</span><a href="#local-6989586621679668225"><span class="hs-identifier hs-var">store</span></a></span><span>
+</span><a href="#local-6989586621679667908"><span class="hs-identifier hs-var">store</span></a></span><span>
 </span><span id="line-46"></span><span>            </span><span class="hs-special">,</span><span> </span><span class="annot"><span class="annottext">$sel:dataSourceUpdatesInsertFlag:DataSourceUpdates :: Flag -&gt; IO (Either Text ())
 </span><a href="LaunchDarkly.Server.DataSource.Internal.html#%24sel%3AdataSourceUpdatesInsertFlag%3ADataSourceUpdates"><span class="hs-identifier hs-var">dataSourceUpdatesInsertFlag</span></a></span><span> </span><span class="hs-glyph">=</span><span> </span><span class="annot"><span class="annottext">StoreHandle IO -&gt; Flag -&gt; IO (Either Text ())
 forall store (m :: * -&gt; *).
 (LaunchDarklyStoreWrite store m, Monad m) =&gt;
 store -&gt; Flag -&gt; StoreResultM m ()
 </span><a href="LaunchDarkly.Server.Store.Internal.html#insertFlag"><span class="hs-identifier hs-var">insertFlag</span></a></span><span> </span><span class="annot"><span class="annottext">StoreHandle IO
-</span><a href="#local-6989586621679668225"><span class="hs-identifier hs-var">store</span></a></span><span>
+</span><a href="#local-6989586621679667908"><span class="hs-identifier hs-var">store</span></a></span><span>
 </span><span id="line-47"></span><span>            </span><span class="hs-special">,</span><span> </span><span class="annot"><span class="annottext">$sel:dataSourceUpdatesInsertSegment:DataSourceUpdates :: Segment -&gt; IO (Either Text ())
 </span><a href="LaunchDarkly.Server.DataSource.Internal.html#%24sel%3AdataSourceUpdatesInsertSegment%3ADataSourceUpdates"><span class="hs-identifier hs-var">dataSourceUpdatesInsertSegment</span></a></span><span> </span><span class="hs-glyph">=</span><span> </span><span class="annot"><span class="annottext">StoreHandle IO -&gt; Segment -&gt; IO (Either Text ())
 forall store (m :: * -&gt; *).
 (LaunchDarklyStoreWrite store m, Monad m) =&gt;
 store -&gt; Segment -&gt; StoreResultM m ()
 </span><a href="LaunchDarkly.Server.Store.Internal.html#insertSegment"><span class="hs-identifier hs-var">insertSegment</span></a></span><span> </span><span class="annot"><span class="annottext">StoreHandle IO
-</span><a href="#local-6989586621679668225"><span class="hs-identifier hs-var">store</span></a></span><span>
+</span><a href="#local-6989586621679667908"><span class="hs-identifier hs-var">store</span></a></span><span>
 </span><span id="line-48"></span><span>            </span><span class="hs-special">,</span><span> </span><span class="annot"><span class="annottext">$sel:dataSourceUpdatesDeleteFlag:DataSourceUpdates :: Text -&gt; Natural -&gt; IO (Either Text ())
 </span><a href="LaunchDarkly.Server.DataSource.Internal.html#%24sel%3AdataSourceUpdatesDeleteFlag%3ADataSourceUpdates"><span class="hs-identifier hs-var">dataSourceUpdatesDeleteFlag</span></a></span><span> </span><span class="hs-glyph">=</span><span> </span><span class="annot"><span class="annottext">StoreHandle IO -&gt; Text -&gt; Natural -&gt; IO (Either Text ())
 forall store (m :: * -&gt; *).
 (LaunchDarklyStoreWrite store m, Monad m) =&gt;
 store -&gt; Text -&gt; Natural -&gt; StoreResultM m ()
 </span><a href="LaunchDarkly.Server.Store.Internal.html#deleteFlag"><span class="hs-identifier hs-var">deleteFlag</span></a></span><span> </span><span class="annot"><span class="annottext">StoreHandle IO
-</span><a href="#local-6989586621679668225"><span class="hs-identifier hs-var">store</span></a></span><span>
+</span><a href="#local-6989586621679667908"><span class="hs-identifier hs-var">store</span></a></span><span>
 </span><span id="line-49"></span><span>            </span><span class="hs-special">,</span><span> </span><span class="annot"><span class="annottext">$sel:dataSourceUpdatesDeleteSegment:DataSourceUpdates :: Text -&gt; Natural -&gt; IO (Either Text ())
 </span><a href="LaunchDarkly.Server.DataSource.Internal.html#%24sel%3AdataSourceUpdatesDeleteSegment%3ADataSourceUpdates"><span class="hs-identifier hs-var">dataSourceUpdatesDeleteSegment</span></a></span><span> </span><span class="hs-glyph">=</span><span> </span><span class="annot"><span class="annottext">StoreHandle IO -&gt; Text -&gt; Natural -&gt; IO (Either Text ())
 forall store (m :: * -&gt; *).
 (LaunchDarklyStoreWrite store m, Monad m) =&gt;
 store -&gt; Text -&gt; Natural -&gt; StoreResultM m ()
 </span><a href="LaunchDarkly.Server.Store.Internal.html#deleteSegment"><span class="hs-identifier hs-var">deleteSegment</span></a></span><span> </span><span class="annot"><span class="annottext">StoreHandle IO
-</span><a href="#local-6989586621679668225"><span class="hs-identifier hs-var">store</span></a></span><span>
+</span><a href="#local-6989586621679667908"><span class="hs-identifier hs-var">store</span></a></span><span>
 </span><span id="line-50"></span><span>            </span><span class="hs-special">,</span><span> </span><span class="annot"><span class="annottext">$sel:dataSourceUpdatesSetStatus:DataSourceUpdates :: Status -&gt; IO ()
 </span><a href="LaunchDarkly.Server.DataSource.Internal.html#%24sel%3AdataSourceUpdatesSetStatus%3ADataSourceUpdates"><span class="hs-identifier hs-var">dataSourceUpdatesSetStatus</span></a></span><span> </span><span class="hs-glyph">=</span><span> </span><span class="annot"><span class="annottext">Status -&gt; IO ()
-</span><a href="#local-6989586621679668224"><span class="hs-identifier hs-var">modifyStatus</span></a></span><span>
+</span><a href="#local-6989586621679667907"><span class="hs-identifier hs-var">modifyStatus</span></a></span><span>
 </span><span id="line-51"></span><span>            </span><span class="hs-special">}</span><span>
 </span><span id="line-52"></span></pre></body></html>

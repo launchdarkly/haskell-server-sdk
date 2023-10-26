@@ -92,34 +92,34 @@
 </span><span id="line-92"></span><span>
 </span><span id="line-93"></span><span class="annot"><a href="LaunchDarkly.Server.Integrations.TestData.html#dataSourceFactory"><span class="hs-identifier hs-type">dataSourceFactory</span></a></span><span> </span><span class="hs-glyph">::</span><span> </span><span class="annot"><a href="LaunchDarkly.Server.Integrations.TestData.html#TestData"><span class="hs-identifier hs-type">TestData</span></a></span><span> </span><span class="hs-glyph">-&gt;</span><span> </span><span class="annot"><a href="LaunchDarkly.Server.DataSource.Internal.html#DataSourceFactory"><span class="hs-identifier hs-type">DataSourceFactory</span></a></span><span>
 </span><span id="line-94"></span><span id="dataSourceFactory"><span class="annot"><span class="annottext">dataSourceFactory :: TestData -&gt; DataSourceFactory
-</span><a href="LaunchDarkly.Server.Integrations.TestData.html#dataSourceFactory"><span class="hs-identifier hs-var hs-var">dataSourceFactory</span></a></span></span><span> </span><span class="hs-special">(</span><span class="annot"><a href="LaunchDarkly.Server.Integrations.TestData.html#TestData"><span class="hs-identifier hs-type">TestData</span></a></span><span> </span><span id="local-6989586621679668335"><span class="annot"><span class="annottext">ref :: MVar TestData'
-</span><a href="#local-6989586621679668335"><span class="hs-identifier hs-var">ref</span></a></span></span><span class="hs-special">)</span><span> </span><span id="local-6989586621679668334"><span class="annot"><span class="annottext">_clientContext :: ClientContext
-</span><a href="#local-6989586621679668334"><span class="hs-identifier hs-var">_clientContext</span></a></span></span><span> </span><span id="local-6989586621679668333"><span class="annot"><span class="annottext">dataSourceUpdates :: DataSourceUpdates
-</span><a href="#local-6989586621679668333"><span class="hs-identifier hs-var">dataSourceUpdates</span></a></span></span><span> </span><span class="hs-glyph">=</span><span> </span><span class="hs-keyword">do</span><span>
-</span><span id="line-95"></span><span>    </span><span id="local-6989586621679668332"><span class="annot"><span class="annottext">MVar Int
-</span><a href="#local-6989586621679668332"><span class="hs-identifier hs-var">listenerIdRef</span></a></span></span><span> </span><span class="hs-glyph">&lt;-</span><span> </span><span class="annot"><span class="annottext">IO (MVar Int)
+</span><a href="LaunchDarkly.Server.Integrations.TestData.html#dataSourceFactory"><span class="hs-identifier hs-var hs-var">dataSourceFactory</span></a></span></span><span> </span><span class="hs-special">(</span><span class="annot"><a href="LaunchDarkly.Server.Integrations.TestData.html#TestData"><span class="hs-identifier hs-type">TestData</span></a></span><span> </span><span id="local-6989586621679668018"><span class="annot"><span class="annottext">ref :: MVar TestData'
+</span><a href="#local-6989586621679668018"><span class="hs-identifier hs-var">ref</span></a></span></span><span class="hs-special">)</span><span> </span><span id="local-6989586621679668017"><span class="annot"><span class="annottext">_clientContext :: ClientContext
+</span><a href="#local-6989586621679668017"><span class="hs-identifier hs-var">_clientContext</span></a></span></span><span> </span><span id="local-6989586621679668016"><span class="annot"><span class="annottext">dataSourceUpdates :: DataSourceUpdates
+</span><a href="#local-6989586621679668016"><span class="hs-identifier hs-var">dataSourceUpdates</span></a></span></span><span> </span><span class="hs-glyph">=</span><span> </span><span class="hs-keyword">do</span><span>
+</span><span id="line-95"></span><span>    </span><span id="local-6989586621679668015"><span class="annot"><span class="annottext">MVar Int
+</span><a href="#local-6989586621679668015"><span class="hs-identifier hs-var">listenerIdRef</span></a></span></span><span> </span><span class="hs-glyph">&lt;-</span><span> </span><span class="annot"><span class="annottext">IO (MVar Int)
 forall a. IO (MVar a)
 </span><span class="hs-identifier hs-var">newEmptyMVar</span></span><span>
-</span><span id="line-96"></span><span>    </span><span class="hs-keyword">let</span><span> </span><span id="local-6989586621679668331"><span class="annot"><span class="annottext">upsert :: Flag -&gt; IO ()
-</span><a href="#local-6989586621679668331"><span class="hs-identifier hs-var hs-var">upsert</span></a></span></span><span> </span><span id="local-6989586621679668330"><span class="annot"><span class="annottext">flag :: Flag
-</span><a href="#local-6989586621679668330"><span class="hs-identifier hs-var">flag</span></a></span></span><span> </span><span class="hs-glyph">=</span><span> </span><span class="annot"><span class="annottext">IO (Either Text ()) -&gt; IO ()
+</span><span id="line-96"></span><span>    </span><span class="hs-keyword">let</span><span> </span><span id="local-6989586621679668014"><span class="annot"><span class="annottext">upsert :: Flag -&gt; IO ()
+</span><a href="#local-6989586621679668014"><span class="hs-identifier hs-var hs-var">upsert</span></a></span></span><span> </span><span id="local-6989586621679668013"><span class="annot"><span class="annottext">flag :: Flag
+</span><a href="#local-6989586621679668013"><span class="hs-identifier hs-var">flag</span></a></span></span><span> </span><span class="hs-glyph">=</span><span> </span><span class="annot"><span class="annottext">IO (Either Text ()) -&gt; IO ()
 forall (f :: * -&gt; *) a. Functor f =&gt; f a -&gt; f ()
 </span><span class="hs-identifier hs-var">void</span></span><span> </span><span class="annot"><span class="annottext">(IO (Either Text ()) -&gt; IO ()) -&gt; IO (Either Text ()) -&gt; IO ()
 forall a b. (a -&gt; b) -&gt; a -&gt; b
 </span><span class="hs-operator hs-var">$</span></span><span> </span><span class="annot"><span class="annottext">DataSourceUpdates -&gt; Flag -&gt; IO (Either Text ())
 </span><a href="LaunchDarkly.Server.DataSource.Internal.html#%24sel%3AdataSourceUpdatesInsertFlag%3ADataSourceUpdates"><span class="hs-identifier hs-var hs-var">dataSourceUpdatesInsertFlag</span></a></span><span> </span><span class="annot"><span class="annottext">DataSourceUpdates
-</span><a href="#local-6989586621679668333"><span class="hs-identifier hs-var">dataSourceUpdates</span></a></span><span> </span><span class="annot"><span class="annottext">Flag
-</span><a href="#local-6989586621679668330"><span class="hs-identifier hs-var">flag</span></a></span><span>
-</span><span id="line-97"></span><span>        </span><span id="local-6989586621679668328"><span class="annot"><span class="annottext">dataSourceStart :: IO ()
-</span><a href="#local-6989586621679668328"><span class="hs-identifier hs-var hs-var">dataSourceStart</span></a></span></span><span> </span><span class="hs-glyph">=</span><span> </span><span class="hs-keyword">do</span><span>
+</span><a href="#local-6989586621679668016"><span class="hs-identifier hs-var">dataSourceUpdates</span></a></span><span> </span><span class="annot"><span class="annottext">Flag
+</span><a href="#local-6989586621679668013"><span class="hs-identifier hs-var">flag</span></a></span><span>
+</span><span id="line-97"></span><span>        </span><span id="local-6989586621679668011"><span class="annot"><span class="annottext">dataSourceStart :: IO ()
+</span><a href="#local-6989586621679668011"><span class="hs-identifier hs-var hs-var">dataSourceStart</span></a></span></span><span> </span><span class="hs-glyph">=</span><span> </span><span class="hs-keyword">do</span><span>
 </span><span id="line-98"></span><span>            </span><span class="annot"><span class="annottext">MVar TestData' -&gt; (TestData' -&gt; IO TestData') -&gt; IO ()
 forall a. MVar a -&gt; (a -&gt; IO a) -&gt; IO ()
 </span><span class="hs-identifier hs-var">modifyMVar_</span></span><span> </span><span class="annot"><span class="annottext">MVar TestData'
-</span><a href="#local-6989586621679668335"><span class="hs-identifier hs-var">ref</span></a></span><span> </span><span class="annot"><span class="annottext">((TestData' -&gt; IO TestData') -&gt; IO ())
+</span><a href="#local-6989586621679668018"><span class="hs-identifier hs-var">ref</span></a></span><span> </span><span class="annot"><span class="annottext">((TestData' -&gt; IO TestData') -&gt; IO ())
 -&gt; (TestData' -&gt; IO TestData') -&gt; IO ()
 forall a b. (a -&gt; b) -&gt; a -&gt; b
-</span><span class="hs-operator hs-var">$</span></span><span> </span><span class="hs-glyph">\</span><span id="local-6989586621679668327"><span class="annot"><span class="annottext">td :: TestData'
-</span><a href="#local-6989586621679668327"><span class="hs-identifier hs-var">td</span></a></span></span><span> </span><span class="hs-glyph">-&gt;</span><span> </span><span class="hs-keyword">do</span><span>
+</span><span class="hs-operator hs-var">$</span></span><span> </span><span class="hs-glyph">\</span><span id="local-6989586621679668010"><span class="annot"><span class="annottext">td :: TestData'
+</span><a href="#local-6989586621679668010"><span class="hs-identifier hs-var">td</span></a></span></span><span> </span><span class="hs-glyph">-&gt;</span><span> </span><span class="hs-keyword">do</span><span>
 </span><span id="line-99"></span><span>                </span><span class="annot"><span class="annottext">IO (Either Text ()) -&gt; IO ()
 forall (f :: * -&gt; *) a. Functor f =&gt; f a -&gt; f ()
 </span><span class="hs-identifier hs-var">void</span></span><span> </span><span class="annot"><span class="annottext">(IO (Either Text ()) -&gt; IO ()) -&gt; IO (Either Text ()) -&gt; IO ()
@@ -127,50 +127,50 @@ forall a b. (a -&gt; b) -&gt; a -&gt; b
 </span><span class="hs-operator hs-var">$</span></span><span> </span><span class="annot"><span class="annottext">DataSourceUpdates
 -&gt; KeyMap Flag -&gt; KeyMap Segment -&gt; IO (Either Text ())
 </span><a href="LaunchDarkly.Server.DataSource.Internal.html#%24sel%3AdataSourceUpdatesInit%3ADataSourceUpdates"><span class="hs-identifier hs-var hs-var">dataSourceUpdatesInit</span></a></span><span> </span><span class="annot"><span class="annottext">DataSourceUpdates
-</span><a href="#local-6989586621679668333"><span class="hs-identifier hs-var">dataSourceUpdates</span></a></span><span> </span><span class="hs-special">(</span><span class="annot"><span class="annottext">TestData' -&gt; KeyMap Flag
+</span><a href="#local-6989586621679668016"><span class="hs-identifier hs-var">dataSourceUpdates</span></a></span><span> </span><span class="hs-special">(</span><span class="annot"><span class="annottext">TestData' -&gt; KeyMap Flag
 </span><a href="LaunchDarkly.Server.Integrations.TestData.html#%24sel%3AcurrentFlags%3ATestData%27"><span class="hs-identifier hs-var hs-var">currentFlags</span></a></span><span> </span><span class="annot"><span class="annottext">TestData'
-</span><a href="#local-6989586621679668327"><span class="hs-identifier hs-var">td</span></a></span><span class="hs-special">)</span><span> </span><span class="annot"><span class="annottext">KeyMap Segment
+</span><a href="#local-6989586621679668010"><span class="hs-identifier hs-var">td</span></a></span><span class="hs-special">)</span><span> </span><span class="annot"><span class="annottext">KeyMap Segment
 forall a. Monoid a =&gt; a
 </span><span class="hs-identifier hs-var">mempty</span></span><span>
-</span><span id="line-100"></span><span>                </span><span class="hs-keyword">let</span><span> </span><span class="hs-special">(</span><span id="local-6989586621679668324"><span class="annot"><span class="annottext">td' :: TestData'
-</span><a href="#local-6989586621679668324"><span class="hs-identifier hs-var">td'</span></a></span></span><span class="hs-special">,</span><span> </span><span id="local-6989586621679668323"><span class="annot"><span class="annottext">listenerId :: Int
-</span><a href="#local-6989586621679668323"><span class="hs-identifier hs-var">listenerId</span></a></span></span><span class="hs-special">)</span><span> </span><span class="hs-glyph">=</span><span> </span><span class="annot"><span class="annottext">TestData' -&gt; (Flag -&gt; IO ()) -&gt; (TestData', Int)
+</span><span id="line-100"></span><span>                </span><span class="hs-keyword">let</span><span> </span><span class="hs-special">(</span><span id="local-6989586621679668007"><span class="annot"><span class="annottext">td' :: TestData'
+</span><a href="#local-6989586621679668007"><span class="hs-identifier hs-var">td'</span></a></span></span><span class="hs-special">,</span><span> </span><span id="local-6989586621679668006"><span class="annot"><span class="annottext">listenerId :: Int
+</span><a href="#local-6989586621679668006"><span class="hs-identifier hs-var">listenerId</span></a></span></span><span class="hs-special">)</span><span> </span><span class="hs-glyph">=</span><span> </span><span class="annot"><span class="annottext">TestData' -&gt; (Flag -&gt; IO ()) -&gt; (TestData', Int)
 </span><a href="LaunchDarkly.Server.Integrations.TestData.html#addDataSourceListener"><span class="hs-identifier hs-var">addDataSourceListener</span></a></span><span> </span><span class="annot"><span class="annottext">TestData'
-</span><a href="#local-6989586621679668327"><span class="hs-identifier hs-var">td</span></a></span><span> </span><span class="annot"><span class="annottext">Flag -&gt; IO ()
-</span><a href="#local-6989586621679668331"><span class="hs-identifier hs-var">upsert</span></a></span><span>
+</span><a href="#local-6989586621679668010"><span class="hs-identifier hs-var">td</span></a></span><span> </span><span class="annot"><span class="annottext">Flag -&gt; IO ()
+</span><a href="#local-6989586621679668014"><span class="hs-identifier hs-var">upsert</span></a></span><span>
 </span><span id="line-101"></span><span>                </span><span class="annot"><span class="annottext">MVar Int -&gt; Int -&gt; IO ()
 forall a. MVar a -&gt; a -&gt; IO ()
 </span><span class="hs-identifier hs-var">putMVar</span></span><span> </span><span class="annot"><span class="annottext">MVar Int
-</span><a href="#local-6989586621679668332"><span class="hs-identifier hs-var">listenerIdRef</span></a></span><span> </span><span class="annot"><span class="annottext">Int
-</span><a href="#local-6989586621679668323"><span class="hs-identifier hs-var">listenerId</span></a></span><span>
+</span><a href="#local-6989586621679668015"><span class="hs-identifier hs-var">listenerIdRef</span></a></span><span> </span><span class="annot"><span class="annottext">Int
+</span><a href="#local-6989586621679668006"><span class="hs-identifier hs-var">listenerId</span></a></span><span>
 </span><span id="line-102"></span><span>                </span><span class="annot"><span class="annottext">TestData' -&gt; IO TestData'
 forall (f :: * -&gt; *) a. Applicative f =&gt; a -&gt; f a
 </span><span class="hs-identifier hs-var">pure</span></span><span> </span><span class="annot"><span class="annottext">TestData'
-</span><a href="#local-6989586621679668324"><span class="hs-identifier hs-var">td'</span></a></span><span>
-</span><span id="line-103"></span><span>        </span><span id="local-6989586621679668321"><span class="annot"><span class="annottext">dataSourceIsInitialized :: f Bool
-</span><a href="#local-6989586621679668321"><span class="hs-identifier hs-var hs-var">dataSourceIsInitialized</span></a></span></span><span> </span><span class="hs-glyph">=</span><span>
+</span><a href="#local-6989586621679668007"><span class="hs-identifier hs-var">td'</span></a></span><span>
+</span><span id="line-103"></span><span>        </span><span id="local-6989586621679668004"><span class="annot"><span class="annottext">dataSourceIsInitialized :: f Bool
+</span><a href="#local-6989586621679668004"><span class="hs-identifier hs-var hs-var">dataSourceIsInitialized</span></a></span></span><span> </span><span class="hs-glyph">=</span><span>
 </span><span id="line-104"></span><span>            </span><span class="annot"><span class="annottext">Bool -&gt; f Bool
 forall (f :: * -&gt; *) a. Applicative f =&gt; a -&gt; f a
 </span><span class="hs-identifier hs-var">pure</span></span><span> </span><span class="annot"><span class="annottext">Bool
 </span><span class="hs-identifier hs-var">True</span></span><span>
-</span><span id="line-105"></span><span>        </span><span id="local-6989586621679668320"><span class="annot"><span class="annottext">dataSourceStop :: IO ()
-</span><a href="#local-6989586621679668320"><span class="hs-identifier hs-var hs-var">dataSourceStop</span></a></span></span><span> </span><span class="hs-glyph">=</span><span>
+</span><span id="line-105"></span><span>        </span><span id="local-6989586621679668003"><span class="annot"><span class="annottext">dataSourceStop :: IO ()
+</span><a href="#local-6989586621679668003"><span class="hs-identifier hs-var hs-var">dataSourceStop</span></a></span></span><span> </span><span class="hs-glyph">=</span><span>
 </span><span id="line-106"></span><span>            </span><span class="annot"><span class="annottext">MVar TestData' -&gt; (TestData' -&gt; IO TestData') -&gt; IO ()
 forall a. MVar a -&gt; (a -&gt; IO a) -&gt; IO ()
 </span><span class="hs-identifier hs-var">modifyMVar_</span></span><span> </span><span class="annot"><span class="annottext">MVar TestData'
-</span><a href="#local-6989586621679668335"><span class="hs-identifier hs-var">ref</span></a></span><span> </span><span class="annot"><span class="annottext">((TestData' -&gt; IO TestData') -&gt; IO ())
+</span><a href="#local-6989586621679668018"><span class="hs-identifier hs-var">ref</span></a></span><span> </span><span class="annot"><span class="annottext">((TestData' -&gt; IO TestData') -&gt; IO ())
 -&gt; (TestData' -&gt; IO TestData') -&gt; IO ()
 forall a b. (a -&gt; b) -&gt; a -&gt; b
-</span><span class="hs-operator hs-var">$</span></span><span> </span><span class="hs-glyph">\</span><span id="local-6989586621679668319"><span class="annot"><span class="annottext">td :: TestData'
-</span><a href="#local-6989586621679668319"><span class="hs-identifier hs-var">td</span></a></span></span><span> </span><span class="hs-glyph">-&gt;</span><span>
+</span><span class="hs-operator hs-var">$</span></span><span> </span><span class="hs-glyph">\</span><span id="local-6989586621679668002"><span class="annot"><span class="annottext">td :: TestData'
+</span><a href="#local-6989586621679668002"><span class="hs-identifier hs-var">td</span></a></span></span><span> </span><span class="hs-glyph">-&gt;</span><span>
 </span><span id="line-107"></span><span>                </span><span class="annot"><span class="annottext">TestData' -&gt; Int -&gt; TestData'
 </span><a href="LaunchDarkly.Server.Integrations.TestData.html#removeDataSourceListener"><span class="hs-identifier hs-var">removeDataSourceListener</span></a></span><span> </span><span class="annot"><span class="annottext">TestData'
-</span><a href="#local-6989586621679668319"><span class="hs-identifier hs-var">td</span></a></span><span> </span><span class="annot"><span class="annottext">(Int -&gt; TestData') -&gt; IO Int -&gt; IO TestData'
+</span><a href="#local-6989586621679668002"><span class="hs-identifier hs-var">td</span></a></span><span> </span><span class="annot"><span class="annottext">(Int -&gt; TestData') -&gt; IO Int -&gt; IO TestData'
 forall (f :: * -&gt; *) a b. Functor f =&gt; (a -&gt; b) -&gt; f a -&gt; f b
 </span><span class="hs-operator hs-var">&lt;$&gt;</span></span><span> </span><span class="annot"><span class="annottext">MVar Int -&gt; IO Int
 forall a. MVar a -&gt; IO a
 </span><span class="hs-identifier hs-var">readMVar</span></span><span> </span><span class="annot"><span class="annottext">MVar Int
-</span><a href="#local-6989586621679668332"><span class="hs-identifier hs-var">listenerIdRef</span></a></span><span>
+</span><a href="#local-6989586621679668015"><span class="hs-identifier hs-var">listenerIdRef</span></a></span><span>
 </span><span id="line-108"></span><span>    </span><span class="annot"><span class="annottext">DataSource -&gt; IO DataSource
 forall (f :: * -&gt; *) a. Applicative f =&gt; a -&gt; f a
 </span><span class="hs-identifier hs-var">pure</span></span><span> </span><span class="annot"><span class="annottext">(DataSource -&gt; IO DataSource) -&gt; DataSource -&gt; IO DataSource
@@ -216,15 +216,15 @@ forall a. Monoid a =&gt; a
 </span><span id="line-127"></span><span>
 </span><span id="line-128"></span><span class="annot"><a href="LaunchDarkly.Server.Integrations.TestData.html#addDataSourceListener"><span class="hs-identifier hs-type">addDataSourceListener</span></a></span><span> </span><span class="hs-glyph">::</span><span> </span><span class="annot"><a href="LaunchDarkly.Server.Integrations.TestData.html#TestData%27"><span class="hs-identifier hs-type">TestData'</span></a></span><span> </span><span class="hs-glyph">-&gt;</span><span> </span><span class="annot"><a href="LaunchDarkly.Server.Integrations.TestData.html#TestDataListener"><span class="hs-identifier hs-type">TestDataListener</span></a></span><span> </span><span class="hs-glyph">-&gt;</span><span> </span><span class="hs-special">(</span><span class="annot"><a href="LaunchDarkly.Server.Integrations.TestData.html#TestData%27"><span class="hs-identifier hs-type">TestData'</span></a></span><span class="hs-special">,</span><span> </span><span class="annot"><span class="hs-identifier hs-type">Int</span></span><span class="hs-special">)</span><span>
 </span><span id="line-129"></span><span id="addDataSourceListener"><span class="annot"><span class="annottext">addDataSourceListener :: TestData' -&gt; (Flag -&gt; IO ()) -&gt; (TestData', Int)
-</span><a href="LaunchDarkly.Server.Integrations.TestData.html#addDataSourceListener"><span class="hs-identifier hs-var hs-var">addDataSourceListener</span></a></span></span><span> </span><span id="local-6989586621679668306"><span class="annot"><span class="annottext">td :: TestData'
-</span><a href="#local-6989586621679668306"><span class="hs-identifier hs-var">td</span></a></span></span><span> </span><span id="local-6989586621679668305"><span class="annot"><span class="annottext">listener :: Flag -&gt; IO ()
-</span><a href="#local-6989586621679668305"><span class="hs-identifier hs-var">listener</span></a></span></span><span> </span><span class="hs-glyph">=</span><span>
+</span><a href="LaunchDarkly.Server.Integrations.TestData.html#addDataSourceListener"><span class="hs-identifier hs-var hs-var">addDataSourceListener</span></a></span></span><span> </span><span id="local-6989586621679667989"><span class="annot"><span class="annottext">td :: TestData'
+</span><a href="#local-6989586621679667989"><span class="hs-identifier hs-var">td</span></a></span></span><span> </span><span id="local-6989586621679667988"><span class="annot"><span class="annottext">listener :: Flag -&gt; IO ()
+</span><a href="#local-6989586621679667988"><span class="hs-identifier hs-var">listener</span></a></span></span><span> </span><span class="hs-glyph">=</span><span>
 </span><span id="line-130"></span><span>    </span><span class="hs-special">(</span><span> </span><span class="annot"><span class="annottext">TestData'
-</span><a href="#local-6989586621679668306"><span class="hs-identifier hs-var">td</span></a></span><span>
+</span><a href="#local-6989586621679667989"><span class="hs-identifier hs-var">td</span></a></span><span>
 </span><span id="line-131"></span><span>        </span><span class="hs-special">{</span><span> </span><span class="annot"><span class="annottext">$sel:nextDataSourceListenerId:TestData' :: Int
 </span><a href="LaunchDarkly.Server.Integrations.TestData.html#%24sel%3AnextDataSourceListenerId%3ATestData%27"><span class="hs-identifier hs-var">nextDataSourceListenerId</span></a></span><span> </span><span class="hs-glyph">=</span><span> </span><span class="annot"><span class="annottext">TestData' -&gt; Int
 </span><a href="LaunchDarkly.Server.Integrations.TestData.html#%24sel%3AnextDataSourceListenerId%3ATestData%27"><span class="hs-identifier hs-var hs-var">nextDataSourceListenerId</span></a></span><span> </span><span class="annot"><span class="annottext">TestData'
-</span><a href="#local-6989586621679668306"><span class="hs-identifier hs-var">td</span></a></span><span> </span><span class="annot"><span class="annottext">Int -&gt; Int -&gt; Int
+</span><a href="#local-6989586621679667989"><span class="hs-identifier hs-var">td</span></a></span><span> </span><span class="annot"><span class="annottext">Int -&gt; Int -&gt; Int
 forall a. Num a =&gt; a -&gt; a -&gt; a
 </span><span class="hs-operator hs-var">+</span></span><span> </span><span class="annot"><span class="hs-number">1</span></span><span>
 </span><span id="line-132"></span><span>        </span><span class="hs-special">,</span><span> </span><span class="annot"><span class="annottext">$sel:dataSourceListeners:TestData' :: IntMap (Flag -&gt; IO ())
@@ -235,31 +235,31 @@ forall a. Num a =&gt; a -&gt; a -&gt; a
 forall a. Int -&gt; a -&gt; IntMap a -&gt; IntMap a
 </span><span class="hs-identifier hs-var">IntMap.insert</span></span><span> </span><span class="hs-special">(</span><span class="annot"><span class="annottext">TestData' -&gt; Int
 </span><a href="LaunchDarkly.Server.Integrations.TestData.html#%24sel%3AnextDataSourceListenerId%3ATestData%27"><span class="hs-identifier hs-var hs-var">nextDataSourceListenerId</span></a></span><span> </span><span class="annot"><span class="annottext">TestData'
-</span><a href="#local-6989586621679668306"><span class="hs-identifier hs-var">td</span></a></span><span class="hs-special">)</span><span> </span><span class="annot"><span class="annottext">Flag -&gt; IO ()
-</span><a href="#local-6989586621679668305"><span class="hs-identifier hs-var">listener</span></a></span><span> </span><span class="hs-special">(</span><span class="annot"><span class="annottext">TestData' -&gt; IntMap (Flag -&gt; IO ())
+</span><a href="#local-6989586621679667989"><span class="hs-identifier hs-var">td</span></a></span><span class="hs-special">)</span><span> </span><span class="annot"><span class="annottext">Flag -&gt; IO ()
+</span><a href="#local-6989586621679667988"><span class="hs-identifier hs-var">listener</span></a></span><span> </span><span class="hs-special">(</span><span class="annot"><span class="annottext">TestData' -&gt; IntMap (Flag -&gt; IO ())
 </span><a href="LaunchDarkly.Server.Integrations.TestData.html#%24sel%3AdataSourceListeners%3ATestData%27"><span class="hs-identifier hs-var hs-var">dataSourceListeners</span></a></span><span> </span><span class="annot"><span class="annottext">TestData'
-</span><a href="#local-6989586621679668306"><span class="hs-identifier hs-var">td</span></a></span><span class="hs-special">)</span><span>
+</span><a href="#local-6989586621679667989"><span class="hs-identifier hs-var">td</span></a></span><span class="hs-special">)</span><span>
 </span><span id="line-133"></span><span>        </span><span class="hs-special">}</span><span>
 </span><span id="line-134"></span><span>    </span><span class="hs-special">,</span><span> </span><span class="annot"><span class="annottext">TestData' -&gt; Int
 </span><a href="LaunchDarkly.Server.Integrations.TestData.html#%24sel%3AnextDataSourceListenerId%3ATestData%27"><span class="hs-identifier hs-var hs-var">nextDataSourceListenerId</span></a></span><span> </span><span class="annot"><span class="annottext">TestData'
-</span><a href="#local-6989586621679668306"><span class="hs-identifier hs-var">td</span></a></span><span>
+</span><a href="#local-6989586621679667989"><span class="hs-identifier hs-var">td</span></a></span><span>
 </span><span id="line-135"></span><span>    </span><span class="hs-special">)</span><span>
 </span><span id="line-136"></span><span>
 </span><span id="line-137"></span><span class="annot"><a href="LaunchDarkly.Server.Integrations.TestData.html#removeDataSourceListener"><span class="hs-identifier hs-type">removeDataSourceListener</span></a></span><span> </span><span class="hs-glyph">::</span><span> </span><span class="annot"><a href="LaunchDarkly.Server.Integrations.TestData.html#TestData%27"><span class="hs-identifier hs-type">TestData'</span></a></span><span> </span><span class="hs-glyph">-&gt;</span><span> </span><span class="annot"><span class="hs-identifier hs-type">Int</span></span><span> </span><span class="hs-glyph">-&gt;</span><span> </span><span class="annot"><a href="LaunchDarkly.Server.Integrations.TestData.html#TestData%27"><span class="hs-identifier hs-type">TestData'</span></a></span><span>
 </span><span id="line-138"></span><span id="removeDataSourceListener"><span class="annot"><span class="annottext">removeDataSourceListener :: TestData' -&gt; Int -&gt; TestData'
-</span><a href="LaunchDarkly.Server.Integrations.TestData.html#removeDataSourceListener"><span class="hs-identifier hs-var hs-var">removeDataSourceListener</span></a></span></span><span> </span><span id="local-6989586621679668302"><span class="annot"><span class="annottext">td :: TestData'
-</span><a href="#local-6989586621679668302"><span class="hs-identifier hs-var">td</span></a></span></span><span> </span><span id="local-6989586621679668301"><span class="annot"><span class="annottext">listenerId :: Int
-</span><a href="#local-6989586621679668301"><span class="hs-identifier hs-var">listenerId</span></a></span></span><span> </span><span class="hs-glyph">=</span><span>
+</span><a href="LaunchDarkly.Server.Integrations.TestData.html#removeDataSourceListener"><span class="hs-identifier hs-var hs-var">removeDataSourceListener</span></a></span></span><span> </span><span id="local-6989586621679667985"><span class="annot"><span class="annottext">td :: TestData'
+</span><a href="#local-6989586621679667985"><span class="hs-identifier hs-var">td</span></a></span></span><span> </span><span id="local-6989586621679667984"><span class="annot"><span class="annottext">listenerId :: Int
+</span><a href="#local-6989586621679667984"><span class="hs-identifier hs-var">listenerId</span></a></span></span><span> </span><span class="hs-glyph">=</span><span>
 </span><span id="line-139"></span><span>    </span><span class="annot"><span class="annottext">TestData'
-</span><a href="#local-6989586621679668302"><span class="hs-identifier hs-var">td</span></a></span><span>
+</span><a href="#local-6989586621679667985"><span class="hs-identifier hs-var">td</span></a></span><span>
 </span><span id="line-140"></span><span>        </span><span class="hs-special">{</span><span> </span><span class="annot"><span class="annottext">$sel:dataSourceListeners:TestData' :: IntMap (Flag -&gt; IO ())
 </span><a href="LaunchDarkly.Server.Integrations.TestData.html#%24sel%3AdataSourceListeners%3ATestData%27"><span class="hs-identifier hs-var">dataSourceListeners</span></a></span><span> </span><span class="hs-glyph">=</span><span>
 </span><span id="line-141"></span><span>            </span><span class="annot"><span class="annottext">Int -&gt; IntMap (Flag -&gt; IO ()) -&gt; IntMap (Flag -&gt; IO ())
 forall a. Int -&gt; IntMap a -&gt; IntMap a
 </span><span class="hs-identifier hs-var">IntMap.delete</span></span><span> </span><span class="annot"><span class="annottext">Int
-</span><a href="#local-6989586621679668301"><span class="hs-identifier hs-var">listenerId</span></a></span><span> </span><span class="hs-special">(</span><span class="annot"><span class="annottext">TestData' -&gt; IntMap (Flag -&gt; IO ())
+</span><a href="#local-6989586621679667984"><span class="hs-identifier hs-var">listenerId</span></a></span><span> </span><span class="hs-special">(</span><span class="annot"><span class="annottext">TestData' -&gt; IntMap (Flag -&gt; IO ())
 </span><a href="LaunchDarkly.Server.Integrations.TestData.html#%24sel%3AdataSourceListeners%3ATestData%27"><span class="hs-identifier hs-var hs-var">dataSourceListeners</span></a></span><span> </span><span class="annot"><span class="annottext">TestData'
-</span><a href="#local-6989586621679668302"><span class="hs-identifier hs-var">td</span></a></span><span class="hs-special">)</span><span>
+</span><a href="#local-6989586621679667985"><span class="hs-identifier hs-var">td</span></a></span><span class="hs-special">)</span><span>
 </span><span id="line-142"></span><span>        </span><span class="hs-special">}</span><span>
 </span><span id="line-143"></span><span>
 </span><span id="line-144"></span><span class="hs-comment">-- |</span><span>
@@ -285,14 +285,14 @@ forall a. Int -&gt; IntMap a -&gt; IntMap a
 </span><span id="line-164"></span><span>    </span><span class="hs-comment">-- | a flag configuration builder</span><span>
 </span><span id="line-165"></span><span>    </span><span class="annot"><span class="hs-identifier hs-type">IO</span></span><span> </span><span class="annot"><a href="LaunchDarkly.Server.Integrations.TestData.FlagBuilder.html#FlagBuilder"><span class="hs-identifier hs-type">FlagBuilder</span></a></span><span>
 </span><span id="line-166"></span><span id="flag"><span class="annot"><span class="annottext">flag :: TestData -&gt; Text -&gt; IO FlagBuilder
-</span><a href="LaunchDarkly.Server.Integrations.TestData.html#flag"><span class="hs-identifier hs-var hs-var">flag</span></a></span></span><span> </span><span class="hs-special">(</span><span class="annot"><a href="LaunchDarkly.Server.Integrations.TestData.html#TestData"><span class="hs-identifier hs-type">TestData</span></a></span><span> </span><span id="local-6989586621679668299"><span class="annot"><span class="annottext">ref :: MVar TestData'
-</span><a href="#local-6989586621679668299"><span class="hs-identifier hs-var">ref</span></a></span></span><span class="hs-special">)</span><span> </span><span id="local-6989586621679668298"><span class="annot"><span class="annottext">key :: Text
-</span><a href="#local-6989586621679668298"><span class="hs-identifier hs-var">key</span></a></span></span><span> </span><span class="hs-glyph">=</span><span> </span><span class="hs-keyword">do</span><span>
-</span><span id="line-167"></span><span>    </span><span id="local-6989586621679668297"><span class="annot"><span class="annottext">TestData'
-</span><a href="#local-6989586621679668297"><span class="hs-identifier hs-var">td</span></a></span></span><span> </span><span class="hs-glyph">&lt;-</span><span> </span><span class="annot"><span class="annottext">MVar TestData' -&gt; IO TestData'
+</span><a href="LaunchDarkly.Server.Integrations.TestData.html#flag"><span class="hs-identifier hs-var hs-var">flag</span></a></span></span><span> </span><span class="hs-special">(</span><span class="annot"><a href="LaunchDarkly.Server.Integrations.TestData.html#TestData"><span class="hs-identifier hs-type">TestData</span></a></span><span> </span><span id="local-6989586621679667982"><span class="annot"><span class="annottext">ref :: MVar TestData'
+</span><a href="#local-6989586621679667982"><span class="hs-identifier hs-var">ref</span></a></span></span><span class="hs-special">)</span><span> </span><span id="local-6989586621679667981"><span class="annot"><span class="annottext">key :: Text
+</span><a href="#local-6989586621679667981"><span class="hs-identifier hs-var">key</span></a></span></span><span> </span><span class="hs-glyph">=</span><span> </span><span class="hs-keyword">do</span><span>
+</span><span id="line-167"></span><span>    </span><span id="local-6989586621679667980"><span class="annot"><span class="annottext">TestData'
+</span><a href="#local-6989586621679667980"><span class="hs-identifier hs-var">td</span></a></span></span><span> </span><span class="hs-glyph">&lt;-</span><span> </span><span class="annot"><span class="annottext">MVar TestData' -&gt; IO TestData'
 forall a. MVar a -&gt; IO a
 </span><span class="hs-identifier hs-var">readMVar</span></span><span> </span><span class="annot"><span class="annottext">MVar TestData'
-</span><a href="#local-6989586621679668299"><span class="hs-identifier hs-var">ref</span></a></span><span>
+</span><a href="#local-6989586621679667982"><span class="hs-identifier hs-var">ref</span></a></span><span>
 </span><span id="line-168"></span><span>    </span><span class="annot"><span class="annottext">FlagBuilder -&gt; IO FlagBuilder
 forall (f :: * -&gt; *) a. Applicative f =&gt; a -&gt; f a
 </span><span class="hs-identifier hs-var">pure</span></span><span> </span><span class="annot"><span class="annottext">(FlagBuilder -&gt; IO FlagBuilder) -&gt; FlagBuilder -&gt; IO FlagBuilder
@@ -305,16 +305,16 @@ forall a. a -&gt; Maybe a -&gt; a
 forall a b. (a -&gt; b) -&gt; a -&gt; b
 </span><span class="hs-operator hs-var">$</span></span><span> </span><span class="annot"><span class="annottext">Text -&gt; FlagBuilder
 </span><a href="LaunchDarkly.Server.Integrations.TestData.FlagBuilder.html#newFlagBuilder"><span class="hs-identifier hs-var">newFlagBuilder</span></a></span><span> </span><span class="annot"><span class="annottext">Text
-</span><a href="#local-6989586621679668298"><span class="hs-identifier hs-var">key</span></a></span><span class="hs-special">)</span><span> </span><span class="annot"><span class="annottext">(Maybe FlagBuilder -&gt; FlagBuilder)
+</span><a href="#local-6989586621679667981"><span class="hs-identifier hs-var">key</span></a></span><span class="hs-special">)</span><span> </span><span class="annot"><span class="annottext">(Maybe FlagBuilder -&gt; FlagBuilder)
 -&gt; Maybe FlagBuilder -&gt; FlagBuilder
 forall a b. (a -&gt; b) -&gt; a -&gt; b
 </span><span class="hs-operator hs-var">$</span></span><span>
 </span><span id="line-170"></span><span>            </span><span class="annot"><span class="annottext">Text -&gt; Map Text FlagBuilder -&gt; Maybe FlagBuilder
 forall k a. Ord k =&gt; k -&gt; Map k a -&gt; Maybe a
 </span><span class="hs-identifier hs-var">Map.lookup</span></span><span> </span><span class="annot"><span class="annottext">Text
-</span><a href="#local-6989586621679668298"><span class="hs-identifier hs-var">key</span></a></span><span> </span><span class="hs-special">(</span><span class="annot"><span class="annottext">TestData' -&gt; Map Text FlagBuilder
+</span><a href="#local-6989586621679667981"><span class="hs-identifier hs-var">key</span></a></span><span> </span><span class="hs-special">(</span><span class="annot"><span class="annottext">TestData' -&gt; Map Text FlagBuilder
 </span><a href="LaunchDarkly.Server.Integrations.TestData.html#%24sel%3AflagBuilders%3ATestData%27"><span class="hs-identifier hs-var hs-var">flagBuilders</span></a></span><span> </span><span class="annot"><span class="annottext">TestData'
-</span><a href="#local-6989586621679668297"><span class="hs-identifier hs-var">td</span></a></span><span class="hs-special">)</span><span>
+</span><a href="#local-6989586621679667980"><span class="hs-identifier hs-var">td</span></a></span><span class="hs-special">)</span><span>
 </span><span id="line-171"></span><span>
 </span><span id="line-172"></span><span class="hs-comment">-- |</span><span>
 </span><span id="line-173"></span><span class="hs-comment">--  Updates the test data with the specified flag configuration.</span><span>
@@ -336,76 +336,76 @@ forall k a. Ord k =&gt; k -&gt; Map k a -&gt; Maybe a
 </span><span id="line-189"></span><span>    </span><span class="annot"><a href="LaunchDarkly.Server.Integrations.TestData.FlagBuilder.html#FlagBuilder"><span class="hs-identifier hs-type">FlagBuilder</span></a></span><span> </span><span class="hs-glyph">-&gt;</span><span>
 </span><span id="line-190"></span><span>    </span><span class="annot"><span class="hs-identifier hs-type">IO</span></span><span> </span><span class="hs-special">(</span><span class="hs-special">)</span><span>
 </span><span id="line-191"></span><span id="update"><span class="annot"><span class="annottext">update :: TestData -&gt; FlagBuilder -&gt; IO ()
-</span><a href="LaunchDarkly.Server.Integrations.TestData.html#update"><span class="hs-identifier hs-var hs-var">update</span></a></span></span><span> </span><span class="hs-special">(</span><span class="annot"><a href="LaunchDarkly.Server.Integrations.TestData.html#TestData"><span class="hs-identifier hs-type">TestData</span></a></span><span> </span><span id="local-6989586621679668293"><span class="annot"><span class="annottext">ref :: MVar TestData'
-</span><a href="#local-6989586621679668293"><span class="hs-identifier hs-var">ref</span></a></span></span><span class="hs-special">)</span><span> </span><span id="local-6989586621679668292"><span class="annot"><span class="annottext">fb :: FlagBuilder
-</span><a href="#local-6989586621679668292"><span class="hs-identifier hs-var">fb</span></a></span></span><span> </span><span class="hs-glyph">=</span><span>
+</span><a href="LaunchDarkly.Server.Integrations.TestData.html#update"><span class="hs-identifier hs-var hs-var">update</span></a></span></span><span> </span><span class="hs-special">(</span><span class="annot"><a href="LaunchDarkly.Server.Integrations.TestData.html#TestData"><span class="hs-identifier hs-type">TestData</span></a></span><span> </span><span id="local-6989586621679667976"><span class="annot"><span class="annottext">ref :: MVar TestData'
+</span><a href="#local-6989586621679667976"><span class="hs-identifier hs-var">ref</span></a></span></span><span class="hs-special">)</span><span> </span><span id="local-6989586621679667975"><span class="annot"><span class="annottext">fb :: FlagBuilder
+</span><a href="#local-6989586621679667975"><span class="hs-identifier hs-var">fb</span></a></span></span><span> </span><span class="hs-glyph">=</span><span>
 </span><span id="line-192"></span><span>    </span><span class="annot"><span class="annottext">MVar TestData' -&gt; (TestData' -&gt; IO TestData') -&gt; IO ()
 forall a. MVar a -&gt; (a -&gt; IO a) -&gt; IO ()
 </span><span class="hs-identifier hs-var">modifyMVar_</span></span><span> </span><span class="annot"><span class="annottext">MVar TestData'
-</span><a href="#local-6989586621679668293"><span class="hs-identifier hs-var">ref</span></a></span><span> </span><span class="annot"><span class="annottext">((TestData' -&gt; IO TestData') -&gt; IO ())
+</span><a href="#local-6989586621679667976"><span class="hs-identifier hs-var">ref</span></a></span><span> </span><span class="annot"><span class="annottext">((TestData' -&gt; IO TestData') -&gt; IO ())
 -&gt; (TestData' -&gt; IO TestData') -&gt; IO ()
 forall a b. (a -&gt; b) -&gt; a -&gt; b
-</span><span class="hs-operator hs-var">$</span></span><span> </span><span class="hs-glyph">\</span><span id="local-6989586621679668291"><span class="annot"><span class="annottext">td :: TestData'
-</span><a href="#local-6989586621679668291"><span class="hs-identifier hs-var">td</span></a></span></span><span> </span><span class="hs-glyph">-&gt;</span><span> </span><span class="hs-keyword">do</span><span>
-</span><span id="line-193"></span><span>        </span><span class="hs-keyword">let</span><span> </span><span id="local-6989586621679668290"><span class="annot"><span class="annottext">key :: Text
-</span><a href="#local-6989586621679668290"><span class="hs-identifier hs-var hs-var">key</span></a></span></span><span> </span><span class="hs-glyph">=</span><span> </span><span class="annot"><span class="annottext">FlagBuilder -&gt; Text
+</span><span class="hs-operator hs-var">$</span></span><span> </span><span class="hs-glyph">\</span><span id="local-6989586621679667974"><span class="annot"><span class="annottext">td :: TestData'
+</span><a href="#local-6989586621679667974"><span class="hs-identifier hs-var">td</span></a></span></span><span> </span><span class="hs-glyph">-&gt;</span><span> </span><span class="hs-keyword">do</span><span>
+</span><span id="line-193"></span><span>        </span><span class="hs-keyword">let</span><span> </span><span id="local-6989586621679667973"><span class="annot"><span class="annottext">key :: Text
+</span><a href="#local-6989586621679667973"><span class="hs-identifier hs-var hs-var">key</span></a></span></span><span> </span><span class="hs-glyph">=</span><span> </span><span class="annot"><span class="annottext">FlagBuilder -&gt; Text
 </span><a href="LaunchDarkly.Server.Integrations.TestData.FlagBuilder.html#%24sel%3AfbKey%3AFlagBuilder"><span class="hs-identifier hs-var hs-var">fbKey</span></a></span><span> </span><span class="annot"><span class="annottext">FlagBuilder
-</span><a href="#local-6989586621679668292"><span class="hs-identifier hs-var">fb</span></a></span><span>
-</span><span id="line-194"></span><span>            </span><span id="local-6989586621679668288"><span class="annot"><span class="annottext">mOldFlag :: Maybe Flag
-</span><a href="#local-6989586621679668288"><span class="hs-identifier hs-var hs-var">mOldFlag</span></a></span></span><span> </span><span class="hs-glyph">=</span><span> </span><span class="annot"><span class="annottext">Text -&gt; KeyMap Flag -&gt; Maybe Flag
+</span><a href="#local-6989586621679667975"><span class="hs-identifier hs-var">fb</span></a></span><span>
+</span><span id="line-194"></span><span>            </span><span id="local-6989586621679667971"><span class="annot"><span class="annottext">mOldFlag :: Maybe Flag
+</span><a href="#local-6989586621679667971"><span class="hs-identifier hs-var hs-var">mOldFlag</span></a></span></span><span> </span><span class="hs-glyph">=</span><span> </span><span class="annot"><span class="annottext">Text -&gt; KeyMap Flag -&gt; Maybe Flag
 forall v. Text -&gt; HashMap Text v -&gt; Maybe v
 </span><a href="LaunchDarkly.AesonCompat.html#lookupKey"><span class="hs-identifier hs-var">lookupKey</span></a></span><span> </span><span class="annot"><span class="annottext">Text
-</span><a href="#local-6989586621679668290"><span class="hs-identifier hs-var">key</span></a></span><span> </span><span class="hs-special">(</span><span class="annot"><span class="annottext">TestData' -&gt; KeyMap Flag
+</span><a href="#local-6989586621679667973"><span class="hs-identifier hs-var">key</span></a></span><span> </span><span class="hs-special">(</span><span class="annot"><span class="annottext">TestData' -&gt; KeyMap Flag
 </span><a href="LaunchDarkly.Server.Integrations.TestData.html#%24sel%3AcurrentFlags%3ATestData%27"><span class="hs-identifier hs-var hs-var">currentFlags</span></a></span><span> </span><span class="annot"><span class="annottext">TestData'
-</span><a href="#local-6989586621679668291"><span class="hs-identifier hs-var">td</span></a></span><span class="hs-special">)</span><span>
-</span><span id="line-195"></span><span>            </span><span id="local-6989586621679668287"><span class="annot"><span class="annottext">oldFlagVersion :: Natural
-</span><a href="#local-6989586621679668287"><span class="hs-identifier hs-var hs-var">oldFlagVersion</span></a></span></span><span> </span><span class="hs-glyph">=</span><span> </span><span class="annot"><span class="annottext">Natural -&gt; (Flag -&gt; Natural) -&gt; Maybe Flag -&gt; Natural
+</span><a href="#local-6989586621679667974"><span class="hs-identifier hs-var">td</span></a></span><span class="hs-special">)</span><span>
+</span><span id="line-195"></span><span>            </span><span id="local-6989586621679667970"><span class="annot"><span class="annottext">oldFlagVersion :: Natural
+</span><a href="#local-6989586621679667970"><span class="hs-identifier hs-var hs-var">oldFlagVersion</span></a></span></span><span> </span><span class="hs-glyph">=</span><span> </span><span class="annot"><span class="annottext">Natural -&gt; (Flag -&gt; Natural) -&gt; Maybe Flag -&gt; Natural
 forall b a. b -&gt; (a -&gt; b) -&gt; Maybe a -&gt; b
 </span><span class="hs-identifier hs-var">maybe</span></span><span> </span><span class="annot"><span class="hs-number">0</span></span><span> </span><span class="hs-special">(</span><span class="annot"><span class="annottext">forall a s. HasField' &quot;version&quot; s a =&gt; s -&gt; a
 forall (f :: Symbol) a s. HasField' f s a =&gt; s -&gt; a
 </span><span class="hs-identifier hs-var">getField</span></span><span> </span><span class="hs-glyph">@</span><span class="annot"><span class="hs-string">&quot;version&quot;</span></span><span class="hs-special">)</span><span> </span><span class="annot"><span class="annottext">Maybe Flag
-</span><a href="#local-6989586621679668288"><span class="hs-identifier hs-var">mOldFlag</span></a></span><span>
-</span><span id="line-196"></span><span>            </span><span id="local-6989586621679668285"><span class="annot"><span class="annottext">newFlag :: Flag
-</span><a href="#local-6989586621679668285"><span class="hs-identifier hs-var hs-var">newFlag</span></a></span></span><span> </span><span class="hs-glyph">=</span><span> </span><span class="annot"><span class="annottext">Natural -&gt; FlagBuilder -&gt; Flag
+</span><a href="#local-6989586621679667971"><span class="hs-identifier hs-var">mOldFlag</span></a></span><span>
+</span><span id="line-196"></span><span>            </span><span id="local-6989586621679667968"><span class="annot"><span class="annottext">newFlag :: Flag
+</span><a href="#local-6989586621679667968"><span class="hs-identifier hs-var hs-var">newFlag</span></a></span></span><span> </span><span class="hs-glyph">=</span><span> </span><span class="annot"><span class="annottext">Natural -&gt; FlagBuilder -&gt; Flag
 </span><a href="LaunchDarkly.Server.Integrations.TestData.FlagBuilder.html#buildFlag"><span class="hs-identifier hs-var">buildFlag</span></a></span><span> </span><span class="hs-special">(</span><span class="annot"><span class="annottext">Natural
-</span><a href="#local-6989586621679668287"><span class="hs-identifier hs-var">oldFlagVersion</span></a></span><span> </span><span class="annot"><span class="annottext">Natural -&gt; Natural -&gt; Natural
+</span><a href="#local-6989586621679667970"><span class="hs-identifier hs-var">oldFlagVersion</span></a></span><span> </span><span class="annot"><span class="annottext">Natural -&gt; Natural -&gt; Natural
 forall a. Num a =&gt; a -&gt; a -&gt; a
 </span><span class="hs-operator hs-var">+</span></span><span> </span><span class="annot"><span class="hs-number">1</span></span><span class="hs-special">)</span><span> </span><span class="annot"><span class="annottext">FlagBuilder
-</span><a href="#local-6989586621679668292"><span class="hs-identifier hs-var">fb</span></a></span><span>
-</span><span id="line-197"></span><span>            </span><span id="local-6989586621679668283"><span class="annot"><span class="annottext">td' :: TestData'
-</span><a href="#local-6989586621679668283"><span class="hs-identifier hs-var hs-var">td'</span></a></span></span><span> </span><span class="hs-glyph">=</span><span>
+</span><a href="#local-6989586621679667975"><span class="hs-identifier hs-var">fb</span></a></span><span>
+</span><span id="line-197"></span><span>            </span><span id="local-6989586621679667966"><span class="annot"><span class="annottext">td' :: TestData'
+</span><a href="#local-6989586621679667966"><span class="hs-identifier hs-var hs-var">td'</span></a></span></span><span> </span><span class="hs-glyph">=</span><span>
 </span><span id="line-198"></span><span>                </span><span class="annot"><span class="annottext">TestData'
-</span><a href="#local-6989586621679668291"><span class="hs-identifier hs-var">td</span></a></span><span>
+</span><a href="#local-6989586621679667974"><span class="hs-identifier hs-var">td</span></a></span><span>
 </span><span id="line-199"></span><span>                    </span><span class="hs-special">{</span><span> </span><span class="annot"><span class="annottext">$sel:flagBuilders:TestData' :: Map Text FlagBuilder
 </span><a href="LaunchDarkly.Server.Integrations.TestData.html#%24sel%3AflagBuilders%3ATestData%27"><span class="hs-identifier hs-var">flagBuilders</span></a></span><span> </span><span class="hs-glyph">=</span><span> </span><span class="annot"><span class="annottext">Text -&gt; FlagBuilder -&gt; Map Text FlagBuilder -&gt; Map Text FlagBuilder
 forall k a. Ord k =&gt; k -&gt; a -&gt; Map k a -&gt; Map k a
 </span><span class="hs-identifier hs-var">Map.insert</span></span><span> </span><span class="annot"><span class="annottext">Text
-</span><a href="#local-6989586621679668290"><span class="hs-identifier hs-var">key</span></a></span><span> </span><span class="annot"><span class="annottext">FlagBuilder
-</span><a href="#local-6989586621679668292"><span class="hs-identifier hs-var">fb</span></a></span><span> </span><span class="hs-special">(</span><span class="annot"><span class="annottext">TestData' -&gt; Map Text FlagBuilder
+</span><a href="#local-6989586621679667973"><span class="hs-identifier hs-var">key</span></a></span><span> </span><span class="annot"><span class="annottext">FlagBuilder
+</span><a href="#local-6989586621679667975"><span class="hs-identifier hs-var">fb</span></a></span><span> </span><span class="hs-special">(</span><span class="annot"><span class="annottext">TestData' -&gt; Map Text FlagBuilder
 </span><a href="LaunchDarkly.Server.Integrations.TestData.html#%24sel%3AflagBuilders%3ATestData%27"><span class="hs-identifier hs-var hs-var">flagBuilders</span></a></span><span> </span><span class="annot"><span class="annottext">TestData'
-</span><a href="#local-6989586621679668291"><span class="hs-identifier hs-var">td</span></a></span><span class="hs-special">)</span><span>
+</span><a href="#local-6989586621679667974"><span class="hs-identifier hs-var">td</span></a></span><span class="hs-special">)</span><span>
 </span><span id="line-200"></span><span>                    </span><span class="hs-special">,</span><span> </span><span class="annot"><span class="annottext">$sel:currentFlags:TestData' :: KeyMap Flag
 </span><a href="LaunchDarkly.Server.Integrations.TestData.html#%24sel%3AcurrentFlags%3ATestData%27"><span class="hs-identifier hs-var">currentFlags</span></a></span><span> </span><span class="hs-glyph">=</span><span> </span><span class="annot"><span class="annottext">Text -&gt; Flag -&gt; KeyMap Flag -&gt; KeyMap Flag
 forall v. Text -&gt; v -&gt; HashMap Text v -&gt; HashMap Text v
 </span><a href="LaunchDarkly.AesonCompat.html#insertKey"><span class="hs-identifier hs-var">insertKey</span></a></span><span> </span><span class="annot"><span class="annottext">Text
-</span><a href="#local-6989586621679668290"><span class="hs-identifier hs-var">key</span></a></span><span> </span><span class="annot"><span class="annottext">Flag
-</span><a href="#local-6989586621679668285"><span class="hs-identifier hs-var">newFlag</span></a></span><span> </span><span class="hs-special">(</span><span class="annot"><span class="annottext">TestData' -&gt; KeyMap Flag
+</span><a href="#local-6989586621679667973"><span class="hs-identifier hs-var">key</span></a></span><span> </span><span class="annot"><span class="annottext">Flag
+</span><a href="#local-6989586621679667968"><span class="hs-identifier hs-var">newFlag</span></a></span><span> </span><span class="hs-special">(</span><span class="annot"><span class="annottext">TestData' -&gt; KeyMap Flag
 </span><a href="LaunchDarkly.Server.Integrations.TestData.html#%24sel%3AcurrentFlags%3ATestData%27"><span class="hs-identifier hs-var hs-var">currentFlags</span></a></span><span> </span><span class="annot"><span class="annottext">TestData'
-</span><a href="#local-6989586621679668291"><span class="hs-identifier hs-var">td</span></a></span><span class="hs-special">)</span><span>
+</span><a href="#local-6989586621679667974"><span class="hs-identifier hs-var">td</span></a></span><span class="hs-special">)</span><span>
 </span><span id="line-201"></span><span>                    </span><span class="hs-special">}</span><span>
 </span><span id="line-202"></span><span>        </span><span class="annot"><span class="annottext">TestData' -&gt; Flag -&gt; IO ()
-</span><a href="#local-6989586621679668281"><span class="hs-identifier hs-var">notifyListeners</span></a></span><span> </span><span class="annot"><span class="annottext">TestData'
-</span><a href="#local-6989586621679668291"><span class="hs-identifier hs-var">td</span></a></span><span> </span><span class="annot"><span class="annottext">Flag
-</span><a href="#local-6989586621679668285"><span class="hs-identifier hs-var">newFlag</span></a></span><span>
+</span><a href="#local-6989586621679667964"><span class="hs-identifier hs-var">notifyListeners</span></a></span><span> </span><span class="annot"><span class="annottext">TestData'
+</span><a href="#local-6989586621679667974"><span class="hs-identifier hs-var">td</span></a></span><span> </span><span class="annot"><span class="annottext">Flag
+</span><a href="#local-6989586621679667968"><span class="hs-identifier hs-var">newFlag</span></a></span><span>
 </span><span id="line-203"></span><span>        </span><span class="annot"><span class="annottext">TestData' -&gt; IO TestData'
 forall (f :: * -&gt; *) a. Applicative f =&gt; a -&gt; f a
 </span><span class="hs-identifier hs-var">pure</span></span><span> </span><span class="annot"><span class="annottext">TestData'
-</span><a href="#local-6989586621679668283"><span class="hs-identifier hs-var">td'</span></a></span><span>
+</span><a href="#local-6989586621679667966"><span class="hs-identifier hs-var">td'</span></a></span><span>
 </span><span id="line-204"></span><span>  </span><span class="hs-keyword">where</span><span>
-</span><span id="line-205"></span><span>    </span><span id="local-6989586621679668281"><span class="annot"><span class="annottext">notifyListeners :: TestData' -&gt; Flag -&gt; IO ()
-</span><a href="#local-6989586621679668281"><span class="hs-identifier hs-var hs-var">notifyListeners</span></a></span></span><span> </span><span id="local-6989586621679668280"><span class="annot"><span class="annottext">td :: TestData'
-</span><a href="#local-6989586621679668280"><span class="hs-identifier hs-var">td</span></a></span></span><span> </span><span id="local-6989586621679668279"><span class="annot"><span class="annottext">newFlag :: Flag
-</span><a href="#local-6989586621679668279"><span class="hs-identifier hs-var">newFlag</span></a></span></span><span> </span><span class="hs-glyph">=</span><span>
+</span><span id="line-205"></span><span>    </span><span id="local-6989586621679667964"><span class="annot"><span class="annottext">notifyListeners :: TestData' -&gt; Flag -&gt; IO ()
+</span><a href="#local-6989586621679667964"><span class="hs-identifier hs-var hs-var">notifyListeners</span></a></span></span><span> </span><span id="local-6989586621679667963"><span class="annot"><span class="annottext">td :: TestData'
+</span><a href="#local-6989586621679667963"><span class="hs-identifier hs-var">td</span></a></span></span><span> </span><span id="local-6989586621679667962"><span class="annot"><span class="annottext">newFlag :: Flag
+</span><a href="#local-6989586621679667962"><span class="hs-identifier hs-var">newFlag</span></a></span></span><span> </span><span class="hs-glyph">=</span><span>
 </span><span id="line-206"></span><span>        </span><span class="annot"><span class="annottext">((Flag -&gt; IO ()) -&gt; IO ()) -&gt; IntMap (Flag -&gt; IO ()) -&gt; IO ()
 forall (t :: * -&gt; *) (f :: * -&gt; *) a b.
 (Foldable t, Applicative f) =&gt;
@@ -413,7 +413,7 @@ forall (t :: * -&gt; *) (f :: * -&gt; *) a b.
 </span><span class="hs-identifier hs-var">traverse_</span></span><span> </span><span class="hs-special">(</span><span class="annot"><span class="annottext">(Flag -&gt; IO ()) -&gt; Flag -&gt; IO ()
 forall a b. (a -&gt; b) -&gt; a -&gt; b
 </span><span class="hs-operator hs-var">$</span></span><span> </span><span class="annot"><span class="annottext">Flag
-</span><a href="#local-6989586621679668279"><span class="hs-identifier hs-var">newFlag</span></a></span><span class="hs-special">)</span><span> </span><span class="hs-special">(</span><span class="annot"><span class="annottext">TestData' -&gt; IntMap (Flag -&gt; IO ())
+</span><a href="#local-6989586621679667962"><span class="hs-identifier hs-var">newFlag</span></a></span><span class="hs-special">)</span><span> </span><span class="hs-special">(</span><span class="annot"><span class="annottext">TestData' -&gt; IntMap (Flag -&gt; IO ())
 </span><a href="LaunchDarkly.Server.Integrations.TestData.html#%24sel%3AdataSourceListeners%3ATestData%27"><span class="hs-identifier hs-var hs-var">dataSourceListeners</span></a></span><span> </span><span class="annot"><span class="annottext">TestData'
-</span><a href="#local-6989586621679668280"><span class="hs-identifier hs-var">td</span></a></span><span class="hs-special">)</span><span>
+</span><a href="#local-6989586621679667963"><span class="hs-identifier hs-var">td</span></a></span><span class="hs-special">)</span><span>
 </span><span id="line-207"></span></pre></body></html>
