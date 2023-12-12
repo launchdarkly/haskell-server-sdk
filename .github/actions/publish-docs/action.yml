@@ -1,0 +1,19 @@
+name: Publish Documentation
+description: 'Publish the documentation to GitHub pages'
+inputs:
+  token:
+    description: 'Token to use for publishing.'
+    required: true
+
+runs:
+  using: composite
+  steps:
+    - name: Setup dist directory
+      shell: bash
+      run: echo "STACK_DIR=$(stack --no-terminal path --dist-dir)" >> $GITHUB_ENV
+
+    - uses: launchdarkly/gh-actions/actions/publish-pages@publish-pages-v1.0.1
+      name: 'Publish to Github pages'
+      with:
+        docs_path: ${{env.STACK_DIR}}/doc/html/launchdarkly-server-sdk/
+        github_token: ${{inputs.token}}

@@ -1,0 +1,22 @@
+name: Publish Package
+description: 'Publish the package to Hackage'
+inputs:
+  token:
+    description: 'Token to use for publishing.'
+    required: true
+  dry_run:
+    description: 'Is this a dry run. If so no package will be published.'
+    required: true
+
+runs:
+  using: composite
+  steps:
+    - name: Setup dist directory
+      shell: bash
+      run: echo "STACK_DIR=$(stack --no-terminal path --dist-dir)" >> $GITHUB_ENV
+
+    - uses: haskell-actions/hackage-publish@v1
+      with:
+        hackageToken: ${{ inputs.token }}
+        packagesPath: ${{ env.STACK_DIR }}
+        publish: ${{ inputs.dry_run == 'false' }}

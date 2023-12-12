@@ -1,0 +1,48 @@
+name: Update generated cabal file
+description: 'Used to update the cabal file after updating package.yaml'
+inputs:
+  branch:
+    description: 'The branch to checkout and push updates to'
+    required: true
+  ghc-version:
+    description: 'The version of GHC to use for cabal cache busting'
+    required: false
+    default: '9.4.7'
+
+runs:
+  using: composite
+  steps:
+    - uses: haskell-actions/setup@v2
+      with:
+        ghc-version: ${{ inputs.ghc-version }}
+
+    - name: Cache ~/.cabal/packages, ~/.cabal/store and dist-newstyle
+      uses: actions/cache@v3
+      with:
+        path: |
+          ~/.cabal/packages
+          ~/.cabal/store
+          dist-newstyle
+        key: ${{ runner.os }}-${{ inputs.ghc-version }}-${{ hashFiles('**/*.cabal', '**/cabal.project', '**/cabal.project.freeze') }}
+        restore-keys: ${{ runner.os }}-${{ inputs.ghc-version }}-
+
+    - uses: actions/checkout@v4
+      with:
+        ref: ${{ inputs.branch }}
+
+    - name: Install hpack
+      shell: bash
+      run: cabal install --global hpack-0.35.1
+
+    - name: Verify the generated .cabal file is up-to-date
+      shell: bash
+      run: |
+        hpack
+
+        if [ $(git status --porcelain | wc -l) -gt 0 ]; then
+          git config --global user.name 'LaunchDarklyReleaseBot'
+          git config --global user.email 'LaunchDarklyReleaseBot@launchdarkly.com'
+          git add *cabal
+          git commit -m 'Updating generated cabal file'
+          git push
+        fi

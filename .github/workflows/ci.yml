@@ -1,0 +1,115 @@
+name: Run CI
+on:
+  push:
+    branches: [ main ]
+    paths-ignore:
+      - '**.md' # Do not need to run CI for markdown changes.
+  pull_request:
+    branches: [ main ]
+    paths-ignore:
+      - '**.md'
+
+jobs:
+  build-linux:
+    runs-on: ubuntu-latest
+
+    strategy:
+      matrix:
+        include:
+          - resolver: lts-18.28
+            ghc-version: 8.10.7
+          - resolver: lts-19.33
+            ghc-version: 9.0.2
+          - resolver: lts-20.11
+            ghc-version: 9.2.5
+
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0 # If you only need the current version keep this.
+
+      - uses: ./.github/actions/setup-cache
+        with:
+          ghc-version: ${{ matrix.ghc-version }}
+
+      - uses: ./.github/actions/ci
+        with:
+          resolver: ${{ matrix.resolver }}
+          ghc-version: ${{ matrix.ghc-version }}
+
+  build-macosx:
+    runs-on: macos-latest
+
+    strategy:
+      matrix:
+        include:
+          - resolver: lts-18.28
+            ghc-version: 8.10.7
+          - resolver: lts-19.33
+            ghc-version: 9.0.2
+          - resolver: lts-20.11
+            ghc-version: 9.2.5
+
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0 # If you only need the current version keep this.
+
+      - name: Install os dependencies
+        run: brew install pcre
+
+      - uses: ./.github/actions/setup-cache
+        with:
+          ghc-version: ${{ matrix.ghc-version }}
+
+      - uses: ./.github/actions/ci
+        with:
+          resolver: ${{ matrix.resolver }}
+          ghc-version: ${{ matrix.ghc-version }}
+
+  quality-checks:
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0 # If you only need the current version keep this.
+
+      - uses: ./.github/actions/setup-cache
+        with:
+          ghc-version: '9.4.7'
+
+      - uses: haskell-actions/setup@v2
+        with:
+          ghc-version: '9.4.7'
+
+      - name: 'Set up HLint'
+        uses: haskell-actions/hlint-setup@v2
+        with:
+          version: 3.5
+
+      - name: 'Run HLint'
+        uses: haskell-actions/hlint-run@v2
+        with:
+          fail-on: warning
+
+      - uses: haskell-actions/run-fourmolu@v9
+        with:
+          version: "0.10.1.0"
+          pattern: |
+            src
+            test
+
+      - name: Install hpack
+        run: cabal install --global hpack-0.35.1
+
+      - name: Verify the generated .cabal file is up-to-date
+        run: |
+          hpack
+          if [ $(git status --porcelain | wc -l) -gt 0 ]; then
+            echo "hpack resulted in modified files. please run hpack locally and commit those changes"
+            echo ""
+            echo "showing the results of `git status`"
+            git status
+            exit -1
+          fi

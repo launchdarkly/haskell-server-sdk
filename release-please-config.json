@@ -1,0 +1,15 @@
+{
+  "packages": {
+    ".": {
+      "release-type": "simple",
+      "bump-minor-pre-major": true,
+      "versioning": "default",
+      "include-component-in-tag": false,
+      "include-v-in-tag": false,
+      "extra-files": [
+        "package.yaml",
+        "src/LaunchDarkly/Server/Client/Internal.hs",
+      ]
+    }
+  }
+}
