@@ -18,10 +18,6 @@ runs:
         ghc-version: ${{ inputs.ghc-version }}
         enable-stack: true
 
-    # - name: Build library
-    #   shell: bash
-    #   run: stack --no-terminal --resolver=${{ inputs.resolver }} setup
-
     - name: Build library
       shell: bash
       run: stack --no-terminal --resolver=${{ inputs.resolver }} build
