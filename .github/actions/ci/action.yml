@@ -1,0 +1,31 @@
+name: CI Workflow
+description: 'Shared CI workflow.'
+inputs:
+  resolver:
+    description: 'Which resolver to use when building the package'
+    required: false
+    default: lts-18.28
+  ghc-version:
+    description: 'Which ghc version to use when building the package'
+    required: false
+    default: 8.10.7
+
+runs:
+  using: composite
+  steps:
+    - uses: haskell-actions/setup@v2
+      with:
+        ghc-version: ${{ inputs.ghc-version }}
+        enable-stack: true
+
+    - name: Build library
+      shell: bash
+      run: stack --no-terminal --resolver=${{ inputs.resolver }} build
+
+    - name: Run tests
+      shell: bash
+      run: stack --no-terminal --resolver=${{ inputs.resolver }} test
+
+    - name: Run contract tests
+      shell: bash
+      run: STACKOPTS='--no-terminal --resolver=${{ inputs.resolver }}' make contract-tests
