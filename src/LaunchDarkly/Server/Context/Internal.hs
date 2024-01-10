@@ -32,6 +32,7 @@ module LaunchDarkly.Server.Context.Internal
     , getCanonicalKey
     , getKinds
     , redactContext
+    , redactContextRedactAnonymous
     )
 where
 
@@ -400,14 +401,24 @@ parseMultiContext = withObject "MultiContext" $ \o -> do
 
 -- Internally used function which performs context attribute redaction.
 redactContext :: Config -> Context -> Value
-redactContext _ (Invalid _) = Null
-redactContext config (Multi MultiContext {contexts}) =
-    mapValues (\context -> redactSingleContext False context (getAllPrivateAttributes config context)) contexts
+redactContext config context = internalRedactContext config context False
+
+-- Internally used function which performs context attribute redaction.
+--
+-- If a provided context is anonymous, all attributes for that context will be
+-- redacted.
+redactContextRedactAnonymous :: Config -> Context -> Value
+redactContextRedactAnonymous config context = internalRedactContext config context True
+
+internalRedactContext :: Config -> Context -> Bool -> Value
+internalRedactContext _ (Invalid _) _ = Null
+internalRedactContext config (Multi MultiContext {contexts}) redactAnonymous =
+    mapValues (\context -> redactSingleContext False context (getAllPrivateAttributes config context redactAnonymous)) contexts
         & insertKey "kind" "multi"
         & Object
         & toJSON
-redactContext config (Single context) =
-    toJSON $ redactSingleContext True context (getAllPrivateAttributes config context)
+internalRedactContext config (Single context) redactAnonymous =
+    toJSON $ redactSingleContext True context (getAllPrivateAttributes config context redactAnonymous)
 
 -- Apply redaction requirements to a SingleContext type.
 redactSingleContext :: Bool -> SingleContext -> Set Reference -> Value
@@ -443,12 +454,15 @@ getAllTopLevelRedactableNames SingleContext {name = Just _, attributes = Just at
 -- Internally used convenience function to return a set of references which
 -- would apply all redaction rules.
 --
--- If allAttributesPrivate is True in the config, this will return a set which
--- covers the entire context.
-getAllPrivateAttributes :: Config -> SingleContext -> Set Reference
-getAllPrivateAttributes (getField @"allAttributesPrivate" -> True) context = getAllTopLevelRedactableNames context
-getAllPrivateAttributes config SingleContext {privateAttributes = Nothing} = getField @"privateAttributeNames" config
-getAllPrivateAttributes config SingleContext {privateAttributes = Just attrs} = S.union (getField @"privateAttributeNames" config) attrs
+-- This will return a set which covers the entire context if:
+--
+-- 1. The allAttributesPrivate config value is set to True, or
+-- 2. Anonymous attribute redaction is requested and the context is anonymous.
+getAllPrivateAttributes :: Config -> SingleContext -> Bool -> Set Reference
+getAllPrivateAttributes (getField @"allAttributesPrivate" -> True) context _ = getAllTopLevelRedactableNames context
+getAllPrivateAttributes _ context@(SingleContext { anonymous = True }) True = getAllTopLevelRedactableNames context
+getAllPrivateAttributes config SingleContext {privateAttributes = Nothing} _ = getField @"privateAttributeNames" config
+getAllPrivateAttributes config SingleContext {privateAttributes = Just attrs} _ = S.union (getField @"privateAttributeNames" config) attrs
 
 -- Internally used storage type for returning both the resulting redacted
 -- context and the list of any attributes which were redacted.

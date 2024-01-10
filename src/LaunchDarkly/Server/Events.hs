@@ -19,7 +19,7 @@ import GHC.Natural (Natural, naturalFromInteger)
 import LaunchDarkly.AesonCompat (KeyMap, insertKey, keyMapUnion, lookupKey, objectValues)
 import LaunchDarkly.Server.Config.Internal (Config, shouldSendEvents)
 import LaunchDarkly.Server.Context (Context)
-import LaunchDarkly.Server.Context.Internal (getCanonicalKey, getKinds, redactContext)
+import LaunchDarkly.Server.Context.Internal (getCanonicalKey, getKinds, redactContext, redactContextRedactAnonymous)
 import LaunchDarkly.Server.Details (EvaluationReason (..))
 import LaunchDarkly.Server.Features (Flag)
 
@@ -188,11 +188,19 @@ instance EventKind DebugEvent where
 instance ToJSON DebugEvent where
     toJSON (DebugEvent x) = toJSON x
 
+makeDebugEvent :: Config -> Context -> Bool -> EvalEvent -> DebugEvent
+makeDebugEvent config context includeReason event =
+    DebugEvent $ makeFeatureEventWithContextPayload (redactContext config context) includeReason event
+
 makeFeatureEvent :: Config -> Context -> Bool -> EvalEvent -> FeatureEvent
 makeFeatureEvent config context includeReason event =
+    makeFeatureEventWithContextPayload (redactContextRedactAnonymous config context) includeReason event
+
+makeFeatureEventWithContextPayload :: Value -> Bool -> EvalEvent -> FeatureEvent
+makeFeatureEventWithContextPayload context includeReason event =
     FeatureEvent
         { key = getField @"key" event
-        , context = redactContext config context
+        , context = context
         , value = getField @"value" event
         , defaultValue = getField @"defaultValue" event
         , version = getField @"version" event
@@ -356,8 +364,7 @@ processEvalEvent now config state context includeReason unknown event = do
     when (now < debugEventsUntilDate && lastKnownServerTime < debugEventsUntilDate) $
         queueEvent config state $
             EventTypeDebug $
-                BaseEvent now $
-                    DebugEvent featureEvent
+                BaseEvent now $ makeDebugEvent config context includeReason event
     runSummary now state event unknown
     maybeIndexContext now config context state
 

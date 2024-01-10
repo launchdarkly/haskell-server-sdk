@@ -12,7 +12,7 @@ import qualified Data.Vector as V
 import LaunchDarkly.AesonCompat (fromList, lookupKey)
 import LaunchDarkly.Server.Config (configSetAllAttributesPrivate, makeConfig)
 import LaunchDarkly.Server.Context
-import LaunchDarkly.Server.Context.Internal (redactContext)
+import LaunchDarkly.Server.Context.Internal (redactContext, redactContextRedactAnonymous, SingleContext (anonymous))
 import qualified LaunchDarkly.Server.Reference as R
 
 confirmInvalidContext :: Context -> Text -> Assertion
@@ -286,6 +286,7 @@ canRedactAllAttributesCorrectly = TestCase $ do
     assertEqual "" expectedRedacted (fromJust $ lookupKey "redactedAttributes" meta)
     assertEqual "" "user" (fromJust $ lookupKey "kind" decodedIntoMap)
     assertEqual "" "user-key" (fromJust $ lookupKey "key" decodedIntoMap)
+    assertEqual "" Nothing (lookupKey "name" decodedIntoMap)
     assertEqual "" Nothing (lookupKey "firstName" decodedIntoMap)
     assertEqual "" Nothing (lookupKey "lastName" decodedIntoMap)
     assertEqual "" Nothing (lookupKey "hobbies" decodedIntoMap)
@@ -310,6 +311,92 @@ canRedactAllAttributesCorrectly = TestCase $ do
     expectedRedacted = Array $ V.fromList ["address", "firstName", "hobbies", "lastName", "name"]
     expectedAddress = Object $ fromList [("state", "IL")]
 
+canRedactSingleKindAnonymousContextAttributesCorrectly :: Test
+canRedactSingleKindAnonymousContextAttributesCorrectly = TestCase $ do
+    assertEqual "" expectedRedacted (fromJust $ lookupKey "redactedAttributes" meta)
+    assertEqual "" "user" (fromJust $ lookupKey "kind" decodedIntoMap)
+    assertEqual "" "user-key" (fromJust $ lookupKey "key" decodedIntoMap)
+    assertEqual "" (Bool True) (fromJust $ lookupKey "anonymous" decodedIntoMap)
+    assertEqual "" Nothing (lookupKey "name" decodedIntoMap)
+    assertEqual "" Nothing (lookupKey "firstName" decodedIntoMap)
+    assertEqual "" Nothing (lookupKey "lastName" decodedIntoMap)
+    assertEqual "" Nothing (lookupKey "hobbies" decodedIntoMap)
+    assertEqual "" Nothing (lookupKey "address" decodedIntoMap)
+  where
+    config = makeConfig "sdk-key"
+
+    address = Object $ fromList [("city", "Chicago"), ("state", "IL")]
+
+    context =
+        makeContext "user-key" "user"
+            & withAnonymous True
+            & withAttribute "name" "Sandy"
+            & withAttribute "firstName" "Sandy"
+            & withAttribute "lastName" "Beaches"
+            & withAttribute "address" address
+            & withAttribute "hobbies" (Array $ V.fromList ["coding", "reading"])
+
+    jsonByteString = encode $ redactContextRedactAnonymous config context
+    decodedAsValue = fromJust $ decode jsonByteString :: Value
+    decodedIntoMap = case decodedAsValue of (Object o) -> o; _ -> error "expected object"
+    meta = case lookupKey "_meta" decodedIntoMap of (Just (Object o)) -> o; _ -> error "expected object"
+    expectedRedacted = Array $ V.fromList ["address", "firstName", "hobbies", "lastName", "name"]
+
+canRedactMultiKindAnonymousContextAttributesCorrectly :: Test
+canRedactMultiKindAnonymousContextAttributesCorrectly = TestCase $ do
+    assertEqual "" expectedRedacted (fromJust $ lookupKey "redactedAttributes" userMeta)
+
+    assertEqual "" "user-key" (fromJust $ lookupKey "key" userObj)
+    assertEqual "" (Bool True) (fromJust $ lookupKey "anonymous" userObj)
+    assertEqual "" Nothing (lookupKey "name" userObj)
+    assertEqual "" Nothing (lookupKey "firstName" userObj)
+    assertEqual "" Nothing (lookupKey "lastName" userObj)
+    assertEqual "" Nothing (lookupKey "hobbies" userObj)
+    assertEqual "" Nothing (lookupKey "address" userObj)
+
+    assertEqual "" "org-key" (fromJust $ lookupKey "key" orgObj)
+    assertEqual "" Nothing (lookupKey "anonymous" orgObj)
+    assertEqual "" "LaunchDarkly" (fromJust $ lookupKey "name" orgObj)
+    assertEqual "" "Launch" (fromJust $ lookupKey "firstName" orgObj)
+    assertEqual "" "Darkly" (fromJust $ lookupKey "lastName" orgObj)
+    assertEqual "" hobbies (fromJust $ lookupKey "hobbies" orgObj)
+    assertEqual "" address (fromJust $ lookupKey "address" orgObj)
+  where
+    config = makeConfig "sdk-key"
+
+    address = Object $ fromList [("city", "Chicago"), ("state", "IL")]
+    hobbies = Array $ V.fromList ["coding", "reading"]
+
+    userContext =
+        makeContext "user-key" "user"
+            & withAnonymous True
+            & withAttribute "name" "Sandy"
+            & withAttribute "firstName" "Sandy"
+            & withAttribute "lastName" "Beaches"
+            & withAttribute "address" address
+            & withAttribute "hobbies" hobbies
+
+    orgContext =
+        makeContext "org-key" "org"
+            & withAnonymous False
+            & withAttribute "name" "LaunchDarkly"
+            & withAttribute "firstName" "Launch"
+            & withAttribute "lastName" "Darkly"
+            & withAttribute "address" address
+            & withAttribute "hobbies" hobbies
+
+    multiContext = makeMultiContext [userContext, orgContext]
+
+    jsonByteString = encode $ redactContextRedactAnonymous config multiContext
+    decodedAsValue = fromJust $ decode jsonByteString :: Value
+    decodedIntoMap = case decodedAsValue of (Object o) -> o; _decodeFailure -> error "expected object"
+
+    userObj = case lookupKey "user" decodedIntoMap of (Just (Object o)) -> o; _decodeFailure -> error "expected object"
+    userMeta = case lookupKey "_meta" userObj of (Just (Object o)) -> o; _ -> error "expected object"
+    expectedRedacted = Array $ V.fromList ["address", "firstName", "hobbies", "lastName", "name"]
+
+    orgObj = case lookupKey "org" decodedIntoMap of (Just (Object o)) -> o; _decodeFailure -> error "expected object"
+
 allTests :: Test
 allTests =
     TestList
@@ -330,4 +417,6 @@ allTests =
         , canParseMultiKindFormat
         , canRedactAttributesCorrectly
         , canRedactAllAttributesCorrectly
+        , canRedactSingleKindAnonymousContextAttributesCorrectly
+        , canRedactMultiKindAnonymousContextAttributesCorrectly
         ]
