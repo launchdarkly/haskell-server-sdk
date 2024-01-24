@@ -6,7 +6,7 @@ import Control.Monad (when)
 import Data.Aeson (ToJSON, Value (..), object, toJSON, (.=))
 import Data.Cache.LRU (LRU, newLRU)
 import qualified Data.Cache.LRU as LRU
-import Data.Generics.Product (HasField', field, getField, setField)
+import Data.Generics.Product (field, getField)
 import qualified Data.HashSet as HS
 import Data.Maybe (fromMaybe)
 import Data.Text (Text)
@@ -19,7 +19,7 @@ import GHC.Natural (Natural, naturalFromInteger)
 import LaunchDarkly.AesonCompat (KeyMap, insertKey, keyMapUnion, lookupKey, objectValues)
 import LaunchDarkly.Server.Config.Internal (Config, shouldSendEvents)
 import LaunchDarkly.Server.Context (Context)
-import LaunchDarkly.Server.Context.Internal (getCanonicalKey, getKeys, getKinds, redactContext)
+import LaunchDarkly.Server.Context.Internal (getCanonicalKey, getKinds, redactContext)
 import LaunchDarkly.Server.Details (EvaluationReason (..))
 import LaunchDarkly.Server.Features (Flag)
 
@@ -152,8 +152,7 @@ instance EventKind IndexEvent where
 
 data FeatureEvent = FeatureEvent
     { key :: !Text
-    , context :: !(Maybe Value)
-    , contextKeys :: !(Maybe (KeyMap Text))
+    , context :: !Value
     , value :: !Value
     , defaultValue :: !(Maybe Value)
     , version :: !(Maybe Natural)
@@ -170,7 +169,6 @@ instance ToJSON FeatureEvent where
                 ((/=) Null . snd)
                 [ ("key", toJSON $ getField @"key" event)
                 , ("context", toJSON $ getField @"context" event)
-                , ("contextKeys", toJSON $ getField @"contextKeys" event)
                 , ("value", toJSON $ getField @"value" event)
                 , ("default", toJSON $ getField @"defaultValue" event)
                 , ("version", toJSON $ getField @"version" event)
@@ -190,30 +188,21 @@ instance EventKind DebugEvent where
 instance ToJSON DebugEvent where
     toJSON (DebugEvent x) = toJSON x
 
-addContextToEvent :: (HasField' "context" r (Maybe Value)) => Config -> Context -> r -> r
-addContextToEvent config context event = setField @"context" (Just $ redactContext config context) event
-
-contextOrContextKeys :: Bool -> Config -> Context -> FeatureEvent -> FeatureEvent
-contextOrContextKeys True config context event = addContextToEvent config context event & setField @"contextKeys" Nothing
-contextOrContextKeys False _ context event = event {contextKeys = Just $ getKeys context, context = Nothing}
-
 makeFeatureEvent :: Config -> Context -> Bool -> EvalEvent -> FeatureEvent
 makeFeatureEvent config context includeReason event =
-    contextOrContextKeys False config context $
-        FeatureEvent
-            { key = getField @"key" event
-            , context = Nothing
-            , contextKeys = Nothing
-            , value = getField @"value" event
-            , defaultValue = getField @"defaultValue" event
-            , version = getField @"version" event
-            , prereqOf = getField @"prereqOf" event
-            , variation = getField @"variation" event
-            , reason =
-                if includeReason || getField @"forceIncludeReason" event
-                    then pure $ getField @"reason" event
-                    else Nothing
-            }
+    FeatureEvent
+        { key = getField @"key" event
+        , context = redactContext config context
+        , value = getField @"value" event
+        , defaultValue = getField @"defaultValue" event
+        , version = getField @"version" event
+        , prereqOf = getField @"prereqOf" event
+        , variation = getField @"variation" event
+        , reason =
+            if includeReason || getField @"forceIncludeReason" event
+                then pure $ getField @"reason" event
+                else Nothing
+        }
 
 data CustomEvent = CustomEvent
     { key :: !Text
@@ -368,8 +357,7 @@ processEvalEvent now config state context includeReason unknown event = do
         queueEvent config state $
             EventTypeDebug $
                 BaseEvent now $
-                    DebugEvent $
-                        contextOrContextKeys True config context featureEvent
+                    DebugEvent featureEvent
     runSummary now state event unknown
     maybeIndexContext now config context state
 
