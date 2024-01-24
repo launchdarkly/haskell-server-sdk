@@ -46,6 +46,7 @@ getAppStatus = json AppStatus
         , "context-type"
         , "secure-mode-hash"
         , "tags"
+        , "inline-context"
         ]
     }
 
