@@ -47,6 +47,7 @@ getAppStatus = json AppStatus
         , "secure-mode-hash"
         , "tags"
         , "inline-context"
+        , "anonymous-redaction"
         ]
     }
 
