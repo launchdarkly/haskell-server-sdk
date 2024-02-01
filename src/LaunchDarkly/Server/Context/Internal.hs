@@ -46,7 +46,7 @@ import Data.Set (Set)
 import qualified Data.Set as S
 import Data.Text (Text, intercalate, replace, unpack)
 import GHC.Generics (Generic)
-import qualified GHC.IsList as L (fromList)
+import qualified GHC.Exts as Exts (fromList)
 import LaunchDarkly.AesonCompat (KeyMap, deleteKey, emptyObject, foldrWithKey, fromList, insertKey, keyMapUnion, lookupKey, mapValues, objectKeys, singleton, toList)
 import LaunchDarkly.Server.Config (Config)
 import LaunchDarkly.Server.Reference (Reference)

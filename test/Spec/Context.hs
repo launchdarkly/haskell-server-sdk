@@ -8,7 +8,7 @@ import Data.Function ((&))
 import Data.Maybe (fromJust)
 import qualified Data.Set as S
 import Data.Text (Text)
-import GHC.IsList (fromList)
+import GHC.Exts (fromList)
 import LaunchDarkly.AesonCompat (lookupKey)
 import LaunchDarkly.Server.Config (configSetAllAttributesPrivate, makeConfig)
 import LaunchDarkly.Server.Context
