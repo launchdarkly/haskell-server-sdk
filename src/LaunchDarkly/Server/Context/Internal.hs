@@ -339,7 +339,7 @@ getMapOfRequiredProperties includeKind SingleContext {key, kind, anonymous, priv
             ( "_meta"
             , case privateAttributes of
                 Nothing -> Null
-                Just attrs -> toJSON $ singleton "privateAttributes" (Array $ L.fromList $ map toJSON $ S.elems attrs)
+                Just attrs -> toJSON $ singleton "privateAttributes" (Array $ Exts.fromList $ map toJSON $ S.elems attrs)
             )
         ]
 
@@ -413,7 +413,7 @@ redactContext config (Single context) =
 redactSingleContext :: Bool -> SingleContext -> Set Reference -> Value
 redactSingleContext includeKind context privateAttributes =
     let State {context = redactedContext, redacted} = foldr applyRedaction State {context = fromList $ getMapOfRedactableProperties context, redacted = []} privateAttributes
-        redactedValues = Array $ L.fromList $ map String redacted
+        redactedValues = Array $ Exts.fromList $ map String redacted
         required = fromList $ getMapOfRequiredProperties includeKind context
      in case redacted of
             [] -> Object $ keyMapUnion redactedContext required
