@@ -2,6 +2,13 @@
 
 All notable changes to the LaunchDarkly Haskell Server-side SDK will be documented in this file. This project adheres to [Semantic Versioning](http://semver.org).
 
+## [4.0.2](https://github.com/launchdarkly/haskell-server-sdk/compare/4.0.1...4.0.2) (2024-02-01)
+
+
+### Bug Fixes
+
+* **deps:** Drop explicit dependency on vector ([#69](https://github.com/launchdarkly/haskell-server-sdk/issues/69)) ([3bb826d](https://github.com/launchdarkly/haskell-server-sdk/commit/3bb826da77f34983abebe84612dfa9d7f8c346c9))
+
 ## [4.0.1] - 2023-10-26
 ### Removed:
 - Eliminated unnecessary and noisy log message
