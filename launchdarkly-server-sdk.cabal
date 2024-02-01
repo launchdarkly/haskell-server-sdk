@@ -124,7 +124,6 @@ library
     , time >=1.9.3 && <1.13
     , unordered-containers >=0.2.10.0 && <0.3
     , uuid >=1.3.13 && <1.4
-    , vector >=0.12.1.2 && <0.13
     , yaml >=0.11.5.0 && <0.12
   default-language: Haskell2010
 
@@ -235,6 +234,5 @@ test-suite haskell-server-sdk-test
     , time >=1.9.3 && <1.13
     , unordered-containers >=0.2.10.0 && <0.3
     , uuid >=1.3.13 && <1.4
-    , vector >=0.12.1.2 && <0.13
     , yaml >=0.11.5.0 && <0.12
   default-language: Haskell2010

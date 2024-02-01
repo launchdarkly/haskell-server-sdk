@@ -8,8 +8,8 @@ import Data.Function ((&))
 import Data.Maybe (fromJust)
 import qualified Data.Set as S
 import Data.Text (Text)
-import qualified Data.Vector as V
-import LaunchDarkly.AesonCompat (fromList, lookupKey)
+import GHC.Exts (fromList)
+import LaunchDarkly.AesonCompat (lookupKey)
 import LaunchDarkly.Server.Config (configSetAllAttributesPrivate, makeConfig)
 import LaunchDarkly.Server.Context
 import LaunchDarkly.Server.Context.Internal (redactContext)
@@ -112,7 +112,7 @@ singleContextSupportsValueRetrieval =
                 makeContext "user-key" "user"
                     & withName "Example"
                     & withAnonymous False
-                    & withAttribute "groups" (Array $ V.fromList ["beta_testers"])
+                    & withAttribute "groups" (Array $ fromList ["beta_testers"])
                     & withAttribute "address" address
                     & withAttribute "preferences" preferences
                     & withAttribute "complex/and-weird~attribute" "nailed it"
@@ -133,7 +133,7 @@ singleContextSupportsValueRetrieval =
                 assertEqual "" (Bool False) $ getValueForReference (R.makeReference "anonymous") user
                 assertEqual "" "Chicago" $ getValueForReference (R.makeReference "/address/city") user
                 assertEqual "" "baseball" $ getValueForReference (R.makeReference "/preferences/favorites/sport") user
-                assertEqual "" (Array $ V.fromList ["beta_testers"]) $ getValueForReference (R.makeReference "/groups") user
+                assertEqual "" (Array $ fromList ["beta_testers"]) $ getValueForReference (R.makeReference "/groups") user
                 assertEqual "" Null $ getValueForReference (R.makeReference "/groups/0") user
                 assertEqual "" "nailed it" $ getValueForReference (R.makeReference "/complex~1and-weird~0attribute") user
             )
@@ -176,7 +176,7 @@ cannotUseWithAttributeToSetRestrictedAttributes =
                 setAndVerifyAttribute "anonymous" (Bool False) (Bool False) user
                 setAndVerifyAttribute "anonymous" "false" (Bool True) user
                 setAndVerifyAttribute "_meta" "anything" Null user
-                setAndVerifyAttribute "privateAttributeNames" (Array $ V.fromList ["name"]) Null user
+                setAndVerifyAttribute "privateAttributeNames" (Array $ fromList ["name"]) Null user
 
                 setAndVerifyAttribute "kind" "org" "multi" multi
                 setAndVerifyAttribute "key" "new-key" Null multi
@@ -185,7 +185,7 @@ cannotUseWithAttributeToSetRestrictedAttributes =
                 setAndVerifyAttribute "anonymous" (Bool False) Null multi
                 setAndVerifyAttribute "anonymous" "false" Null multi
                 setAndVerifyAttribute "_meta" "anything" Null multi
-                setAndVerifyAttribute "privateAttributeNames" (Array $ V.fromList ["name"]) Null multi
+                setAndVerifyAttribute "privateAttributeNames" (Array $ fromList ["name"]) Null multi
 
                 setAndVerifyAttribute "kind" "org" Null invalid
                 setAndVerifyAttribute "key" "new-key" Null invalid
@@ -194,7 +194,7 @@ cannotUseWithAttributeToSetRestrictedAttributes =
                 setAndVerifyAttribute "anonymous" (Bool False) Null invalid
                 setAndVerifyAttribute "anonymous" "false" Null invalid
                 setAndVerifyAttribute "_meta" "anything" Null invalid
-                setAndVerifyAttribute "privateAttributeNames" (Array $ V.fromList ["name"]) Null invalid
+                setAndVerifyAttribute "privateAttributeNames" (Array $ fromList ["name"]) Null invalid
             )
 
 canParseFromLegacyUserFormat :: Test
@@ -263,7 +263,7 @@ canRedactAttributesCorrectly = TestCase $ do
     config = makeConfig "sdk-key"
 
     address = Object $ fromList [("city", "Chicago"), ("state", "IL")]
-    hobbies = (Array $ V.fromList ["coding", "reading"])
+    hobbies = (Array $ fromList ["coding", "reading"])
 
     context =
         makeContext "user-key" "user"
@@ -278,7 +278,7 @@ canRedactAttributesCorrectly = TestCase $ do
     decodedAsValue = fromJust $ decode jsonByteString :: Value
     decodedIntoMap = case decodedAsValue of (Object o) -> o; _ -> error "expected object"
     meta = case lookupKey "_meta" decodedIntoMap of (Just (Object o)) -> o; _ -> error "expected object"
-    expectedRedacted = Array $ V.fromList ["/address/city", "name"]
+    expectedRedacted = Array $ fromList ["/address/city", "name"]
     expectedAddress = Object $ fromList [("state", "IL")]
 
 canRedactAllAttributesCorrectly :: Test
@@ -301,13 +301,13 @@ canRedactAllAttributesCorrectly = TestCase $ do
             & withAttribute "firstName" "Sandy"
             & withAttribute "lastName" "Beaches"
             & withAttribute "address" address
-            & withAttribute "hobbies" (Array $ V.fromList ["coding", "reading"])
+            & withAttribute "hobbies" (Array $ fromList ["coding", "reading"])
 
     jsonByteString = encode $ redactContext config context
     decodedAsValue = fromJust $ decode jsonByteString :: Value
     decodedIntoMap = case decodedAsValue of (Object o) -> o; _ -> error "expected object"
     meta = case lookupKey "_meta" decodedIntoMap of (Just (Object o)) -> o; _ -> error "expected object"
-    expectedRedacted = Array $ V.fromList ["address", "firstName", "hobbies", "lastName", "name"]
+    expectedRedacted = Array $ fromList ["address", "firstName", "hobbies", "lastName", "name"]
     expectedAddress = Object $ fromList [("state", "IL")]
 
 allTests :: Test

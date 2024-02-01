@@ -22,7 +22,6 @@ import Data.Scientific (Scientific, floatingOrInteger)
 import Data.Text (Text)
 import qualified Data.Text as T
 import Data.Text.Encoding (encodeUtf8)
-import qualified Data.Vector as V
 import Data.Word (Word8)
 import GHC.Natural (Natural)
 
@@ -334,7 +333,7 @@ clauseMatchesContextNoSegments clause context
         Nothing -> Right False
         Just ctx -> case getValueForReference (getField @"attribute" clause) ctx of
             Null -> Right False
-            Array a -> Right $ maybeNegate clause $ V.any (matchAnyClauseValue clause) a
+            Array a -> Right $ maybeNegate clause $ any (matchAnyClauseValue clause) a
             x -> Right $ maybeNegate clause $ matchAnyClauseValue clause x
 
 clauseMatchesContext :: (Monad m, LaunchDarklyStoreRead store m) => store -> Clause -> Context -> HS.HashSet Text -> m (Either Text Bool)

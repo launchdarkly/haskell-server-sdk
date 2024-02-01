@@ -45,7 +45,7 @@ import Data.Maybe (fromMaybe, mapMaybe)
 import Data.Set (Set)
 import qualified Data.Set as S
 import Data.Text (Text, intercalate, replace, unpack)
-import qualified Data.Vector as V
+import qualified GHC.Exts as Exts (fromList)
 import GHC.Generics (Generic)
 import LaunchDarkly.AesonCompat (KeyMap, deleteKey, emptyObject, foldrWithKey, fromList, insertKey, keyMapUnion, lookupKey, mapValues, objectKeys, singleton, toList)
 import LaunchDarkly.Server.Config (Config)
@@ -339,7 +339,7 @@ getMapOfRequiredProperties includeKind SingleContext {key, kind, anonymous, priv
             ( "_meta"
             , case privateAttributes of
                 Nothing -> Null
-                Just attrs -> toJSON $ singleton "privateAttributes" (Array $ V.fromList $ map toJSON $ S.elems attrs)
+                Just attrs -> toJSON $ singleton "privateAttributes" (Array $ Exts.fromList $ map toJSON $ S.elems attrs)
             )
         ]
 
@@ -413,7 +413,7 @@ redactContext config (Single context) =
 redactSingleContext :: Bool -> SingleContext -> Set Reference -> Value
 redactSingleContext includeKind context privateAttributes =
     let State {context = redactedContext, redacted} = foldr applyRedaction State {context = fromList $ getMapOfRedactableProperties context, redacted = []} privateAttributes
-        redactedValues = Array $ V.fromList $ map String redacted
+        redactedValues = Array $ Exts.fromList $ map String redacted
         required = fromList $ getMapOfRequiredProperties includeKind context
      in case redacted of
             [] -> Object $ keyMapUnion redactedContext required
