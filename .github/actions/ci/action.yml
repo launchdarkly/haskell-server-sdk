@@ -22,6 +22,10 @@ runs:
       shell: bash
       run: stack --no-terminal --resolver=${{ inputs.resolver }} build
 
+    - name: Build sdist distribution
+      shell: bash
+      run: stack --no-terminal --resolver=${{ inputs.resolver }} sdist
+
     - name: Run tests
       shell: bash
       run: stack --no-terminal --resolver=${{ inputs.resolver }} test

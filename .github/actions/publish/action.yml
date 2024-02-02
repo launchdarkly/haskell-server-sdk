@@ -1,6 +1,10 @@
 name: Publish Package
 description: 'Publish the package to Hackage'
 inputs:
+  resolver:
+    description: 'Which resolver to use when building the package'
+    required: false
+    default: lts-18.28
   token:
     description: 'Token to use for publishing.'
     required: true
@@ -13,7 +17,7 @@ runs:
   steps:
     - name: Setup dist directory
       shell: bash
-      run: echo "STACK_DIR=$(stack --no-terminal path --dist-dir)" >> $GITHUB_ENV
+      run: echo "STACK_DIR=$(stack --no-terminal path --dist-dir --resolver=${{ inputs.resolver }})" >> $GITHUB_ENV
 
     - uses: haskell-actions/hackage-publish@v1
       with:

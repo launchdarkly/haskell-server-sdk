@@ -57,6 +57,7 @@ jobs:
         if: ${{ steps.release.outputs.releases_created }}
         with:
           token: ${{ env.HACKAGE_TOKEN }}
+          dry_run: 'false'
 
       - uses: ./.github/actions/publish-docs
         if: ${{ steps.release.outputs.releases_created }}
