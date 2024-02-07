@@ -2,6 +2,13 @@
 
 All notable changes to the LaunchDarkly Haskell Server-side SDK will be documented in this file. This project adheres to [Semantic Versioning](http://semver.org).
 
+## [4.0.3](https://github.com/launchdarkly/haskell-server-sdk/compare/4.0.2...4.0.3) (2024-02-07)
+
+
+### Bug Fixes
+
+* Bump aeson bounds to accept aeson-2.2.1.0 ([#74](https://github.com/launchdarkly/haskell-server-sdk/issues/74)) ([faee60e](https://github.com/launchdarkly/haskell-server-sdk/commit/faee60ed4fa118cefaefbbb754835c34af14fa2b))
+
 ## [4.0.2](https://github.com/launchdarkly/haskell-server-sdk/compare/4.0.1...4.0.2) (2024-02-01)
 
 
