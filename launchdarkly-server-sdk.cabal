@@ -94,7 +94,7 @@ library
       TypeOperators
   ghc-options: -fwarn-unused-imports -Wall -Wno-name-shadowing
   build-depends:
-      aeson >=1.4.7.1 && <1.6 || >=2.0.1.0 && <2.2
+      aeson >=1.4.7.1 && <1.6 || >=2.0.1.0 && <2.3
     , attoparsec >=0.13.2.4 && <0.15
     , base >=4.13 && <5
     , base16-bytestring >=0.1.1.7 && <1.1
