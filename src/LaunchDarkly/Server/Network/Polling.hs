@@ -3,7 +3,7 @@ module LaunchDarkly.Server.Network.Polling (pollingThread) where
 import Control.Concurrent (threadDelay)
 import Control.Monad.Catch (MonadMask, MonadThrow)
 import Control.Monad.IO.Class (MonadIO, liftIO)
-import Control.Monad.Logger (MonadLogger, logError, logInfo)
+import Control.Monad.Logger (MonadLogger, logDebug, logError)
 import Data.Aeson (FromJSON (..), eitherDecode)
 import Data.Generics.Product (getField)
 import Data.Text (Text)
@@ -68,7 +68,7 @@ pollingThread baseURI pollingIntervalSeconds clientContext dataSourceUpdates = d
   where
     poll :: (MonadIO m, MonadLogger m, MonadMask m) => Request -> Int -> m ()
     poll req pollingMicroseconds = do
-        $(logInfo) "starting poll"
+        $(logDebug) "starting poll"
         processPoll (tlsManager $ httpConfiguration clientContext) dataSourceUpdates req >>= \case
             True -> do
                 liftIO $ threadDelay pollingMicroseconds

@@ -9,7 +9,7 @@ import Control.Exception (throwIO)
 import Control.Monad (mzero, void)
 import Control.Monad.Catch (Exception, MonadCatch, MonadMask, try)
 import Control.Monad.IO.Class (MonadIO, liftIO)
-import Control.Monad.Logger (MonadLogger, logDebug, logError, logInfo, logWarn)
+import Control.Monad.Logger (MonadLogger, logDebug, logError, logWarn)
 import Control.Monad.Loops (iterateUntilM)
 import Data.Aeson (FromJSON, Result (..), eitherDecode, fromJSON, parseJSON, withObject, (.!=), (.:), (.:?))
 import Data.Attoparsec.Text as P hiding (Result, try)
@@ -106,7 +106,7 @@ parseEvent = do
 processPut :: (MonadIO m, MonadLogger m) => DataSourceUpdates -> L.ByteString -> m Bool
 processPut dataSourceUpdates value = case eitherDecode value of
     Right (PathData _ (PutBody flags segments)) -> do
-        $(logInfo) "initializing dataSourceUpdates with put"
+        $(logDebug) "initializing dataSourceUpdates with put"
         liftIO (dataSourceUpdatesInit dataSourceUpdates flags segments) >>= \case
             Left err -> do
                 $(logError) $ T.append "dataSourceUpdates failed put: " err
@@ -133,7 +133,7 @@ processPatch dataSourceUpdates value = case eitherDecode value of
         $(logError) $ T.concat ["failed to parse patch ", name, ": ", T.pack err]
         pure False
     insPatch name path insert (Success item) = do
-        $(logInfo) $ T.concat ["patching ", name, " with path: ", path]
+        $(logDebug) $ T.concat ["patching ", name, " with path: ", path]
         status <- liftIO $ insert dataSourceUpdates item
         either
             ( \err -> do
@@ -157,7 +157,7 @@ processDelete dataSourceUpdates value = case eitherDecode value :: Either String
   where
     logDelete :: Text -> Text -> StoreResult () -> m Bool
     logDelete name path action = do
-        $(logInfo) $ T.concat ["deleting ", name, " with path: ", path]
+        $(logDebug) $ T.concat ["deleting ", name, " with path: ", path]
         status <- liftIO action
         either
             ( \err -> do
