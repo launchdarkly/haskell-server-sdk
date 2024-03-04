@@ -9,6 +9,10 @@ inputs:
     description: 'Which ghc version to use when building the package'
     required: false
     default: 8.10.7
+outputs:
+  package-hashes:
+    description: "base64-encoded sha256 hashes of distribution files"
+    value: ${{ steps.package-hashes.outputs.package-hashes }}
 
 runs:
   using: composite
@@ -25,6 +29,17 @@ runs:
     - name: Build sdist distribution
       shell: bash
       run: stack --no-terminal --resolver=${{ inputs.resolver }} sdist
+
+    - name: Setup dist directory
+      shell: bash
+      run: echo "STACK_DIR=$(stack --no-terminal path --dist-dir --resolver=${{ inputs.resolver }})" >> $GITHUB_ENV
+
+    - name: Hash build files for provenance
+      id: package-hashes
+      shell: bash
+      working-directory: ${{ env.STACK_DIR }}
+      run: |
+        echo "package-hashes=$(sha256sum *tar.gz | base64 -w0)" >> "$GITHUB_OUTPUT"
 
     - name: Run tests
       shell: bash
