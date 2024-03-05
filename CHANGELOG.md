@@ -2,6 +2,13 @@
 
 All notable changes to the LaunchDarkly Haskell Server-side SDK will be documented in this file. This project adheres to [Semantic Versioning](http://semver.org).
 
+## [4.0.4](https://github.com/launchdarkly/haskell-server-sdk/compare/4.0.3...4.0.4) (2024-03-05)
+
+
+### Bug Fixes
+
+* Downgrade verbose data source log messages to debug ([#76](https://github.com/launchdarkly/haskell-server-sdk/issues/76)) ([4de2b04](https://github.com/launchdarkly/haskell-server-sdk/commit/4de2b04ec99aa7a7338ac4673ec139767e410bc2))
+
 ## [4.0.3](https://github.com/launchdarkly/haskell-server-sdk/compare/4.0.2...4.0.3) (2024-02-07)
 
 

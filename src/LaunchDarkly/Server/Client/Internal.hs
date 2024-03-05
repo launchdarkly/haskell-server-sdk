@@ -21,7 +21,7 @@ import LaunchDarkly.Server.Store.Internal (StoreHandle, getInitializedC)
 
 -- | The version string for this library.
 clientVersion :: Text
-clientVersion = "4.0.3" -- x-release-please-version
+clientVersion = "4.0.4" -- x-release-please-version
 
 -- |
 -- Client is the LaunchDarkly client. Client instances are thread-safe.
