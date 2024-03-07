@@ -1,5 +1,5 @@
 name:                launchdarkly-server-sdk
-version:             4.0.3 # x-release-please-version
+version:             4.0.4 # x-release-please-version
 github:              "launchdarkly/haskell-server-sdk"
 license:             Apache-2.0
 license-file:        "LICENSE"
