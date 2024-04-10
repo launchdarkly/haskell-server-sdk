@@ -1,0 +1,12 @@
+{
+  "version": 1,
+  "sdks": {
+    "haskell-server-sdk": {
+      "name": "Haskell Server SDK",
+      "type": "server-side",
+      "languages": [
+        "Haskell"
+      ]
+    }
+  }
+}
