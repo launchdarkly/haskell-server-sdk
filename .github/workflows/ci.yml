@@ -37,6 +37,7 @@ jobs:
         with:
           resolver: ${{ matrix.resolver }}
           ghc-version: ${{ matrix.ghc-version }}
+          token: ${{ secrets.GITHUB_TOKEN }}
 
   build-macosx:
     runs-on: macos-latest
@@ -58,7 +59,12 @@ jobs:
           fetch-depth: 0 # If you only need the current version keep this.
 
       - name: Install os dependencies
-        run: brew install pcre
+        run: brew install pcre llvm@13
+
+      - name: Setup compilation environment
+        run: |
+          echo "C_INCLUDE_PATH=$(find /opt/homebrew/Cellar/pcre -name 'pcre.h' -exec dirname {} \;):$(xcrun --show-sdk-path)/usr/include/ffi" >> $GITHUB_ENV
+          echo "PATH=/opt/homebrew/opt/llvm@13/bin:$PATH" >> $GITHUB_ENV
 
       - uses: ./.github/actions/setup-cache
         with:
@@ -68,6 +74,7 @@ jobs:
         with:
           resolver: ${{ matrix.resolver }}
           ghc-version: ${{ matrix.ghc-version }}
+          token: ${{ secrets.GITHUB_TOKEN }}
 
   quality-checks:
     runs-on: ubuntu-latest

@@ -25,6 +25,8 @@ jobs:
       - name: Build and Test
         id: ci
         uses: ./.github/actions/ci
+        with:
+          token: ${{secrets.GITHUB_TOKEN}}
 
       - uses: launchdarkly/gh-actions/actions/release-secrets@release-secrets-v1.0.0
         name: 'Get Hackage token'

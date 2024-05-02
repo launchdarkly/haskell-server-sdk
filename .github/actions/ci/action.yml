@@ -9,6 +9,9 @@ inputs:
     description: 'Which ghc version to use when building the package'
     required: false
     default: 8.10.7
+  token:
+    description: 'GH token used to download SDK test harness.'
+    required: true
 outputs:
   package-hashes:
     description: "base64-encoded sha256 hashes of distribution files"
@@ -45,6 +48,16 @@ runs:
       shell: bash
       run: stack --no-terminal --resolver=${{ inputs.resolver }} test
 
-    - name: Run contract tests
+    - name: Build contract tests
       shell: bash
-      run: STACKOPTS='--no-terminal --resolver=${{ inputs.resolver }}' make contract-tests
+      run: STACKOPTS='--no-terminal --resolver=${{ inputs.resolver }}' make build-contract-tests
+
+    - name: Start contract test service
+      shell: bash
+      run: STACKOPTS='--no-terminal --resolver=${{ inputs.resolver }}' make start-contract-test-service-bg
+
+    - uses: launchdarkly/gh-actions/actions/contract-tests@contract-tests-v1.0.2
+      with:
+        test_service_port: 8000
+        token: ${{ inputs.token }}
+        extra_params: "-skip-from contract-tests/testharness-suppressions.txt"
