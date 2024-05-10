@@ -54,6 +54,8 @@ jobs:
       - uses: ./.github/actions/ci
         id: ci
         if: ${{ steps.release.outputs.releases_created }}
+        with:
+          token: ${{secrets.GITHUB_TOKEN}}
 
       - uses: ./.github/actions/build-docs
         if: ${{ steps.release.outputs.releases_created }}
