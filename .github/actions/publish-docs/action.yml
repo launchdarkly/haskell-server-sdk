@@ -12,7 +12,7 @@ runs:
       shell: bash
       run: echo "STACK_DIR=$(stack --no-terminal path --dist-dir)" >> $GITHUB_ENV
 
-    - uses: launchdarkly/gh-actions/actions/publish-pages@publish-pages-v1.0.1
+    - uses: launchdarkly/gh-actions/actions/publish-pages@publish-pages-v1.0.2
       name: 'Publish to Github pages'
       with:
         docs_path: ${{env.STACK_DIR}}/doc/html/launchdarkly-server-sdk/
