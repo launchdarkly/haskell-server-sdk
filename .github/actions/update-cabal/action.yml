@@ -17,7 +17,7 @@ runs:
         ghc-version: ${{ inputs.ghc-version }}
 
     - name: Cache ~/.cabal/packages, ~/.cabal/store and dist-newstyle
-      uses: actions/cache@v3
+      uses: actions/cache@v4
       with:
         path: |
           ~/.cabal/packages
