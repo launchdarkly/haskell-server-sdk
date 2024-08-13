@@ -61,15 +61,16 @@ jobs:
         with:
           fetch-depth: 0 # If you only need the current version keep this.
 
-      - name: Install os dependencies
-        run: brew install pcre llvm@13
-
       - name: Setup C_INCLUDE_PATH
-        run: echo "C_INCLUDE_PATH=$(find /opt/homebrew/Cellar/pcre -name 'pcre.h' -exec dirname {} \;):$(xcrun --show-sdk-path)/usr/include/ffi" >> $GITHUB_ENV
+        run: |
+          brew install pcre
+          echo "C_INCLUDE_PATH=$(find /opt/homebrew/Cellar/pcre -name 'pcre.h' -exec dirname {} \;):$(xcrun --show-sdk-path)/usr/include/ffi" >> $GITHUB_ENV
 
       - name: Add LLVM to path
         if: ${{ matrix.use-llvm == 'true' }}
-        run: echo "PATH=/opt/homebrew/opt/llvm@13/bin:$PATH" >> $GITHUB_ENV
+        run: |
+          brew install llvm@13
+          echo "PATH=/opt/homebrew/opt/llvm@13/bin:$PATH" >> $GITHUB_ENV
 
       - uses: ./.github/actions/setup-cache
         with:
