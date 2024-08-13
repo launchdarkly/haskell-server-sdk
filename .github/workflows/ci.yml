@@ -48,10 +48,13 @@ jobs:
         include:
           - resolver: lts-18.28
             ghc-version: 8.10.7
+            use-llvm: 'true'
           - resolver: lts-19.33
             ghc-version: 9.0.2
+            use-llvm: 'true'
           - resolver: lts-20.26
             ghc-version: 9.2.5
+            use-llvm: 'false'
 
     steps:
       - uses: actions/checkout@v4
@@ -61,10 +64,12 @@ jobs:
       - name: Install os dependencies
         run: brew install pcre llvm@13
 
-      - name: Setup compilation environment
-        run: |
-          echo "C_INCLUDE_PATH=$(find /opt/homebrew/Cellar/pcre -name 'pcre.h' -exec dirname {} \;):$(xcrun --show-sdk-path)/usr/include/ffi" >> $GITHUB_ENV
-          echo "PATH=/opt/homebrew/opt/llvm@13/bin:$PATH" >> $GITHUB_ENV
+      - name: Setup C_INCLUDE_PATH
+        run: echo "C_INCLUDE_PATH=$(find /opt/homebrew/Cellar/pcre -name 'pcre.h' -exec dirname {} \;):$(xcrun --show-sdk-path)/usr/include/ffi" >> $GITHUB_ENV
+
+      - name: Add LLVM to path
+        if: ${{ matrix.use-llvm == 'true' }}
+        run: echo "PATH=/opt/homebrew/opt/llvm@13/bin:$PATH" >> $GITHUB_ENV
 
       - uses: ./.github/actions/setup-cache
         with:
