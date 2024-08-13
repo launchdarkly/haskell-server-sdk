@@ -69,8 +69,8 @@ jobs:
       - name: Add LLVM to path
         if: ${{ matrix.use-llvm == 'true' }}
         run: |
-          brew install llvm@13
-          echo "PATH=/opt/homebrew/opt/llvm@13/bin:$PATH" >> $GITHUB_ENV
+          brew install llvm@14
+          echo "PATH=/opt/homebrew/opt/llvm@14/bin:$PATH" >> $GITHUB_ENV
 
       - uses: ./.github/actions/setup-cache
         with:
