@@ -33,6 +33,8 @@ module LaunchDarkly.Server.Context.Internal
     , getKinds
     , redactContext
     , redactContextRedactAnonymous
+    , optionallyRedactAnonymous
+    , withoutAnonymousContexts
     )
 where
 
@@ -48,8 +50,8 @@ import qualified Data.Set as S
 import Data.Text (Text, intercalate, replace, unpack)
 import qualified GHC.Exts as Exts (fromList)
 import GHC.Generics (Generic)
-import LaunchDarkly.AesonCompat (KeyMap, deleteKey, emptyObject, foldrWithKey, fromList, insertKey, keyMapUnion, lookupKey, mapValues, objectKeys, singleton, toList)
-import LaunchDarkly.Server.Config (Config)
+import LaunchDarkly.AesonCompat (KeyMap, deleteKey, emptyObject, foldrWithKey, fromList, insertKey, keyMapUnion, lookupKey, mapValues, objectKeys, objectValues, singleton, toList)
+import LaunchDarkly.Server.Config.Internal (Config (..))
 import LaunchDarkly.Server.Reference (Reference)
 import qualified LaunchDarkly.Server.Reference as R
 
@@ -157,7 +159,7 @@ makeMultiContext contexts =
             _ ->
                 Multi
                     MultiContext
-                        { fullKey = intercalate ":" $ map (\c -> canonicalizeKey (key c) (kind c)) sorted
+                        { fullKey = intercalate ":" $ map (\c -> canonicalizeKey (getField @"key" c) (kind c)) sorted
                         , contexts = fromList $ map (\c -> ((kind c), c)) singleContexts
                         }
 
@@ -268,7 +270,7 @@ unwrapSingleContext _ = Nothing
 -- This method is functionally equivalent to @fromMaybe "" $ getValue "key"@,
 -- it's just nicer to use.
 getKey :: Context -> Text
-getKey (Single c) = key c
+getKey (Single c) = getField @"key" c
 getKey _ = ""
 
 -- Internally used convenience function for retrieving all context keys,
@@ -278,8 +280,8 @@ getKey _ = ""
 -- and key. Multi-kind contexts will return a map of kind / key pairs for each
 -- of its sub-contexts. An invalid context will return the empty map.
 getKeys :: Context -> KeyMap Text
-getKeys (Single c) = singleton (kind c) (key c)
-getKeys (Multi (MultiContext {contexts})) = mapValues key contexts
+getKeys (Single c) = singleton (kind c) (getField @"key" c)
+getKeys (Multi (MultiContext {contexts})) = mapValues (getField @"key") contexts
 getKeys _ = emptyObject
 
 -- Internally used convenience function to retrieve a context's fully qualified
@@ -520,3 +522,32 @@ redactComponents (x : xs) level state@(RedactState {context}) = case lookupKey x
         let substate@(RedactState {context = subcontext}) = redactComponents xs (level + 1) (state {context = o})
          in substate {context = insertKey x (Object $ subcontext) context}
     _ -> state
+
+-- |
+-- Internally used only.
+--
+-- If the config has omitAnonymousContexts set to True, this method will return a new context with
+-- all anonymous contexts removed. If the config does not have omitAnonymousContexts set to True,
+-- this method will return the context as is.
+optionallyRedactAnonymous :: Config -> Context -> Context
+optionallyRedactAnonymous Config {omitAnonymousContexts = True} c = withoutAnonymousContexts c
+optionallyRedactAnonymous _ c = c
+
+-- |
+-- Internally used only.
+--
+-- For a multi-kind context:
+--
+-- A multi-kind context is made up of two or more single-kind contexts. This method will first discard any
+-- single-kind contexts which are anonymous. It will then create a new multi-kind context from the remaining
+-- single-kind contexts. This may result in an invalid context (e.g. all single-kind contexts are anonymous).
+--
+-- For a single-kind context:
+--
+-- If the context is not anonymous, this method will return the current context as is and unmodified.
+--
+-- If the context is anonymous, this method will return an invalid context.
+withoutAnonymousContexts :: Context -> Context
+withoutAnonymousContexts (Single SingleContext {anonymous = True}) = makeMultiContext []
+withoutAnonymousContexts (Multi MultiContext {contexts}) = makeMultiContext $ map Single $ filter (not . anonymous) $ objectValues contexts
+withoutAnonymousContexts c = c

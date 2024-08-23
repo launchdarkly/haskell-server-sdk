@@ -12,7 +12,7 @@ import GHC.Exts (fromList)
 import LaunchDarkly.AesonCompat (lookupKey)
 import LaunchDarkly.Server.Config (configSetAllAttributesPrivate, makeConfig)
 import LaunchDarkly.Server.Context
-import LaunchDarkly.Server.Context.Internal (redactContext, redactContextRedactAnonymous)
+import LaunchDarkly.Server.Context.Internal (redactContext, redactContextRedactAnonymous, withoutAnonymousContexts)
 import qualified LaunchDarkly.Server.Reference as R
 
 confirmInvalidContext :: Context -> Text -> Assertion
@@ -397,6 +397,25 @@ canRedactMultiKindAnonymousContextAttributesCorrectly = TestCase $ do
 
     orgObj = case lookupKey "org" decodedIntoMap of (Just (Object o)) -> o; _decodeFailure -> error "expected object"
 
+canRedactAnonymousContextsAsExpected :: Test
+canRedactAnonymousContextsAsExpected =
+    TestCase $
+        let anonymousUser = makeContext "user-key" "user" & withAnonymous True
+            anonymousOrg = makeContext "org-key" "org" & withAnonymous True
+            device = makeContext "device-key" "device"
+            mc = makeMultiContext [anonymousUser, anonymousOrg, device]
+            anonMc = makeMultiContext [anonymousUser, anonymousOrg]
+         in ( do
+                -- Redacting an anonymous context should result in an invalid context
+                assertEqual "" False $ isValid $ withoutAnonymousContexts anonymousUser
+                -- Redacting a non-anonymous context should result in the same context
+                assertEqual "" device $ withoutAnonymousContexts device
+                -- Redacting a multi-context should result in a multi-context with only the non-anonymous contexts
+                assertEqual "" device $ withoutAnonymousContexts mc
+                -- Redacting a multi-context with only anonymous contexts should result in an invalid context
+                assertEqual "" False $ isValid $ withoutAnonymousContexts anonMc
+            )
+
 allTests :: Test
 allTests =
     TestList
@@ -419,4 +438,5 @@ allTests =
         , canRedactAllAttributesCorrectly
         , canRedactSingleKindAnonymousContextAttributesCorrectly
         , canRedactMultiKindAnonymousContextAttributesCorrectly
+        , canRedactAnonymousContextsAsExpected
         ]

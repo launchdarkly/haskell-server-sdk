@@ -1,20 +1,21 @@
 module Types where
 
+import Data.Aeson (FromJSON, ToJSON, object, parseJSON, toJSON, withObject, (.!=), (.:), (.:?))
+import Data.Aeson.Types (Value (..))
 import Data.Function ((&))
-import Data.Text (Text)
-import qualified LaunchDarkly.Server as LD
-import Data.Aeson.Types (Value(..))
 import Data.HashMap.Strict (HashMap)
-import Data.Aeson (FromJSON, ToJSON, toJSON, parseJSON, object, withObject, (.:), (.:?), (.!=))
-import GHC.Generics (Generic)
-import Data.Set (Set)
-import GHC.Natural (Natural)
 import Data.Maybe (fromMaybe)
+import Data.Set (Set)
+import Data.Text (Text)
+import GHC.Generics (Generic)
+import GHC.Natural (Natural)
+import qualified LaunchDarkly.Server as LD
 
 data CreateClientParams = CreateClientParams
     { tag :: !Text
     , configuration :: !ConfigurationParams
-    } deriving (FromJSON, ToJSON, Show, Generic)
+    }
+    deriving (FromJSON, ToJSON, Show, Generic)
 
 data ConfigurationParams = ConfigurationParams
     { credential :: !Text
@@ -24,17 +25,20 @@ data ConfigurationParams = ConfigurationParams
     , polling :: !(Maybe PollingParams)
     , events :: !(Maybe EventParams)
     , tags :: !(Maybe TagParams)
-    } deriving (FromJSON, ToJSON, Show, Generic)
+    }
+    deriving (FromJSON, ToJSON, Show, Generic)
 
 data StreamingParams = StreamingParams
     { baseUri :: !(Maybe Text)
     , initialRetryDelayMs :: !(Maybe Int)
-    } deriving (FromJSON, ToJSON, Show, Generic)
+    }
+    deriving (FromJSON, ToJSON, Show, Generic)
 
 data PollingParams = PollingParams
     { baseUri :: !(Maybe Text)
     , pollIntervalMs :: !(Maybe Natural)
-    } deriving (FromJSON, ToJSON, Show, Generic)
+    }
+    deriving (FromJSON, ToJSON, Show, Generic)
 
 data EventParams = EventParams
     { baseUri :: !(Maybe Text)
@@ -43,12 +47,15 @@ data EventParams = EventParams
     , allAttributesPrivate :: !(Maybe Bool)
     , globalPrivateAttributes :: !(Maybe (Set Text))
     , flushIntervalMs :: !(Maybe Natural)
-    } deriving (FromJSON, ToJSON, Show, Generic)
+    , omitAnonymousContexts :: !(Maybe Bool)
+    }
+    deriving (FromJSON, ToJSON, Show, Generic)
 
 data TagParams = TagParams
     { applicationId :: !(Maybe Text)
     , applicationVersion :: !(Maybe Text)
-    } deriving (FromJSON, ToJSON, Show, Generic)
+    }
+    deriving (FromJSON, ToJSON, Show, Generic)
 
 data CommandParams = CommandParams
     { command :: !Text
@@ -59,7 +66,8 @@ data CommandParams = CommandParams
     , contextBuild :: !(Maybe ContextBuildParams)
     , contextConvert :: !(Maybe ContextConvertParams)
     , secureModeHash :: !(Maybe SecureModeHashParams)
-    } deriving (FromJSON, Generic)
+    }
+    deriving (FromJSON, Generic)
 
 data EvaluateFlagParams = EvaluateFlagParams
     { flagKey :: !Text
@@ -67,24 +75,28 @@ data EvaluateFlagParams = EvaluateFlagParams
     , valueType :: !Text
     , defaultValue :: !Value
     , detail :: !Bool
-    } deriving (FromJSON, Generic)
+    }
+    deriving (FromJSON, Generic)
 
 data EvaluateFlagResponse = EvaluateFlagResponse
     { value :: !Value
     , variationIndex :: !(Maybe Integer)
     , reason :: !(Maybe LD.EvaluationReason)
-    } deriving (ToJSON, Show, Generic)
+    }
+    deriving (ToJSON, Show, Generic)
 
 data EvaluateAllFlagsParams = EvaluateAllFlagsParams
     { context :: !LD.Context
     , withReasons :: !Bool
     , clientSideOnly :: !Bool
     , detailsOnlyForTrackedFlags :: !Bool
-    } deriving (FromJSON, Generic)
+    }
+    deriving (FromJSON, Generic)
 
 data EvaluateAllFlagsResponse = EvaluateAllFlagsResponse
     { state :: !LD.AllFlagsState
-    } deriving (ToJSON, Show, Generic)
+    }
+    deriving (ToJSON, Show, Generic)
 
 data CustomEventParams = CustomEventParams
     { eventKey :: !Text
@@ -92,7 +104,8 @@ data CustomEventParams = CustomEventParams
     , dataValue :: !(Maybe Value)
     , omitNullData :: !(Maybe Bool)
     , metricValue :: !(Maybe Double)
-    } deriving (Generic)
+    }
+    deriving (Generic)
 
 instance FromJSON CustomEventParams where
     parseJSON = withObject "CustomEvent" $ \o -> do
@@ -101,16 +114,18 @@ instance FromJSON CustomEventParams where
         dataValue <- o .:? "data"
         omitNullData <- o .:? "omitNullData"
         metricValue <- o .:? "metricValue"
-        return $ CustomEventParams { .. }
+        return $ CustomEventParams {..}
 
 data IdentifyEventParams = IdentifyEventParams
     { context :: !LD.Context
-    } deriving (FromJSON, Generic)
+    }
+    deriving (FromJSON, Generic)
 
 data ContextBuildParams = ContextBuildParams
     { single :: !(Maybe ContextBuildParam)
     , multi :: !(Maybe [ContextBuildParam])
-    } deriving (FromJSON, Generic)
+    }
+    deriving (FromJSON, Generic)
 
 data ContextBuildParam = ContextBuildParam
     { kind :: !(Maybe Text)
@@ -119,26 +134,31 @@ data ContextBuildParam = ContextBuildParam
     , anonymous :: !(Maybe Bool)
     , private :: !(Maybe (Set Text))
     , custom :: !(Maybe (HashMap Text Value))
-    } deriving (FromJSON, Generic)
+    }
+    deriving (FromJSON, Generic)
 
 data ContextConvertParams = ContextConvertParams
     { input :: !Text
-    } deriving (FromJSON, Generic)
+    }
+    deriving (FromJSON, Generic)
 
 data ContextResponse = ContextResponse
     { output :: !(Maybe Text)
     , errorMessage :: !(Maybe Text)
-    } deriving (Generic)
+    }
+    deriving (Generic)
 
 instance ToJSON ContextResponse where
-    toJSON (ContextResponse { output = Just o, errorMessage = Nothing }) = object [ ("output", String o) ]
-    toJSON (ContextResponse { output = _, errorMessage = Just e }) = object [ ("error", String e) ]
-    toJSON _ = object [ ("error", String "Invalid context response was generated") ]
+    toJSON (ContextResponse {output = Just o, errorMessage = Nothing}) = object [("output", String o)]
+    toJSON (ContextResponse {output = _, errorMessage = Just e}) = object [("error", String e)]
+    toJSON _ = object [("error", String "Invalid context response was generated")]
 
 data SecureModeHashParams = SecureModeHashParams
     { context :: !(Maybe LD.Context)
-    } deriving (FromJSON, Generic)
+    }
+    deriving (FromJSON, Generic)
 
 data SecureModeHashResponse = SecureModeHashResponse
     { result :: !Text
-    } deriving (ToJSON, Show, Generic)
+    }
+    deriving (ToJSON, Show, Generic)
