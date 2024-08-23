@@ -269,8 +269,8 @@ identify client context = case (getValue "key" context) of
     _anyValidKey -> do
         let identifyContext = optionallyRedactAnonymous (getField @"config" client) context
         case identifyContext of
-            (Invalid err) -> clientRunLogger client $ $(logWarn) $ "identify called with an invalid context: " <> err
-            _ -> do
+            (Invalid _) -> pure ()
+            _anyValidContext -> do
                 let redacted = redactContext (getField @"config" client) identifyContext
                 x <- makeBaseEvent $ IdentifyEvent {key = getKey context, context = redacted}
                 _ <- noticeContext (getField @"events" client) context
