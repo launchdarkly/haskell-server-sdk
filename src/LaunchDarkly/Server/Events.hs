@@ -19,7 +19,7 @@ import GHC.Natural (Natural, naturalFromInteger)
 import LaunchDarkly.AesonCompat (KeyMap, insertKey, keyMapUnion, lookupKey, objectValues)
 import LaunchDarkly.Server.Config.Internal (Config, shouldSendEvents)
 import LaunchDarkly.Server.Context (Context)
-import LaunchDarkly.Server.Context.Internal (getCanonicalKey, getKinds, redactContext, redactContextRedactAnonymous)
+import LaunchDarkly.Server.Context.Internal (getCanonicalKey, getKinds, redactContext, redactContextRedactAnonymous, Context(Invalid), optionallyRedactAnonymous)
 import LaunchDarkly.Server.Details (EvaluationReason (..))
 import LaunchDarkly.Server.Features (Flag)
 
@@ -375,9 +375,12 @@ processEvalEvents config state context includeReason events unknown =
 
 maybeIndexContext :: Natural -> Config -> Context -> EventState -> IO ()
 maybeIndexContext now config context state = do
-    noticedContext <- noticeContext state context
-    when noticedContext $
-        queueEvent config state (EventTypeIndex $ BaseEvent now $ IndexEvent {context = redactContext config context})
+    case optionallyRedactAnonymous config context of
+        (Invalid _) -> pure ()
+        ctx -> do
+            noticedContext <- noticeContext state ctx
+            when noticedContext $
+                queueEvent config state (EventTypeIndex $ BaseEvent now $ IndexEvent {context = redactContext config ctx})
 
 noticeContext :: EventState -> Context -> IO Bool
 noticeContext state context = modifyMVar (getField @"contextKeyLRU" state) $ \cache -> do

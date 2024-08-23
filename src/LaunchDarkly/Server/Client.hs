@@ -55,7 +55,7 @@ import LaunchDarkly.Server.Config.ClientContext (ClientContext (..))
 import LaunchDarkly.Server.Config.HttpConfiguration (HttpConfiguration (..))
 import LaunchDarkly.Server.Config.Internal (ApplicationInfo, Config, getApplicationInfoHeader, shouldSendEvents)
 import LaunchDarkly.Server.Context (getValue)
-import LaunchDarkly.Server.Context.Internal (Context (Invalid), getCanonicalKey, getKey, getKeys, redactContext)
+import LaunchDarkly.Server.Context.Internal (Context (Invalid), getCanonicalKey, getKey, getKeys, redactContext, optionallyRedactAnonymous)
 import LaunchDarkly.Server.DataSource.Internal (DataSource (..), DataSourceFactory, DataSourceUpdates (..), defaultDataSourceUpdates, nullDataSourceFactory)
 import LaunchDarkly.Server.Details (EvalErrorKind (..), EvaluationDetail (..), EvaluationReason (..))
 import LaunchDarkly.Server.Evaluate (evaluateDetail, evaluateTyped)
@@ -129,7 +129,7 @@ makeClient config = mfix $ \client -> do
     clientContext <- makeClientContext config
 
     let dataSourceUpdates = defaultDataSourceUpdates status store
-    dataSource <- dataSourceFactory config clientContext dataSourceUpdates
+    dataSource <- getDataSourceFactory config clientContext dataSourceUpdates
     eventThreadPair <-
         if not (shouldSendEvents config)
             then pure Nothing
@@ -142,8 +142,8 @@ makeClient config = mfix $ \client -> do
 
     pure $ Client {..}
 
-dataSourceFactory :: Config -> DataSourceFactory
-dataSourceFactory config =
+getDataSourceFactory :: Config -> DataSourceFactory
+getDataSourceFactory config =
     if getField @"offline" config || getField @"useLdd" config
         then nullDataSourceFactory
         else case getField @"dataSourceFactory" config of
@@ -266,11 +266,15 @@ identify :: Client -> Context -> IO ()
 identify client (Invalid err) = clientRunLogger client $ $(logWarn) $ "identify called with an invalid context: " <> err
 identify client context = case (getValue "key" context) of
     (String "") -> clientRunLogger client $ $(logWarn) "identify called with empty key"
-    _ -> do
-        let redacted = redactContext (getField @"config" client) context
-        x <- makeBaseEvent $ IdentifyEvent {key = getKey context, context = redacted}
-        _ <- noticeContext (getField @"events" client) context
-        queueEvent (getField @"config" client) (getField @"events" client) (EventTypeIdentify x)
+    _anyValidKey -> do
+        let identifyContext = optionallyRedactAnonymous (getField @"config" client) context
+        case identifyContext of
+            (Invalid err) -> clientRunLogger client $ $(logWarn) $ "identify called with an invalid context: " <> err
+            _ -> do
+                let redacted = redactContext (getField @"config" client) identifyContext
+                x <- makeBaseEvent $ IdentifyEvent {key = getKey context, context = redacted}
+                _ <- noticeContext (getField @"events" client) context
+                queueEvent (getField @"config" client) (getField @"events" client) (EventTypeIdentify x)
 
 -- |
 -- Track reports that a context has performed an event. Custom data can be

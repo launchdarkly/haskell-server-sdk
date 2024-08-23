@@ -43,6 +43,7 @@ data EventParams = EventParams
     , allAttributesPrivate :: !(Maybe Bool)
     , globalPrivateAttributes :: !(Maybe (Set Text))
     , flushIntervalMs :: !(Maybe Natural)
+    , omitAnonymousContexts :: !(Maybe Bool)
     } deriving (FromJSON, ToJSON, Show, Generic)
 
 data TagParams = TagParams

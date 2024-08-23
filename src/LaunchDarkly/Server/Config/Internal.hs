@@ -49,6 +49,7 @@ data Config = Config
     , dataSourceFactory :: !(Maybe DataSourceFactory)
     , manager :: !(Maybe Manager)
     , applicationInfo :: !(Maybe ApplicationInfo)
+    , omitAnonymousContexts :: !Bool
     }
     deriving (Generic)
 

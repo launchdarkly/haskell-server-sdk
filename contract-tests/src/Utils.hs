@@ -62,4 +62,5 @@ eventConfig (Just p) c = updateConfig LD.configSetEventsURI (getField @"baseUri"
     $ updateConfig LD.configSetEventsCapacity (getField @"capacity" p)
     $ updateConfig LD.configSetAllAttributesPrivate (getField @"allAttributesPrivate" p)
     $ updateConfig LD.configSetPrivateAttributeNames ((S.map R.makeReference) <$> getField @"globalPrivateAttributes" p)
+    $ updateConfig LD.configSetOmitAnonymousContexts (getField @"omitAnonymousContexts" p)
     $ updateConfig LD.configSetFlushIntervalSeconds (getField @"flushIntervalMs" p) c

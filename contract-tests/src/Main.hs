@@ -48,6 +48,7 @@ getAppStatus = json AppStatus
         , "tags"
         , "inline-context"
         , "anonymous-redaction"
+        , "omit-anonymous-contexts"
         ]
     }
 

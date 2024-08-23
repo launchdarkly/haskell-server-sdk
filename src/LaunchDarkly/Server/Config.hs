@@ -27,6 +27,7 @@ module LaunchDarkly.Server.Config
     , configSetUseLdd
     , configSetDataSourceFactory
     , configSetApplicationInfo
+    , configSetOmitAnonymousContexts
     , ApplicationInfo
     , makeApplicationInfo
     , withApplicationValue
@@ -70,6 +71,7 @@ makeConfig key =
         , dataSourceFactory = Nothing
         , manager = Nothing
         , applicationInfo = Nothing
+        , omitAnonymousContexts = False
         }
 
 -- | Set the SDK key used to authenticate with LaunchDarkly.
@@ -221,3 +223,10 @@ configSetManager = setField @"manager" . Just
 -- appropriately configured dict to the 'Config' object.
 configSetApplicationInfo :: ApplicationInfo -> Config -> Config
 configSetApplicationInfo = setField @"applicationInfo" . Just
+
+-- |
+-- Sets whether anonymous contexts should be omitted from index and identify events.
+--
+-- By default, anonymous contexts are included in index and identify events.
+configSetOmitAnonymousContexts :: Bool -> Config -> Config
+configSetOmitAnonymousContexts = setField @"omitAnonymousContexts"
