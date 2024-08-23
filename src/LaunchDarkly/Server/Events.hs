@@ -19,7 +19,7 @@ import GHC.Natural (Natural, naturalFromInteger)
 import LaunchDarkly.AesonCompat (KeyMap, insertKey, keyMapUnion, lookupKey, objectValues)
 import LaunchDarkly.Server.Config.Internal (Config, shouldSendEvents)
 import LaunchDarkly.Server.Context (Context)
-import LaunchDarkly.Server.Context.Internal (getCanonicalKey, getKinds, redactContext, redactContextRedactAnonymous, Context(Invalid), optionallyRedactAnonymous)
+import LaunchDarkly.Server.Context.Internal (Context (Invalid), getCanonicalKey, getKinds, optionallyRedactAnonymous, redactContext, redactContextRedactAnonymous)
 import LaunchDarkly.Server.Details (EvaluationReason (..))
 import LaunchDarkly.Server.Features (Flag)
 

@@ -50,8 +50,8 @@ import qualified Data.Set as S
 import Data.Text (Text, intercalate, replace, unpack)
 import qualified GHC.Exts as Exts (fromList)
 import GHC.Generics (Generic)
-import LaunchDarkly.AesonCompat (KeyMap, deleteKey, emptyObject, foldrWithKey, fromList, insertKey, keyMapUnion, lookupKey, mapValues, objectKeys, singleton, toList, objectValues)
-import LaunchDarkly.Server.Config.Internal (Config(..))
+import LaunchDarkly.AesonCompat (KeyMap, deleteKey, emptyObject, foldrWithKey, fromList, insertKey, keyMapUnion, lookupKey, mapValues, objectKeys, objectValues, singleton, toList)
+import LaunchDarkly.Server.Config.Internal (Config (..))
 import LaunchDarkly.Server.Reference (Reference)
 import qualified LaunchDarkly.Server.Reference as R
 
@@ -530,7 +530,7 @@ redactComponents (x : xs) level state@(RedactState {context}) = case lookupKey x
 -- all anonymous contexts removed. If the config does not have omitAnonymousContexts set to True,
 -- this method will return the context as is.
 optionallyRedactAnonymous :: Config -> Context -> Context
-optionallyRedactAnonymous Config{omitAnonymousContexts=True} c = withoutAnonymousContexts c
+optionallyRedactAnonymous Config {omitAnonymousContexts = True} c = withoutAnonymousContexts c
 optionallyRedactAnonymous _ c = c
 
 -- |
