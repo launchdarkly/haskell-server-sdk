@@ -2,6 +2,13 @@
 
 All notable changes to the LaunchDarkly Haskell Server-side SDK will be documented in this file. This project adheres to [Semantic Versioning](http://semver.org).
 
+## [4.2.0](https://github.com/launchdarkly/haskell-server-sdk/compare/4.1.0...4.2.0) (2024-08-23)
+
+
+### Features
+
+* Add option to omit anonymous users from index and identify events ([#87](https://github.com/launchdarkly/haskell-server-sdk/issues/87)) ([85e512a](https://github.com/launchdarkly/haskell-server-sdk/commit/85e512a80dff0e8814afb0f6e6ca334c30afe9cd))
+
 ## [4.1.0](https://github.com/launchdarkly/haskell-server-sdk/compare/4.0.4...4.1.0) (2024-03-18)
 
 
