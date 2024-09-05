@@ -1,0 +1,520 @@
+<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Transitional//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-transitional.dtd"><html xmlns="http://www.w3.org/1999/xhtml"><head><link rel="stylesheet" type="text/css" href="style.css" /><script type="text/javascript" src="highlight.js"></script></head><body><pre><span class="hs-pragma">{-# LANGUAGE NamedFieldPuns #-}</span><span>
+</span><span id="line-2"></span><span class="hs-pragma">{-# LANGUAGE ViewPatterns #-}</span><span>
+</span><span id="line-3"></span><span>
+</span><span id="line-4"></span><span class="hs-comment">-- |</span><span>
+</span><span id="line-5"></span><span class="hs-comment">-- Reference is an attribute name or path expression identifying a value within</span><span>
+</span><span id="line-6"></span><span class="hs-comment">-- a Context.</span><span>
+</span><span id="line-7"></span><span class="hs-comment">--</span><span>
+</span><span id="line-8"></span><span class="hs-comment">-- This type is mainly intended to be used internally by LaunchDarkly SDK and</span><span>
+</span><span id="line-9"></span><span class="hs-comment">-- service code, where efficiency is a major concern so it's desirable to do</span><span>
+</span><span id="line-10"></span><span class="hs-comment">-- any parsing or preprocessing just once. Applications are unlikely to need to</span><span>
+</span><span id="line-11"></span><span class="hs-comment">-- use the Reference type directly.</span><span>
+</span><span id="line-12"></span><span class="hs-comment">--</span><span>
+</span><span id="line-13"></span><span class="hs-comment">-- It can be used to retrieve a value with</span><span>
+</span><span id="line-14"></span><span class="hs-comment">-- 'LaunchDarkly.Server.Context.getValueForReference' or to identify an</span><span>
+</span><span id="line-15"></span><span class="hs-comment">-- attribute or nested value that should be considered private.</span><span>
+</span><span id="line-16"></span><span class="hs-comment">--</span><span>
+</span><span id="line-17"></span><span class="hs-comment">-- Parsing and validation are done at the time that the Reference is</span><span>
+</span><span id="line-18"></span><span class="hs-comment">-- constructed. If a Reference instance was created from an invalid string, it</span><span>
+</span><span id="line-19"></span><span class="hs-comment">-- is considered invalid. The error can be inspected with 'getError'.</span><span>
+</span><span id="line-20"></span><span class="hs-comment">--</span><span>
+</span><span id="line-21"></span><span class="hs-comment">-- == Syntax</span><span>
+</span><span id="line-22"></span><span class="hs-comment">--</span><span>
+</span><span id="line-23"></span><span class="hs-comment">-- The string representation of an attribute reference in LaunchDarkly JSON</span><span>
+</span><span id="line-24"></span><span class="hs-comment">-- data uses the following syntax:</span><span>
+</span><span id="line-25"></span><span class="hs-comment">--</span><span>
+</span><span id="line-26"></span><span class="hs-comment">-- If the first character is not a slash, the string is interpreted literally</span><span>
+</span><span id="line-27"></span><span class="hs-comment">-- as an attribute name. An attribute name can contain any characters, but must</span><span>
+</span><span id="line-28"></span><span class="hs-comment">-- not be empty.</span><span>
+</span><span id="line-29"></span><span class="hs-comment">--</span><span>
+</span><span id="line-30"></span><span class="hs-comment">-- If the first character is a slash, the string is interpreted as a</span><span>
+</span><span id="line-31"></span><span class="hs-comment">-- slash-delimited path where the first path component is an attribute name,</span><span>
+</span><span id="line-32"></span><span class="hs-comment">-- and each subsequent path component is the name of a property in a JSON</span><span>
+</span><span id="line-33"></span><span class="hs-comment">-- object. Any instances of the characters &quot;/&quot; or &quot;~&quot; in a path component are</span><span>
+</span><span id="line-34"></span><span class="hs-comment">-- escaped as &quot;~1&quot; or &quot;~0&quot; respectively. This syntax deliberately resembles</span><span>
+</span><span id="line-35"></span><span class="hs-comment">-- JSON Pointer, but no JSON Pointer behaviors other than those mentioned here</span><span>
+</span><span id="line-36"></span><span class="hs-comment">-- are supported.</span><span>
+</span><span id="line-37"></span><span class="hs-comment">--</span><span>
+</span><span id="line-38"></span><span class="hs-comment">-- == Examples</span><span>
+</span><span id="line-39"></span><span class="hs-comment">--</span><span>
+</span><span id="line-40"></span><span class="hs-comment">-- Suppose there is a context whose JSON implementation looks like this:</span><span>
+</span><span id="line-41"></span><span class="hs-comment">--</span><span>
+</span><span id="line-42"></span><span class="hs-comment">-- 	{</span><span>
+</span><span id="line-43"></span><span class="hs-comment">-- 	  &quot;kind&quot;: &quot;user&quot;,</span><span>
+</span><span id="line-44"></span><span class="hs-comment">-- 	  &quot;key&quot;: &quot;value1&quot;,</span><span>
+</span><span id="line-45"></span><span class="hs-comment">-- 	  &quot;address&quot;: {</span><span>
+</span><span id="line-46"></span><span class="hs-comment">-- 	    &quot;street&quot;: {</span><span>
+</span><span id="line-47"></span><span class="hs-comment">-- 	      &quot;line1&quot;: &quot;value2&quot;,</span><span>
+</span><span id="line-48"></span><span class="hs-comment">-- 	      &quot;line2&quot;: &quot;value3&quot;</span><span>
+</span><span id="line-49"></span><span class="hs-comment">-- 	    },</span><span>
+</span><span id="line-50"></span><span class="hs-comment">-- 	    &quot;city&quot;: &quot;value4&quot;</span><span>
+</span><span id="line-51"></span><span class="hs-comment">-- 	  },</span><span>
+</span><span id="line-52"></span><span class="hs-comment">-- 	  &quot;good/bad&quot;: &quot;value5&quot;</span><span>
+</span><span id="line-53"></span><span class="hs-comment">-- 	}</span><span>
+</span><span id="line-54"></span><span class="hs-comment">--</span><span>
+</span><span id="line-55"></span><span class="hs-comment">-- The attribute references &quot;key&quot; and &quot;/key&quot; would both point to &quot;value1&quot;.</span><span>
+</span><span id="line-56"></span><span class="hs-comment">--</span><span>
+</span><span id="line-57"></span><span class="hs-comment">-- The attribute reference &quot;/address/street/line1&quot; would point to &quot;value2&quot;.</span><span>
+</span><span id="line-58"></span><span class="hs-comment">--</span><span>
+</span><span id="line-59"></span><span class="hs-comment">-- The attribute references &quot;good/bad&quot; and &quot;/good~1bad&quot; would both point to</span><span>
+</span><span id="line-60"></span><span class="hs-comment">-- &quot;value5&quot;.</span><span>
+</span><span id="line-61"></span><span class="hs-keyword">module</span><span> </span><span class="hs-identifier">LaunchDarkly.Server.Reference</span><span>
+</span><span id="line-62"></span><span>    </span><span class="hs-special">(</span><span> </span><span class="annot"><a href="LaunchDarkly.Server.Reference.html#Reference"><span class="hs-identifier">Reference</span></a></span><span>
+</span><span id="line-63"></span><span>    </span><span class="hs-special">,</span><span> </span><span class="annot"><a href="LaunchDarkly.Server.Reference.html#makeReference"><span class="hs-identifier">makeReference</span></a></span><span>
+</span><span id="line-64"></span><span>    </span><span class="hs-special">,</span><span> </span><span class="annot"><a href="LaunchDarkly.Server.Reference.html#makeLiteral"><span class="hs-identifier">makeLiteral</span></a></span><span>
+</span><span id="line-65"></span><span>    </span><span class="hs-special">,</span><span> </span><span class="annot"><a href="LaunchDarkly.Server.Reference.html#isValid"><span class="hs-identifier">isValid</span></a></span><span>
+</span><span id="line-66"></span><span>    </span><span class="hs-special">,</span><span> </span><span class="annot"><a href="LaunchDarkly.Server.Reference.html#getError"><span class="hs-identifier">getError</span></a></span><span>
+</span><span id="line-67"></span><span>    </span><span class="hs-special">,</span><span> </span><span class="annot"><a href="LaunchDarkly.Server.Reference.html#getComponents"><span class="hs-identifier">getComponents</span></a></span><span>
+</span><span id="line-68"></span><span>    </span><span class="hs-special">,</span><span> </span><span class="annot"><a href="LaunchDarkly.Server.Reference.html#getRawPath"><span class="hs-identifier">getRawPath</span></a></span><span>
+</span><span id="line-69"></span><span>    </span><span class="hs-special">)</span><span>
+</span><span id="line-70"></span><span class="hs-keyword">where</span><span>
+</span><span id="line-71"></span><span>
+</span><span id="line-72"></span><span class="hs-keyword">import</span><span> </span><span class="annot"><span class="hs-identifier">Data.Aeson</span></span><span> </span><span class="hs-special">(</span><span class="annot"><span class="hs-identifier">ToJSON</span></span><span class="hs-special">,</span><span> </span><span class="annot"><span class="hs-identifier">Value</span></span><span> </span><span class="hs-special">(</span><span class="annot"><span class="hs-identifier">String</span></span><span class="hs-special">)</span><span class="hs-special">,</span><span> </span><span class="annot"><span class="hs-identifier">toJSON</span></span><span class="hs-special">)</span><span>
+</span><span id="line-73"></span><span class="hs-keyword">import</span><span> </span><span class="annot"><span class="hs-identifier">Data.Text</span></span><span> </span><span class="hs-special">(</span><span class="annot"><span class="hs-identifier">Text</span></span><span class="hs-special">)</span><span>
+</span><span id="line-74"></span><span class="hs-keyword">import</span><span> </span><span class="hs-keyword">qualified</span><span> </span><span class="annot"><span class="hs-identifier">Data.Text</span></span><span> </span><span class="hs-keyword">as</span><span> </span><span class="annot"><span class="hs-identifier">T</span></span><span>
+</span><span id="line-75"></span><span>
+</span><span id="line-76"></span><span class="hs-comment">-- | data record for the Reference type.</span><span>
+</span><span id="line-77"></span><span class="hs-keyword">data</span><span> </span><span id="Reference"><span class="annot"><a href="LaunchDarkly.Server.Reference.html#Reference"><span class="hs-identifier hs-var">Reference</span></a></span></span><span>
+</span><span id="line-78"></span><span>    </span><span class="hs-glyph">=</span><span> </span><span id="Valid"><span class="annot"><a href="LaunchDarkly.Server.Reference.html#Valid"><span class="hs-identifier hs-var">Valid</span></a></span></span><span> </span><span class="hs-special">{</span><span id="%24sel%3ArawPath%3AValid"><span class="annot"><span class="annottext">Reference -&gt; Text
+</span><a href="LaunchDarkly.Server.Reference.html#%24sel%3ArawPath%3AValid"><span class="hs-identifier hs-var hs-var">rawPath</span></a></span></span><span> </span><span class="hs-glyph">::</span><span> </span><span class="hs-glyph">!</span><span class="annot"><span class="hs-identifier hs-type">Text</span></span><span class="hs-special">,</span><span> </span><span id="%24sel%3Acomponents%3AValid"><span class="annot"><span class="annottext">Reference -&gt; [Text]
+</span><a href="LaunchDarkly.Server.Reference.html#%24sel%3Acomponents%3AValid"><span class="hs-identifier hs-var hs-var">components</span></a></span></span><span> </span><span class="hs-glyph">::</span><span> </span><span class="hs-glyph">!</span><span class="hs-special">[</span><span class="annot"><span class="hs-identifier hs-type">Text</span></span><span class="hs-special">]</span><span class="hs-special">}</span><span>
+</span><span id="line-79"></span><span>    </span><span class="hs-glyph">|</span><span> </span><span id="Invalid"><span class="annot"><a href="LaunchDarkly.Server.Reference.html#Invalid"><span class="hs-identifier hs-var">Invalid</span></a></span></span><span> </span><span class="hs-special">{</span><span id="%24sel%3ArawPath%3AValid"><span class="annot"><a href="LaunchDarkly.Server.Reference.html#%24sel%3ArawPath%3AValid"><span class="hs-identifier hs-var">rawPath</span></a></span></span><span> </span><span class="hs-glyph">::</span><span> </span><span class="hs-glyph">!</span><span class="annot"><span class="hs-identifier hs-type">Text</span></span><span class="hs-special">,</span><span> </span><span id="%24sel%3Aerror%3AValid"><span class="annot"><span class="annottext">Reference -&gt; Text
+</span><a href="LaunchDarkly.Server.Reference.html#%24sel%3Aerror%3AValid"><span class="hs-identifier hs-var hs-var">error</span></a></span></span><span> </span><span class="hs-glyph">::</span><span> </span><span class="hs-glyph">!</span><span class="annot"><span class="hs-identifier hs-type">Text</span></span><span class="hs-special">}</span><span>
+</span><span id="line-80"></span><span>    </span><span class="hs-keyword">deriving</span><span> </span><span class="hs-special">(</span><span id="local-6989586621679666422"><span id="local-6989586621679666424"><span id="local-6989586621679666426"><span class="annot"><span class="annottext">Int -&gt; Reference -&gt; ShowS
+[Reference] -&gt; ShowS
+Reference -&gt; String
+(Int -&gt; Reference -&gt; ShowS)
+-&gt; (Reference -&gt; String)
+-&gt; ([Reference] -&gt; ShowS)
+-&gt; Show Reference
+forall a.
+(Int -&gt; a -&gt; ShowS) -&gt; (a -&gt; String) -&gt; ([a] -&gt; ShowS) -&gt; Show a
+showList :: [Reference] -&gt; ShowS
+$cshowList :: [Reference] -&gt; ShowS
+show :: Reference -&gt; String
+$cshow :: Reference -&gt; String
+showsPrec :: Int -&gt; Reference -&gt; ShowS
+$cshowsPrec :: Int -&gt; Reference -&gt; ShowS
+</span><span class="hs-identifier hs-var hs-var hs-var hs-var hs-var hs-var hs-var hs-var">Show</span></span></span></span></span><span class="hs-special">,</span><span> </span><span id="local-6989586621679666417"><span id="local-6989586621679666419"><span class="annot"><span class="annottext">Reference -&gt; Reference -&gt; Bool
+(Reference -&gt; Reference -&gt; Bool)
+-&gt; (Reference -&gt; Reference -&gt; Bool) -&gt; Eq Reference
+forall a. (a -&gt; a -&gt; Bool) -&gt; (a -&gt; a -&gt; Bool) -&gt; Eq a
+/= :: Reference -&gt; Reference -&gt; Bool
+$c/= :: Reference -&gt; Reference -&gt; Bool
+== :: Reference -&gt; Reference -&gt; Bool
+$c== :: Reference -&gt; Reference -&gt; Bool
+</span><span class="hs-identifier hs-var hs-var hs-var hs-var hs-var hs-var">Eq</span></span></span></span><span class="hs-special">)</span><span>
+</span><span id="line-81"></span><span>
+</span><span id="line-82"></span><span class="hs-keyword">instance</span><span> </span><span id="local-6989586621679666402"><span id="local-6989586621679666404"><span id="local-6989586621679666406"><span id="local-6989586621679666408"><span id="local-6989586621679666410"><span id="local-6989586621679666412"><span class="annot"><span class="hs-identifier hs-type">Ord</span></span><span> </span><span class="annot"><a href="LaunchDarkly.Server.Reference.html#Reference"><span class="hs-identifier hs-type">Reference</span></a></span></span></span></span></span></span></span><span> </span><span class="hs-keyword">where</span><span>
+</span><span id="line-83"></span><span>    </span><span id="local-6989586621679666400"><span class="annot"><span class="annottext">compare :: Reference -&gt; Reference -&gt; Ordering
+</span><span class="hs-identifier hs-var hs-var hs-var hs-var">compare</span></span></span><span> </span><span class="hs-special">(</span><span class="annot"><a href="LaunchDarkly.Server.Reference.html#Invalid"><span class="hs-identifier hs-type">Invalid</span></a></span><span> </span><span class="hs-identifier">_</span><span> </span><span class="hs-identifier">_</span><span class="hs-special">)</span><span> </span><span class="hs-special">(</span><span class="annot"><a href="LaunchDarkly.Server.Reference.html#Valid"><span class="hs-identifier hs-type">Valid</span></a></span><span> </span><span class="hs-identifier">_</span><span> </span><span class="hs-identifier">_</span><span class="hs-special">)</span><span> </span><span class="hs-glyph">=</span><span> </span><span class="annot"><span class="annottext">Ordering
+</span><span class="hs-identifier hs-var">LT</span></span><span>
+</span><span id="line-84"></span><span>    </span><span class="annot"><span class="hs-identifier hs-var">compare</span></span><span> </span><span class="hs-special">(</span><span class="annot"><a href="LaunchDarkly.Server.Reference.html#Valid"><span class="hs-identifier hs-type">Valid</span></a></span><span> </span><span class="hs-identifier">_</span><span> </span><span class="hs-identifier">_</span><span class="hs-special">)</span><span> </span><span class="hs-special">(</span><span class="annot"><a href="LaunchDarkly.Server.Reference.html#Invalid"><span class="hs-identifier hs-type">Invalid</span></a></span><span> </span><span class="hs-identifier">_</span><span> </span><span class="hs-identifier">_</span><span class="hs-special">)</span><span> </span><span class="hs-glyph">=</span><span> </span><span class="annot"><span class="annottext">Ordering
+</span><span class="hs-identifier hs-var">GT</span></span><span>
+</span><span id="line-85"></span><span>    </span><span class="annot"><span class="hs-identifier hs-var">compare</span></span><span> </span><span class="hs-special">(</span><span class="annot"><a href="LaunchDarkly.Server.Reference.html#Valid"><span class="hs-identifier hs-type">Valid</span></a></span><span> </span><span id="local-6989586621679666398"><span class="annot"><span class="annottext">lhsRaw :: Text
+</span><a href="#local-6989586621679666398"><span class="hs-identifier hs-var">lhsRaw</span></a></span></span><span> </span><span id="local-6989586621679666397"><span class="annot"><span class="annottext">lhsComponents :: [Text]
+</span><a href="#local-6989586621679666397"><span class="hs-identifier hs-var">lhsComponents</span></a></span></span><span class="hs-special">)</span><span> </span><span class="hs-special">(</span><span class="annot"><a href="LaunchDarkly.Server.Reference.html#Valid"><span class="hs-identifier hs-type">Valid</span></a></span><span> </span><span id="local-6989586621679666396"><span class="annot"><span class="annottext">rhsRaw :: Text
+</span><a href="#local-6989586621679666396"><span class="hs-identifier hs-var">rhsRaw</span></a></span></span><span> </span><span id="local-6989586621679666395"><span class="annot"><span class="annottext">rhsComponents :: [Text]
+</span><a href="#local-6989586621679666395"><span class="hs-identifier hs-var">rhsComponents</span></a></span></span><span class="hs-special">)</span><span>
+</span><span id="line-86"></span><span>        </span><span class="hs-glyph">|</span><span> </span><span class="annot"><span class="annottext">[Text]
+</span><a href="#local-6989586621679666397"><span class="hs-identifier hs-var">lhsComponents</span></a></span><span> </span><span class="annot"><span class="annottext">[Text] -&gt; [Text] -&gt; Bool
+forall a. Eq a =&gt; a -&gt; a -&gt; Bool
+</span><span class="hs-operator hs-var">==</span></span><span> </span><span class="annot"><span class="annottext">[Text]
+</span><a href="#local-6989586621679666395"><span class="hs-identifier hs-var">rhsComponents</span></a></span><span> </span><span class="hs-glyph">=</span><span> </span><span class="annot"><span class="annottext">Text -&gt; Text -&gt; Ordering
+forall a. Ord a =&gt; a -&gt; a -&gt; Ordering
+</span><span class="hs-identifier hs-var">compare</span></span><span> </span><span class="annot"><span class="annottext">Text
+</span><a href="#local-6989586621679666398"><span class="hs-identifier hs-var">lhsRaw</span></a></span><span> </span><span class="annot"><span class="annottext">Text
+</span><a href="#local-6989586621679666396"><span class="hs-identifier hs-var">rhsRaw</span></a></span><span>
+</span><span id="line-87"></span><span>        </span><span class="hs-glyph">|</span><span> </span><span class="annot"><span class="annottext">Bool
+</span><span class="hs-identifier hs-var">otherwise</span></span><span> </span><span class="hs-glyph">=</span><span> </span><span class="annot"><span class="annottext">[Text] -&gt; [Text] -&gt; Ordering
+forall a. Ord a =&gt; a -&gt; a -&gt; Ordering
+</span><span class="hs-identifier hs-var">compare</span></span><span> </span><span class="annot"><span class="annottext">[Text]
+</span><a href="#local-6989586621679666397"><span class="hs-identifier hs-var">lhsComponents</span></a></span><span> </span><span class="annot"><span class="annottext">[Text]
+</span><a href="#local-6989586621679666395"><span class="hs-identifier hs-var">rhsComponents</span></a></span><span>
+</span><span id="line-88"></span><span>    </span><span class="annot"><span class="hs-identifier hs-var">compare</span></span><span> </span><span class="hs-special">(</span><span class="annot"><a href="LaunchDarkly.Server.Reference.html#Invalid"><span class="hs-identifier hs-type">Invalid</span></a></span><span> </span><span id="local-6989586621679666394"><span class="annot"><span class="annottext">lhsRaw :: Text
+</span><a href="#local-6989586621679666394"><span class="hs-identifier hs-var">lhsRaw</span></a></span></span><span> </span><span id="local-6989586621679666393"><span class="annot"><span class="annottext">lhsError :: Text
+</span><a href="#local-6989586621679666393"><span class="hs-identifier hs-var">lhsError</span></a></span></span><span class="hs-special">)</span><span> </span><span class="hs-special">(</span><span class="annot"><a href="LaunchDarkly.Server.Reference.html#Invalid"><span class="hs-identifier hs-type">Invalid</span></a></span><span> </span><span id="local-6989586621679666392"><span class="annot"><span class="annottext">rhsRaw :: Text
+</span><a href="#local-6989586621679666392"><span class="hs-identifier hs-var">rhsRaw</span></a></span></span><span> </span><span id="local-6989586621679666391"><span class="annot"><span class="annottext">rhsError :: Text
+</span><a href="#local-6989586621679666391"><span class="hs-identifier hs-var">rhsError</span></a></span></span><span class="hs-special">)</span><span>
+</span><span id="line-89"></span><span>        </span><span class="hs-glyph">|</span><span> </span><span class="annot"><span class="annottext">Text
+</span><a href="#local-6989586621679666394"><span class="hs-identifier hs-var">lhsRaw</span></a></span><span> </span><span class="annot"><span class="annottext">Text -&gt; Text -&gt; Bool
+forall a. Eq a =&gt; a -&gt; a -&gt; Bool
+</span><span class="hs-operator hs-var">==</span></span><span> </span><span class="annot"><span class="annottext">Text
+</span><a href="#local-6989586621679666392"><span class="hs-identifier hs-var">rhsRaw</span></a></span><span> </span><span class="hs-glyph">=</span><span> </span><span class="annot"><span class="annottext">Text -&gt; Text -&gt; Ordering
+forall a. Ord a =&gt; a -&gt; a -&gt; Ordering
+</span><span class="hs-identifier hs-var">compare</span></span><span> </span><span class="annot"><span class="annottext">Text
+</span><a href="#local-6989586621679666393"><span class="hs-identifier hs-var">lhsError</span></a></span><span> </span><span class="annot"><span class="annottext">Text
+</span><a href="#local-6989586621679666391"><span class="hs-identifier hs-var">rhsError</span></a></span><span>
+</span><span id="line-90"></span><span>        </span><span class="hs-glyph">|</span><span> </span><span class="annot"><span class="annottext">Bool
+</span><span class="hs-identifier hs-var">otherwise</span></span><span> </span><span class="hs-glyph">=</span><span> </span><span class="annot"><span class="annottext">Text -&gt; Text -&gt; Ordering
+forall a. Ord a =&gt; a -&gt; a -&gt; Ordering
+</span><span class="hs-identifier hs-var">compare</span></span><span> </span><span class="annot"><span class="annottext">Text
+</span><a href="#local-6989586621679666394"><span class="hs-identifier hs-var">lhsRaw</span></a></span><span> </span><span class="annot"><span class="annottext">Text
+</span><a href="#local-6989586621679666392"><span class="hs-identifier hs-var">rhsRaw</span></a></span><span>
+</span><span id="line-91"></span><span>
+</span><span id="line-92"></span><span class="hs-keyword">instance</span><span> </span><span id="local-6989586621679666384"><span id="local-6989586621679666386"><span id="local-6989586621679666388"><span class="annot"><span class="hs-identifier hs-type">ToJSON</span></span><span> </span><span class="annot"><a href="LaunchDarkly.Server.Reference.html#Reference"><span class="hs-identifier hs-type">Reference</span></a></span></span></span></span><span> </span><span class="hs-keyword">where</span><span>
+</span><span id="line-93"></span><span>    </span><span id="local-6989586621679666382"><span class="annot"><span class="annottext">toJSON :: Reference -&gt; Value
+</span><a href="#local-6989586621679666382"><span class="hs-identifier hs-var hs-var hs-var hs-var">toJSON</span></a></span></span><span> </span><span class="hs-glyph">=</span><span> </span><span class="annot"><span class="annottext">Text -&gt; Value
+</span><span class="hs-identifier hs-var">String</span></span><span> </span><span class="annot"><span class="annottext">(Text -&gt; Value) -&gt; (Reference -&gt; Text) -&gt; Reference -&gt; Value
+forall b c a. (b -&gt; c) -&gt; (a -&gt; b) -&gt; a -&gt; c
+</span><span class="hs-operator hs-var">.</span></span><span> </span><span class="annot"><span class="annottext">Reference -&gt; Text
+</span><a href="LaunchDarkly.Server.Reference.html#%24sel%3ArawPath%3AValid"><span class="hs-identifier hs-var hs-var">rawPath</span></a></span><span>
+</span><span id="line-94"></span><span>
+</span><span id="line-95"></span><span class="hs-comment">-- |</span><span>
+</span><span id="line-96"></span><span class="hs-comment">-- Creates a Reference from a string. For the supported syntax and examples,</span><span>
+</span><span id="line-97"></span><span class="hs-comment">-- see comments on the &quot;LaunchDarkly.Server.Reference&quot; module.</span><span>
+</span><span id="line-98"></span><span class="hs-comment">--</span><span>
+</span><span id="line-99"></span><span class="hs-comment">-- This function always returns a Reference that preserves the original string,</span><span>
+</span><span id="line-100"></span><span class="hs-comment">-- even if validation fails, so that accessing 'getRawPath' (or serializing the</span><span>
+</span><span id="line-101"></span><span class="hs-comment">-- Reference to JSON) will produce the original string. If validation fails,</span><span>
+</span><span id="line-102"></span><span class="hs-comment">-- 'getError' will return an error and any SDK method that takes this Reference</span><span>
+</span><span id="line-103"></span><span class="hs-comment">-- as a parameter will consider it invalid.</span><span>
+</span><span id="line-104"></span><span class="annot"><a href="LaunchDarkly.Server.Reference.html#makeReference"><span class="hs-identifier hs-type">makeReference</span></a></span><span> </span><span class="hs-glyph">::</span><span> </span><span class="annot"><span class="hs-identifier hs-type">Text</span></span><span> </span><span class="hs-glyph">-&gt;</span><span> </span><span class="annot"><a href="LaunchDarkly.Server.Reference.html#Reference"><span class="hs-identifier hs-type">Reference</span></a></span><span>
+</span><span id="line-105"></span><span id="makeReference"><span class="annot"><span class="annottext">makeReference :: Text -&gt; Reference
+</span><a href="LaunchDarkly.Server.Reference.html#makeReference"><span class="hs-identifier hs-var hs-var">makeReference</span></a></span></span><span> </span><span class="hs-string">&quot;&quot;</span><span> </span><span class="hs-glyph">=</span><span> </span><span class="annot"><span class="annottext">$WInvalid :: Text -&gt; Text -&gt; Reference
+</span><a href="LaunchDarkly.Server.Reference.html#%24WInvalid"><span class="hs-identifier hs-type hs-type">Invalid</span></a></span><span> </span><span class="hs-special">{</span><span class="annot"><span class="annottext">$sel:rawPath:Valid :: Text
+</span><a href="LaunchDarkly.Server.Reference.html#%24sel%3ArawPath%3AValid"><span class="hs-identifier hs-var">rawPath</span></a></span><span> </span><span class="hs-glyph">=</span><span> </span><span class="annot"><span class="hs-string">&quot;&quot;</span></span><span class="hs-special">,</span><span> </span><span class="annot"><span class="annottext">$sel:error:Valid :: Text
+</span><a href="LaunchDarkly.Server.Reference.html#%24sel%3Aerror%3AValid"><span class="hs-identifier hs-var">error</span></a></span><span> </span><span class="hs-glyph">=</span><span> </span><span class="annot"><span class="hs-string">&quot;empty reference&quot;</span></span><span class="hs-special">}</span><span>
+</span><span id="line-106"></span><span class="annot"><a href="LaunchDarkly.Server.Reference.html#makeReference"><span class="hs-identifier hs-var">makeReference</span></a></span><span> </span><span class="hs-string">&quot;/&quot;</span><span> </span><span class="hs-glyph">=</span><span> </span><span class="annot"><span class="annottext">$WInvalid :: Text -&gt; Text -&gt; Reference
+</span><a href="LaunchDarkly.Server.Reference.html#%24WInvalid"><span class="hs-identifier hs-type hs-type">Invalid</span></a></span><span> </span><span class="hs-special">{</span><span class="annot"><span class="annottext">$sel:rawPath:Valid :: Text
+</span><a href="LaunchDarkly.Server.Reference.html#%24sel%3ArawPath%3AValid"><span class="hs-identifier hs-var">rawPath</span></a></span><span> </span><span class="hs-glyph">=</span><span> </span><span class="annot"><span class="hs-string">&quot;/&quot;</span></span><span class="hs-special">,</span><span> </span><span class="annot"><span class="annottext">$sel:error:Valid :: Text
+</span><a href="LaunchDarkly.Server.Reference.html#%24sel%3Aerror%3AValid"><span class="hs-identifier hs-var">error</span></a></span><span> </span><span class="hs-glyph">=</span><span> </span><span class="annot"><span class="hs-string">&quot;empty reference&quot;</span></span><span class="hs-special">}</span><span>
+</span><span id="line-107"></span><span class="annot"><a href="LaunchDarkly.Server.Reference.html#makeReference"><span class="hs-identifier hs-var">makeReference</span></a></span><span> </span><span id="local-6989586621679666379"><span class="annot"><span class="annottext">value :: Text
+</span><a href="#local-6989586621679666379"><span class="hs-identifier hs-var">value</span></a></span></span><span class="hs-glyph">@</span><span class="hs-special">(</span><span class="annot"><span class="annottext">Text -&gt; Text -&gt; Maybe Text
+</span><span class="hs-identifier hs-var">T.stripPrefix</span></span><span> </span><span class="annot"><span class="hs-string">&quot;/&quot;</span></span><span> </span><span class="hs-glyph">-&gt;</span><span> </span><span class="annot"><span class="annottext">Maybe Text
+</span><span class="hs-identifier hs-var">Nothing</span></span><span class="hs-special">)</span><span> </span><span class="hs-glyph">=</span><span> </span><span class="annot"><span class="annottext">$WValid :: Text -&gt; [Text] -&gt; Reference
+</span><a href="LaunchDarkly.Server.Reference.html#%24WValid"><span class="hs-identifier hs-type hs-type">Valid</span></a></span><span> </span><span class="hs-special">{</span><span class="annot"><span class="annottext">$sel:rawPath:Valid :: Text
+</span><a href="LaunchDarkly.Server.Reference.html#%24sel%3ArawPath%3AValid"><span class="hs-identifier hs-var">rawPath</span></a></span><span> </span><span class="hs-glyph">=</span><span> </span><span class="annot"><span class="annottext">Text
+</span><a href="#local-6989586621679666379"><span class="hs-identifier hs-var">value</span></a></span><span class="hs-special">,</span><span> </span><span class="annot"><span class="annottext">$sel:components:Valid :: [Text]
+</span><a href="LaunchDarkly.Server.Reference.html#%24sel%3Acomponents%3AValid"><span class="hs-identifier hs-var">components</span></a></span><span> </span><span class="hs-glyph">=</span><span> </span><span class="hs-special">[</span><span class="annot"><span class="annottext">Text
+</span><a href="#local-6989586621679666379"><span class="hs-identifier hs-var">value</span></a></span><span class="hs-special">]</span><span class="hs-special">}</span><span>
+</span><span id="line-108"></span><span class="annot"><a href="LaunchDarkly.Server.Reference.html#makeReference"><span class="hs-identifier hs-var">makeReference</span></a></span><span> </span><span id="local-6989586621679666376"><span class="annot"><span class="annottext">value :: Text
+</span><a href="#local-6989586621679666376"><span class="hs-identifier hs-var">value</span></a></span></span><span class="hs-glyph">@</span><span class="hs-special">(</span><span class="annot"><span class="annottext">Text -&gt; Text -&gt; Maybe Text
+</span><span class="hs-identifier hs-var">T.stripSuffix</span></span><span> </span><span class="annot"><span class="hs-string">&quot;/&quot;</span></span><span> </span><span class="hs-glyph">-&gt;</span><span> </span><span class="annot"><span class="hs-identifier hs-type">Just</span></span><span> </span><span class="hs-identifier">_</span><span class="hs-special">)</span><span> </span><span class="hs-glyph">=</span><span> </span><span class="annot"><span class="annottext">$WInvalid :: Text -&gt; Text -&gt; Reference
+</span><a href="LaunchDarkly.Server.Reference.html#%24WInvalid"><span class="hs-identifier hs-type hs-type">Invalid</span></a></span><span> </span><span class="hs-special">{</span><span class="annot"><span class="annottext">$sel:rawPath:Valid :: Text
+</span><a href="LaunchDarkly.Server.Reference.html#%24sel%3ArawPath%3AValid"><span class="hs-identifier hs-var">rawPath</span></a></span><span> </span><span class="hs-glyph">=</span><span> </span><span class="annot"><span class="annottext">Text
+</span><a href="#local-6989586621679666376"><span class="hs-identifier hs-var">value</span></a></span><span class="hs-special">,</span><span> </span><span class="annot"><span class="annottext">$sel:error:Valid :: Text
+</span><a href="LaunchDarkly.Server.Reference.html#%24sel%3Aerror%3AValid"><span class="hs-identifier hs-var">error</span></a></span><span> </span><span class="hs-glyph">=</span><span> </span><span class="annot"><span class="hs-string">&quot;trailing slash&quot;</span></span><span class="hs-special">}</span><span>
+</span><span id="line-109"></span><span class="annot"><a href="LaunchDarkly.Server.Reference.html#makeReference"><span class="hs-identifier hs-var">makeReference</span></a></span><span> </span><span id="local-6989586621679666374"><span class="annot"><span class="annottext">value :: Text
+</span><a href="#local-6989586621679666374"><span class="hs-identifier hs-var">value</span></a></span></span><span> </span><span class="hs-glyph">=</span><span> </span><span class="annot"><span class="annottext">(Text -&gt; Reference -&gt; Reference)
+-&gt; Reference -&gt; [Text] -&gt; Reference
+forall (t :: * -&gt; *) a b.
+Foldable t =&gt;
+(a -&gt; b -&gt; b) -&gt; b -&gt; t a -&gt; b
+</span><span class="hs-identifier hs-var">foldr</span></span><span> </span><span class="annot"><span class="annottext">Text -&gt; Reference -&gt; Reference
+</span><a href="LaunchDarkly.Server.Reference.html#addComponentToReference"><span class="hs-identifier hs-var">addComponentToReference</span></a></span><span> </span><span class="hs-special">(</span><span class="annot"><span class="annottext">$WValid :: Text -&gt; [Text] -&gt; Reference
+</span><a href="LaunchDarkly.Server.Reference.html#%24WValid"><span class="hs-identifier hs-type hs-type">Valid</span></a></span><span> </span><span class="hs-special">{</span><span class="annot"><span class="annottext">$sel:rawPath:Valid :: Text
+</span><a href="LaunchDarkly.Server.Reference.html#%24sel%3ArawPath%3AValid"><span class="hs-identifier hs-var">rawPath</span></a></span><span> </span><span class="hs-glyph">=</span><span> </span><span class="annot"><span class="annottext">Text
+</span><a href="#local-6989586621679666374"><span class="hs-identifier hs-var">value</span></a></span><span class="hs-special">,</span><span> </span><span class="annot"><span class="annottext">$sel:components:Valid :: [Text]
+</span><a href="LaunchDarkly.Server.Reference.html#%24sel%3Acomponents%3AValid"><span class="hs-identifier hs-var">components</span></a></span><span> </span><span class="hs-glyph">=</span><span> </span><span class="hs-special">[</span><span class="hs-special">]</span><span class="hs-special">}</span><span class="hs-special">)</span><span> </span><span class="hs-special">(</span><span class="annot"><span class="annottext">Text -&gt; Text -&gt; [Text]
+</span><span class="hs-identifier hs-var">T.splitOn</span></span><span> </span><span class="annot"><span class="hs-string">&quot;/&quot;</span></span><span> </span><span class="annot"><span class="annottext">(Text -&gt; [Text]) -&gt; Text -&gt; [Text]
+forall a b. (a -&gt; b) -&gt; a -&gt; b
+</span><span class="hs-operator hs-var">$</span></span><span> </span><span class="annot"><span class="annottext">Int -&gt; Text -&gt; Text
+</span><span class="hs-identifier hs-var">T.drop</span></span><span> </span><span class="annot"><span class="hs-number">1</span></span><span> </span><span class="annot"><span class="annottext">Text
+</span><a href="#local-6989586621679666374"><span class="hs-identifier hs-var">value</span></a></span><span class="hs-special">)</span><span>
+</span><span id="line-110"></span><span>
+</span><span id="line-111"></span><span class="hs-comment">-- |</span><span>
+</span><span id="line-112"></span><span class="hs-comment">-- makeLiteral is similar to 'makeReference' except that it always interprets</span><span>
+</span><span id="line-113"></span><span class="hs-comment">-- the string as a literal attribute name, never as a slash-delimited path</span><span>
+</span><span id="line-114"></span><span class="hs-comment">-- expression. There is no escaping or unescaping, even if the name contains</span><span>
+</span><span id="line-115"></span><span class="hs-comment">-- literal '/' or '~' characters. Since an attribute name can contain any</span><span>
+</span><span id="line-116"></span><span class="hs-comment">-- characters, this method always returns a valid Reference unless the name is</span><span>
+</span><span id="line-117"></span><span class="hs-comment">-- empty.</span><span>
+</span><span id="line-118"></span><span class="hs-comment">--</span><span>
+</span><span id="line-119"></span><span class="hs-comment">-- For example: @makeLiteral &quot;name&quot;@ is exactly equivalent to @makeReference</span><span>
+</span><span id="line-120"></span><span class="hs-comment">-- &quot;name&quot;@. @makeLiteral &quot;a/b&quot;@ is exactly equivalent to @makeReference &quot;a/b&quot;@</span><span>
+</span><span id="line-121"></span><span class="hs-comment">-- (since the syntax used by 'makeReference' treats the whole string as a</span><span>
+</span><span id="line-122"></span><span class="hs-comment">-- literal as long as it does not start with a slash), or to @makeReference</span><span>
+</span><span id="line-123"></span><span class="hs-comment">-- &quot;/a~1b&quot;@.</span><span>
+</span><span id="line-124"></span><span class="annot"><a href="LaunchDarkly.Server.Reference.html#makeLiteral"><span class="hs-identifier hs-type">makeLiteral</span></a></span><span> </span><span class="hs-glyph">::</span><span> </span><span class="annot"><span class="hs-identifier hs-type">Text</span></span><span> </span><span class="hs-glyph">-&gt;</span><span> </span><span class="annot"><a href="LaunchDarkly.Server.Reference.html#Reference"><span class="hs-identifier hs-type">Reference</span></a></span><span>
+</span><span id="line-125"></span><span id="makeLiteral"><span class="annot"><span class="annottext">makeLiteral :: Text -&gt; Reference
+</span><a href="LaunchDarkly.Server.Reference.html#makeLiteral"><span class="hs-identifier hs-var hs-var">makeLiteral</span></a></span></span><span> </span><span class="hs-string">&quot;&quot;</span><span> </span><span class="hs-glyph">=</span><span> </span><span class="annot"><span class="annottext">$WInvalid :: Text -&gt; Text -&gt; Reference
+</span><a href="LaunchDarkly.Server.Reference.html#%24WInvalid"><span class="hs-identifier hs-type hs-type">Invalid</span></a></span><span> </span><span class="hs-special">{</span><span class="annot"><span class="annottext">$sel:rawPath:Valid :: Text
+</span><a href="LaunchDarkly.Server.Reference.html#%24sel%3ArawPath%3AValid"><span class="hs-identifier hs-var">rawPath</span></a></span><span> </span><span class="hs-glyph">=</span><span> </span><span class="annot"><span class="hs-string">&quot;&quot;</span></span><span class="hs-special">,</span><span> </span><span class="annot"><span class="annottext">$sel:error:Valid :: Text
+</span><a href="LaunchDarkly.Server.Reference.html#%24sel%3Aerror%3AValid"><span class="hs-identifier hs-var">error</span></a></span><span> </span><span class="hs-glyph">=</span><span> </span><span class="annot"><span class="hs-string">&quot;empty reference&quot;</span></span><span class="hs-special">}</span><span>
+</span><span id="line-126"></span><span class="annot"><a href="LaunchDarkly.Server.Reference.html#makeLiteral"><span class="hs-identifier hs-var">makeLiteral</span></a></span><span> </span><span id="local-6989586621679666369"><span class="annot"><span class="annottext">value :: Text
+</span><a href="#local-6989586621679666369"><span class="hs-identifier hs-var">value</span></a></span></span><span class="hs-glyph">@</span><span class="hs-special">(</span><span class="annot"><span class="annottext">Text -&gt; Text -&gt; Maybe Text
+</span><span class="hs-identifier hs-var">T.stripPrefix</span></span><span> </span><span class="annot"><span class="hs-string">&quot;/&quot;</span></span><span> </span><span class="hs-glyph">-&gt;</span><span> </span><span class="annot"><span class="annottext">Maybe Text
+</span><span class="hs-identifier hs-var">Nothing</span></span><span class="hs-special">)</span><span> </span><span class="hs-glyph">=</span><span> </span><span class="annot"><span class="annottext">$WValid :: Text -&gt; [Text] -&gt; Reference
+</span><a href="LaunchDarkly.Server.Reference.html#%24WValid"><span class="hs-identifier hs-type hs-type">Valid</span></a></span><span> </span><span class="hs-special">{</span><span class="annot"><span class="annottext">$sel:rawPath:Valid :: Text
+</span><a href="LaunchDarkly.Server.Reference.html#%24sel%3ArawPath%3AValid"><span class="hs-identifier hs-var">rawPath</span></a></span><span> </span><span class="hs-glyph">=</span><span> </span><span class="annot"><span class="annottext">Text
+</span><a href="#local-6989586621679666369"><span class="hs-identifier hs-var">value</span></a></span><span class="hs-special">,</span><span> </span><span class="annot"><span class="annottext">$sel:components:Valid :: [Text]
+</span><a href="LaunchDarkly.Server.Reference.html#%24sel%3Acomponents%3AValid"><span class="hs-identifier hs-var">components</span></a></span><span> </span><span class="hs-glyph">=</span><span> </span><span class="hs-special">[</span><span class="annot"><span class="annottext">Text
+</span><a href="#local-6989586621679666369"><span class="hs-identifier hs-var">value</span></a></span><span class="hs-special">]</span><span class="hs-special">}</span><span>
+</span><span id="line-127"></span><span class="annot"><a href="LaunchDarkly.Server.Reference.html#makeLiteral"><span class="hs-identifier hs-var">makeLiteral</span></a></span><span> </span><span id="local-6989586621679666368"><span class="annot"><span class="annottext">value :: Text
+</span><a href="#local-6989586621679666368"><span class="hs-identifier hs-var">value</span></a></span></span><span> </span><span class="hs-glyph">=</span><span> </span><span class="annot"><span class="annottext">$WValid :: Text -&gt; [Text] -&gt; Reference
+</span><a href="LaunchDarkly.Server.Reference.html#%24WValid"><span class="hs-identifier hs-type hs-type">Valid</span></a></span><span> </span><span class="hs-special">{</span><span class="annot"><span class="annottext">$sel:rawPath:Valid :: Text
+</span><a href="LaunchDarkly.Server.Reference.html#%24sel%3ArawPath%3AValid"><span class="hs-identifier hs-var">rawPath</span></a></span><span> </span><span class="hs-glyph">=</span><span> </span><span class="annot"><span class="hs-string">&quot;/&quot;</span></span><span> </span><span class="annot"><span class="annottext">Text -&gt; Text -&gt; Text
+forall a. Semigroup a =&gt; a -&gt; a -&gt; a
+</span><span class="hs-operator hs-var">&lt;&gt;</span></span><span> </span><span class="hs-special">(</span><span class="annot"><span class="annottext">Text -&gt; Text -&gt; Text -&gt; Text
+</span><span class="hs-identifier hs-var">T.replace</span></span><span> </span><span class="annot"><span class="hs-string">&quot;/&quot;</span></span><span> </span><span class="annot"><span class="hs-string">&quot;~1&quot;</span></span><span> </span><span class="annot"><span class="annottext">(Text -&gt; Text) -&gt; Text -&gt; Text
+forall a b. (a -&gt; b) -&gt; a -&gt; b
+</span><span class="hs-operator hs-var">$</span></span><span> </span><span class="annot"><span class="annottext">Text -&gt; Text -&gt; Text -&gt; Text
+</span><span class="hs-identifier hs-var">T.replace</span></span><span> </span><span class="annot"><span class="hs-string">&quot;~&quot;</span></span><span> </span><span class="annot"><span class="hs-string">&quot;~0&quot;</span></span><span> </span><span class="annot"><span class="annottext">Text
+</span><a href="#local-6989586621679666368"><span class="hs-identifier hs-var">value</span></a></span><span class="hs-special">)</span><span class="hs-special">,</span><span> </span><span class="annot"><span class="annottext">$sel:components:Valid :: [Text]
+</span><a href="LaunchDarkly.Server.Reference.html#%24sel%3Acomponents%3AValid"><span class="hs-identifier hs-var">components</span></a></span><span> </span><span class="hs-glyph">=</span><span> </span><span class="hs-special">[</span><span class="annot"><span class="annottext">Text
+</span><a href="#local-6989586621679666368"><span class="hs-identifier hs-var">value</span></a></span><span class="hs-special">]</span><span class="hs-special">}</span><span>
+</span><span id="line-128"></span><span>
+</span><span id="line-129"></span><span class="hs-comment">-- |</span><span>
+</span><span id="line-130"></span><span class="hs-comment">-- Returns True for a valid Reference; False otherwise.</span><span>
+</span><span id="line-131"></span><span class="hs-comment">--</span><span>
+</span><span id="line-132"></span><span class="hs-comment">-- A Reference is invalid if the input string is empty, or starts with a slash</span><span>
+</span><span id="line-133"></span><span class="hs-comment">-- but is not a valid slash-delimited path, or starts with a slash and contains</span><span>
+</span><span id="line-134"></span><span class="hs-comment">-- an invalid escape sequence.</span><span>
+</span><span id="line-135"></span><span class="hs-comment">--</span><span>
+</span><span id="line-136"></span><span class="hs-comment">-- Otherwise, the Reference is valid, but that does not guarantee that such an</span><span>
+</span><span id="line-137"></span><span class="hs-comment">-- attribute exists in any given Context. For instance, @makeReference &quot;name&quot;@</span><span>
+</span><span id="line-138"></span><span class="hs-comment">-- is a valid Reference, but a specific Context might or might not have a name.</span><span>
+</span><span id="line-139"></span><span class="hs-comment">--</span><span>
+</span><span id="line-140"></span><span class="hs-comment">-- See comments on the &quot;LaunchDarkly.Server.Reference&quot; module for more details</span><span>
+</span><span id="line-141"></span><span class="hs-comment">-- of the attribute reference syntax.</span><span>
+</span><span id="line-142"></span><span class="annot"><a href="LaunchDarkly.Server.Reference.html#isValid"><span class="hs-identifier hs-type">isValid</span></a></span><span> </span><span class="hs-glyph">::</span><span> </span><span class="annot"><a href="LaunchDarkly.Server.Reference.html#Reference"><span class="hs-identifier hs-type">Reference</span></a></span><span> </span><span class="hs-glyph">-&gt;</span><span> </span><span class="annot"><span class="hs-identifier hs-type">Bool</span></span><span>
+</span><span id="line-143"></span><span id="isValid"><span class="annot"><span class="annottext">isValid :: Reference -&gt; Bool
+</span><a href="LaunchDarkly.Server.Reference.html#isValid"><span class="hs-identifier hs-var hs-var">isValid</span></a></span></span><span> </span><span class="hs-special">(</span><span class="annot"><a href="LaunchDarkly.Server.Reference.html#Invalid"><span class="hs-identifier hs-type">Invalid</span></a></span><span> </span><span class="hs-identifier">_</span><span> </span><span class="hs-identifier">_</span><span class="hs-special">)</span><span> </span><span class="hs-glyph">=</span><span> </span><span class="annot"><span class="annottext">Bool
+</span><span class="hs-identifier hs-var">False</span></span><span>
+</span><span id="line-144"></span><span class="annot"><a href="LaunchDarkly.Server.Reference.html#isValid"><span class="hs-identifier hs-var">isValid</span></a></span><span> </span><span class="hs-identifier">_</span><span> </span><span class="hs-glyph">=</span><span> </span><span class="annot"><span class="annottext">Bool
+</span><span class="hs-identifier hs-var">True</span></span><span>
+</span><span id="line-145"></span><span>
+</span><span id="line-146"></span><span class="hs-comment">-- |</span><span>
+</span><span id="line-147"></span><span class="hs-comment">-- Returns an empty string for a valid Reference, or a Text error description</span><span>
+</span><span id="line-148"></span><span class="hs-comment">-- for an invalid Reference.</span><span>
+</span><span id="line-149"></span><span class="hs-comment">--</span><span>
+</span><span id="line-150"></span><span class="hs-comment">-- See comments on the &quot;LaunchDarkly.Server.Reference&quot; module for more details</span><span>
+</span><span id="line-151"></span><span class="hs-comment">-- of the attribute reference syntax.</span><span>
+</span><span id="line-152"></span><span class="annot"><a href="LaunchDarkly.Server.Reference.html#getError"><span class="hs-identifier hs-type">getError</span></a></span><span> </span><span class="hs-glyph">::</span><span> </span><span class="annot"><a href="LaunchDarkly.Server.Reference.html#Reference"><span class="hs-identifier hs-type">Reference</span></a></span><span> </span><span class="hs-glyph">-&gt;</span><span> </span><span class="annot"><span class="hs-identifier hs-type">Text</span></span><span>
+</span><span id="line-153"></span><span id="getError"><span class="annot"><span class="annottext">getError :: Reference -&gt; Text
+</span><a href="LaunchDarkly.Server.Reference.html#getError"><span class="hs-identifier hs-var hs-var">getError</span></a></span></span><span> </span><span class="hs-special">(</span><span class="annot"><a href="LaunchDarkly.Server.Reference.html#Invalid"><span class="hs-identifier hs-type">Invalid</span></a></span><span> </span><span class="hs-special">{</span><span class="annot"><span class="annottext">$sel:error:Valid :: Reference -&gt; Text
+</span><a href="LaunchDarkly.Server.Reference.html#%24sel%3Aerror%3AValid"><span class="hs-identifier hs-var">error</span></a></span><span> </span><span class="hs-glyph">=</span><span> </span><span id="local-6989586621679666366"><span class="annot"><span class="annottext">Text
+</span><a href="#local-6989586621679666366"><span class="hs-identifier hs-var">e</span></a></span></span><span class="hs-special">}</span><span class="hs-special">)</span><span> </span><span class="hs-glyph">=</span><span> </span><span class="annot"><span class="annottext">Text
+</span><a href="#local-6989586621679666366"><span class="hs-identifier hs-var">e</span></a></span><span>
+</span><span id="line-154"></span><span class="annot"><a href="LaunchDarkly.Server.Reference.html#getError"><span class="hs-identifier hs-var">getError</span></a></span><span> </span><span class="hs-identifier">_</span><span> </span><span class="hs-glyph">=</span><span> </span><span class="annot"><span class="hs-string">&quot;&quot;</span></span><span>
+</span><span id="line-155"></span><span>
+</span><span id="line-156"></span><span class="hs-comment">-- |</span><span>
+</span><span id="line-157"></span><span class="hs-comment">-- Retrieves path components from the attribute reference.</span><span>
+</span><span id="line-158"></span><span class="hs-comment">--</span><span>
+</span><span id="line-159"></span><span class="hs-comment">-- Invalid references will return an empty list.</span><span>
+</span><span id="line-160"></span><span class="hs-comment">--</span><span>
+</span><span id="line-161"></span><span class="hs-comment">-- &gt; makeReference &quot;&quot; &amp; getComponents     -- returns []</span><span>
+</span><span id="line-162"></span><span class="hs-comment">-- &gt; makeReference &quot;a&quot; &amp; getComponents    -- returns [&quot;a&quot;]</span><span>
+</span><span id="line-163"></span><span class="hs-comment">-- &gt; makeReference &quot;/a/b&quot; &amp; getComponents -- returns [&quot;a&quot;, &quot;b&quot;]</span><span>
+</span><span id="line-164"></span><span class="annot"><a href="LaunchDarkly.Server.Reference.html#getComponents"><span class="hs-identifier hs-type">getComponents</span></a></span><span> </span><span class="hs-glyph">::</span><span> </span><span class="annot"><a href="LaunchDarkly.Server.Reference.html#Reference"><span class="hs-identifier hs-type">Reference</span></a></span><span> </span><span class="hs-glyph">-&gt;</span><span> </span><span class="hs-special">[</span><span class="annot"><span class="hs-identifier hs-type">Text</span></span><span class="hs-special">]</span><span>
+</span><span id="line-165"></span><span id="getComponents"><span class="annot"><span class="annottext">getComponents :: Reference -&gt; [Text]
+</span><a href="LaunchDarkly.Server.Reference.html#getComponents"><span class="hs-identifier hs-var hs-var">getComponents</span></a></span></span><span> </span><span class="hs-special">(</span><span class="annot"><a href="LaunchDarkly.Server.Reference.html#Valid"><span class="hs-identifier hs-type">Valid</span></a></span><span> </span><span class="hs-special">{</span><span id="local-6989586621679666365"><span class="annot"><span class="annottext">[Text]
+components :: [Text]
+$sel:components:Valid :: Reference -&gt; [Text]
+</span><a href="#local-6989586621679666365"><span class="hs-identifier hs-var hs-var">components</span></a></span></span><span class="hs-special">}</span><span class="hs-special">)</span><span> </span><span class="hs-glyph">=</span><span> </span><span class="annot"><span class="annottext">[Text]
+</span><a href="#local-6989586621679666365"><span class="hs-identifier hs-var">components</span></a></span><span>
+</span><span id="line-166"></span><span class="annot"><a href="LaunchDarkly.Server.Reference.html#getComponents"><span class="hs-identifier hs-var">getComponents</span></a></span><span> </span><span class="hs-identifier">_</span><span> </span><span class="hs-glyph">=</span><span> </span><span class="hs-special">[</span><span class="hs-special">]</span><span>
+</span><span id="line-167"></span><span>
+</span><span id="line-168"></span><span class="hs-comment">-- |</span><span>
+</span><span id="line-169"></span><span class="hs-comment">-- Returns the attribute reference as a string, in the same format provided</span><span>
+</span><span id="line-170"></span><span class="hs-comment">-- to 'makeReference'.</span><span>
+</span><span id="line-171"></span><span class="hs-comment">--</span><span>
+</span><span id="line-172"></span><span class="hs-comment">-- If the Reference was created with 'makeReference', this value is identical</span><span>
+</span><span id="line-173"></span><span class="hs-comment">-- to the original string. If it was created with 'makeLiteral', the value may</span><span>
+</span><span id="line-174"></span><span class="hs-comment">-- be different due to unescaping (for instance, an attribute whose name is</span><span>
+</span><span id="line-175"></span><span class="hs-comment">-- &quot;/a&quot; would be represented as &quot;~1a&quot;).</span><span>
+</span><span id="line-176"></span><span class="annot"><a href="LaunchDarkly.Server.Reference.html#getRawPath"><span class="hs-identifier hs-type">getRawPath</span></a></span><span> </span><span class="hs-glyph">::</span><span> </span><span class="annot"><a href="LaunchDarkly.Server.Reference.html#Reference"><span class="hs-identifier hs-type">Reference</span></a></span><span> </span><span class="hs-glyph">-&gt;</span><span> </span><span class="annot"><span class="hs-identifier hs-type">Text</span></span><span>
+</span><span id="line-177"></span><span id="getRawPath"><span class="annot"><span class="annottext">getRawPath :: Reference -&gt; Text
+</span><a href="LaunchDarkly.Server.Reference.html#getRawPath"><span class="hs-identifier hs-var hs-var">getRawPath</span></a></span></span><span> </span><span class="hs-glyph">=</span><span> </span><span class="annot"><span class="annottext">Reference -&gt; Text
+</span><a href="LaunchDarkly.Server.Reference.html#%24sel%3ArawPath%3AValid"><span class="hs-identifier hs-var hs-var">rawPath</span></a></span><span>
+</span><span id="line-178"></span><span>
+</span><span id="line-179"></span><span class="hs-comment">-- Method intended to be used with a foldr. If you do not use this with a</span><span>
+</span><span id="line-180"></span><span class="hs-comment">-- foldr, the components will be in the wrong order as this method does</span><span>
+</span><span id="line-181"></span><span class="hs-comment">-- prepending.</span><span>
+</span><span id="line-182"></span><span class="hs-comment">--</span><span>
+</span><span id="line-183"></span><span class="hs-comment">-- This function helps assist in the construction of a Valid reference by</span><span>
+</span><span id="line-184"></span><span class="hs-comment">-- incrementally adding a new component to the Reference. If the component</span><span>
+</span><span id="line-185"></span><span class="hs-comment">-- cannot be added, or if the Reference is already invalid, we return an</span><span>
+</span><span id="line-186"></span><span class="hs-comment">-- Invalid reference with the appropriate error description.</span><span>
+</span><span id="line-187"></span><span class="annot"><a href="LaunchDarkly.Server.Reference.html#addComponentToReference"><span class="hs-identifier hs-type">addComponentToReference</span></a></span><span> </span><span class="hs-glyph">::</span><span> </span><span class="annot"><span class="hs-identifier hs-type">Text</span></span><span> </span><span class="hs-glyph">-&gt;</span><span> </span><span class="annot"><a href="LaunchDarkly.Server.Reference.html#Reference"><span class="hs-identifier hs-type">Reference</span></a></span><span> </span><span class="hs-glyph">-&gt;</span><span> </span><span class="annot"><a href="LaunchDarkly.Server.Reference.html#Reference"><span class="hs-identifier hs-type">Reference</span></a></span><span>
+</span><span id="line-188"></span><span id="addComponentToReference"><span class="annot"><span class="annottext">addComponentToReference :: Text -&gt; Reference -&gt; Reference
+</span><a href="LaunchDarkly.Server.Reference.html#addComponentToReference"><span class="hs-identifier hs-var hs-var">addComponentToReference</span></a></span></span><span> </span><span class="hs-identifier">_</span><span> </span><span id="local-6989586621679666364"><span class="annot"><span class="annottext">r :: Reference
+</span><a href="#local-6989586621679666364"><span class="hs-identifier hs-var">r</span></a></span></span><span class="hs-glyph">@</span><span class="hs-special">(</span><span class="annot"><a href="LaunchDarkly.Server.Reference.html#Invalid"><span class="hs-identifier hs-type">Invalid</span></a></span><span> </span><span class="hs-identifier">_</span><span> </span><span class="hs-identifier">_</span><span class="hs-special">)</span><span> </span><span class="hs-glyph">=</span><span> </span><span class="annot"><span class="annottext">Reference
+</span><a href="#local-6989586621679666364"><span class="hs-identifier hs-var">r</span></a></span><span>
+</span><span id="line-189"></span><span class="annot"><a href="LaunchDarkly.Server.Reference.html#addComponentToReference"><span class="hs-identifier hs-var">addComponentToReference</span></a></span><span> </span><span class="hs-string">&quot;&quot;</span><span> </span><span class="hs-special">(</span><span class="annot"><a href="LaunchDarkly.Server.Reference.html#Valid"><span class="hs-identifier hs-type">Valid</span></a></span><span> </span><span class="hs-special">{</span><span id="local-6989586621679666363"><span class="annot"><span class="annottext">Text
+rawPath :: Text
+$sel:rawPath:Valid :: Reference -&gt; Text
+</span><a href="#local-6989586621679666363"><span class="hs-identifier hs-var hs-var">rawPath</span></a></span></span><span class="hs-special">}</span><span class="hs-special">)</span><span> </span><span class="hs-glyph">=</span><span> </span><span class="annot"><span class="annottext">$WInvalid :: Text -&gt; Text -&gt; Reference
+</span><a href="LaunchDarkly.Server.Reference.html#%24WInvalid"><span class="hs-identifier hs-type hs-type">Invalid</span></a></span><span> </span><span class="hs-special">{</span><span class="annot"><span class="annottext">Text
+rawPath :: Text
+$sel:rawPath:Valid :: Text
+</span><a href="#local-6989586621679666363"><span class="hs-identifier hs-var hs-var">rawPath</span></a></span><span class="hs-special">,</span><span> </span><span class="annot"><span class="annottext">$sel:error:Valid :: Text
+</span><a href="LaunchDarkly.Server.Reference.html#%24sel%3Aerror%3AValid"><span class="hs-identifier hs-var">error</span></a></span><span> </span><span class="hs-glyph">=</span><span> </span><span class="annot"><span class="hs-string">&quot;double slash&quot;</span></span><span class="hs-special">}</span><span>
+</span><span id="line-190"></span><span class="annot"><a href="LaunchDarkly.Server.Reference.html#addComponentToReference"><span class="hs-identifier hs-var">addComponentToReference</span></a></span><span> </span><span id="local-6989586621679666362"><span class="annot"><span class="annottext">component :: Text
+</span><a href="#local-6989586621679666362"><span class="hs-identifier hs-var">component</span></a></span></span><span> </span><span class="hs-special">(</span><span class="annot"><a href="LaunchDarkly.Server.Reference.html#Valid"><span class="hs-identifier hs-type">Valid</span></a></span><span> </span><span class="hs-special">{</span><span id="local-6989586621679666361"><span class="annot"><span class="annottext">Text
+rawPath :: Text
+$sel:rawPath:Valid :: Reference -&gt; Text
+</span><a href="#local-6989586621679666361"><span class="hs-identifier hs-var hs-var">rawPath</span></a></span></span><span class="hs-special">,</span><span> </span><span id="local-6989586621679666360"><span class="annot"><span class="annottext">[Text]
+components :: [Text]
+$sel:components:Valid :: Reference -&gt; [Text]
+</span><a href="#local-6989586621679666360"><span class="hs-identifier hs-var hs-var">components</span></a></span></span><span class="hs-special">}</span><span class="hs-special">)</span><span> </span><span class="hs-glyph">=</span><span> </span><span class="hs-keyword">case</span><span> </span><span class="annot"><span class="annottext">Text -&gt; Either Text Text
+</span><a href="LaunchDarkly.Server.Reference.html#unescapePath"><span class="hs-identifier hs-var">unescapePath</span></a></span><span> </span><span class="annot"><span class="annottext">Text
+</span><a href="#local-6989586621679666362"><span class="hs-identifier hs-var">component</span></a></span><span> </span><span class="hs-keyword">of</span><span>
+</span><span id="line-191"></span><span>    </span><span class="annot"><span class="hs-identifier hs-type">Left</span></span><span> </span><span id="local-6989586621679666358"><span class="annot"><span class="annottext">c :: Text
+</span><a href="#local-6989586621679666358"><span class="hs-identifier hs-var">c</span></a></span></span><span> </span><span class="hs-glyph">-&gt;</span><span> </span><span class="annot"><span class="annottext">$WValid :: Text -&gt; [Text] -&gt; Reference
+</span><a href="LaunchDarkly.Server.Reference.html#%24WValid"><span class="hs-identifier hs-type hs-type">Valid</span></a></span><span> </span><span class="hs-special">{</span><span class="annot"><span class="annottext">Text
+rawPath :: Text
+$sel:rawPath:Valid :: Text
+</span><a href="#local-6989586621679666361"><span class="hs-identifier hs-var hs-var">rawPath</span></a></span><span class="hs-special">,</span><span> </span><span class="annot"><span class="annottext">$sel:components:Valid :: [Text]
+</span><a href="LaunchDarkly.Server.Reference.html#%24sel%3Acomponents%3AValid"><span class="hs-identifier hs-var">components</span></a></span><span> </span><span class="hs-glyph">=</span><span> </span><span class="hs-special">(</span><span class="annot"><span class="annottext">Text
+</span><a href="#local-6989586621679666358"><span class="hs-identifier hs-var">c</span></a></span><span> </span><span class="annot"><span class="annottext">Text -&gt; [Text] -&gt; [Text]
+forall a. a -&gt; [a] -&gt; [a]
+</span><span class="hs-glyph hs-var">:</span></span><span> </span><span class="annot"><span class="annottext">[Text]
+</span><a href="#local-6989586621679666360"><span class="hs-identifier hs-var">components</span></a></span><span class="hs-special">)</span><span class="hs-special">}</span><span>
+</span><span id="line-192"></span><span>    </span><span class="annot"><span class="hs-identifier hs-type">Right</span></span><span> </span><span id="local-6989586621679666357"><span class="annot"><span class="annottext">e :: Text
+</span><a href="#local-6989586621679666357"><span class="hs-identifier hs-var">e</span></a></span></span><span> </span><span class="hs-glyph">-&gt;</span><span> </span><span class="annot"><span class="annottext">$WInvalid :: Text -&gt; Text -&gt; Reference
+</span><a href="LaunchDarkly.Server.Reference.html#%24WInvalid"><span class="hs-identifier hs-type hs-type">Invalid</span></a></span><span> </span><span class="hs-special">{</span><span class="annot"><span class="annottext">Text
+rawPath :: Text
+$sel:rawPath:Valid :: Text
+</span><a href="#local-6989586621679666361"><span class="hs-identifier hs-var hs-var">rawPath</span></a></span><span class="hs-special">,</span><span> </span><span class="annot"><span class="annottext">$sel:error:Valid :: Text
+</span><a href="LaunchDarkly.Server.Reference.html#%24sel%3Aerror%3AValid"><span class="hs-identifier hs-var">error</span></a></span><span> </span><span class="hs-glyph">=</span><span> </span><span class="annot"><span class="annottext">Text
+</span><a href="#local-6989586621679666357"><span class="hs-identifier hs-var">e</span></a></span><span class="hs-special">}</span><span>
+</span><span id="line-193"></span><span>
+</span><span id="line-194"></span><span class="hs-comment">-- Performs unescaping of attribute reference path components:</span><span>
+</span><span id="line-195"></span><span class="hs-comment">--</span><span>
+</span><span id="line-196"></span><span class="hs-comment">-- &quot;~1&quot; becomes &quot;/&quot;</span><span>
+</span><span id="line-197"></span><span class="hs-comment">-- &quot;~0&quot; becomes &quot;~&quot;</span><span>
+</span><span id="line-198"></span><span class="hs-comment">-- &quot;~&quot; followed by any character other than &quot;0&quot; or &quot;1&quot; is invalid</span><span>
+</span><span id="line-199"></span><span class="hs-comment">--</span><span>
+</span><span id="line-200"></span><span class="hs-comment">-- This method returns an Either. Left Text is the path if unescaping was</span><span>
+</span><span id="line-201"></span><span class="hs-comment">-- valid; otherwise, Right Text will be a description error message.</span><span>
+</span><span id="line-202"></span><span class="annot"><a href="LaunchDarkly.Server.Reference.html#unescapePath"><span class="hs-identifier hs-type">unescapePath</span></a></span><span> </span><span class="hs-glyph">::</span><span> </span><span class="annot"><span class="hs-identifier hs-type">Text</span></span><span> </span><span class="hs-glyph">-&gt;</span><span> </span><span class="annot"><span class="hs-identifier hs-type">Either</span></span><span> </span><span class="annot"><span class="hs-identifier hs-type">Text</span></span><span> </span><span class="annot"><span class="hs-identifier hs-type">Text</span></span><span>
+</span><span id="line-203"></span><span id="unescapePath"><span class="annot"><span class="annottext">unescapePath :: Text -&gt; Either Text Text
+</span><a href="LaunchDarkly.Server.Reference.html#unescapePath"><span class="hs-identifier hs-var hs-var">unescapePath</span></a></span></span><span> </span><span id="local-6989586621679666356"><span class="annot"><span class="annottext">value :: Text
+</span><a href="#local-6989586621679666356"><span class="hs-identifier hs-var">value</span></a></span></span><span class="hs-glyph">@</span><span class="hs-special">(</span><span class="annot"><span class="annottext">Text -&gt; Text -&gt; Bool
+</span><span class="hs-identifier hs-var">T.isInfixOf</span></span><span> </span><span class="annot"><span class="hs-string">&quot;~&quot;</span></span><span> </span><span class="hs-glyph">-&gt;</span><span> </span><span class="annot"><span class="annottext">Bool
+</span><span class="hs-identifier hs-var">False</span></span><span class="hs-special">)</span><span> </span><span class="hs-glyph">=</span><span> </span><span class="annot"><span class="annottext">Text -&gt; Either Text Text
+forall a b. a -&gt; Either a b
+</span><span class="hs-identifier hs-var">Left</span></span><span> </span><span class="annot"><span class="annottext">Text
+</span><a href="#local-6989586621679666356"><span class="hs-identifier hs-var">value</span></a></span><span>
+</span><span id="line-204"></span><span class="annot"><a href="LaunchDarkly.Server.Reference.html#unescapePath"><span class="hs-identifier hs-var">unescapePath</span></a></span><span> </span><span class="hs-special">(</span><span class="annot"><span class="annottext">Text -&gt; Text -&gt; Maybe Text
+</span><span class="hs-identifier hs-var">T.stripSuffix</span></span><span> </span><span class="annot"><span class="hs-string">&quot;~&quot;</span></span><span> </span><span class="hs-glyph">-&gt;</span><span> </span><span class="annot"><span class="hs-identifier hs-type">Just</span></span><span> </span><span class="hs-identifier">_</span><span class="hs-special">)</span><span> </span><span class="hs-glyph">=</span><span> </span><span class="annot"><span class="annottext">Text -&gt; Either Text Text
+forall a b. b -&gt; Either a b
+</span><span class="hs-identifier hs-var">Right</span></span><span> </span><span class="annot"><span class="hs-string">&quot;invalid escape sequence&quot;</span></span><span>
+</span><span id="line-205"></span><span class="annot"><a href="LaunchDarkly.Server.Reference.html#unescapePath"><span class="hs-identifier hs-var">unescapePath</span></a></span><span> </span><span id="local-6989586621679666354"><span class="annot"><span class="annottext">value :: Text
+</span><a href="#local-6989586621679666354"><span class="hs-identifier hs-var">value</span></a></span></span><span> </span><span class="hs-glyph">=</span><span>
+</span><span id="line-206"></span><span>    </span><span class="hs-keyword">let</span><span> </span><span id="local-6989586621679666353"><span class="annot"><span class="annottext">component :: ComponentState
+</span><a href="#local-6989586621679666353"><span class="hs-identifier hs-var hs-var">component</span></a></span></span><span> </span><span class="hs-glyph">=</span><span> </span><span class="annot"><span class="annottext">(ComponentState -&gt; Char -&gt; ComponentState)
+-&gt; ComponentState -&gt; Text -&gt; ComponentState
+forall a. (a -&gt; Char -&gt; a) -&gt; a -&gt; Text -&gt; a
+</span><span class="hs-identifier hs-var">T.foldl</span></span><span> </span><span class="annot"><span class="annottext">ComponentState -&gt; Char -&gt; ComponentState
+</span><a href="LaunchDarkly.Server.Reference.html#unescapeComponent"><span class="hs-identifier hs-var">unescapeComponent</span></a></span><span> </span><span class="hs-special">(</span><span class="annot"><span class="annottext">$WComponentState :: String -&gt; Bool -&gt; Bool -&gt; ComponentState
+</span><a href="LaunchDarkly.Server.Reference.html#%24WComponentState"><span class="hs-identifier hs-type hs-type">ComponentState</span></a></span><span> </span><span class="hs-special">{</span><span class="annot"><span class="annottext">$sel:acc:ComponentState :: String
+</span><a href="LaunchDarkly.Server.Reference.html#%24sel%3Aacc%3AComponentState"><span class="hs-identifier hs-var">acc</span></a></span><span> </span><span class="hs-glyph">=</span><span> </span><span class="hs-special">[</span><span class="hs-special">]</span><span class="hs-special">,</span><span> </span><span class="annot"><span class="annottext">$sel:valid:ComponentState :: Bool
+</span><a href="LaunchDarkly.Server.Reference.html#%24sel%3Avalid%3AComponentState"><span class="hs-identifier hs-var">valid</span></a></span><span> </span><span class="hs-glyph">=</span><span> </span><span class="annot"><span class="annottext">Bool
+</span><span class="hs-identifier hs-var">True</span></span><span class="hs-special">,</span><span> </span><span class="annot"><span class="annottext">$sel:inEscape:ComponentState :: Bool
+</span><a href="LaunchDarkly.Server.Reference.html#%24sel%3AinEscape%3AComponentState"><span class="hs-identifier hs-var">inEscape</span></a></span><span> </span><span class="hs-glyph">=</span><span> </span><span class="annot"><span class="annottext">Bool
+</span><span class="hs-identifier hs-var">False</span></span><span class="hs-special">}</span><span class="hs-special">)</span><span> </span><span class="annot"><span class="annottext">Text
+</span><a href="#local-6989586621679666354"><span class="hs-identifier hs-var">value</span></a></span><span>
+</span><span id="line-207"></span><span>     </span><span class="hs-keyword">in</span><span> </span><span class="hs-keyword">case</span><span> </span><span class="annot"><span class="annottext">ComponentState
+</span><a href="#local-6989586621679666353"><span class="hs-identifier hs-var">component</span></a></span><span> </span><span class="hs-keyword">of</span><span>
+</span><span id="line-208"></span><span>            </span><span class="annot"><a href="LaunchDarkly.Server.Reference.html#ComponentState"><span class="hs-identifier hs-type">ComponentState</span></a></span><span> </span><span class="hs-special">{</span><span class="annot"><span class="annottext">$sel:acc:ComponentState :: ComponentState -&gt; String
+</span><a href="LaunchDarkly.Server.Reference.html#%24sel%3Aacc%3AComponentState"><span class="hs-identifier hs-var">acc</span></a></span><span> </span><span class="hs-glyph">=</span><span> </span><span id="local-6989586621679666345"><span class="annot"><span class="annottext">String
+</span><a href="#local-6989586621679666345"><span class="hs-identifier hs-var">acc</span></a></span></span><span class="hs-special">,</span><span> </span><span class="annot"><span class="annottext">$sel:valid:ComponentState :: ComponentState -&gt; Bool
+</span><a href="LaunchDarkly.Server.Reference.html#%24sel%3Avalid%3AComponentState"><span class="hs-identifier hs-var">valid</span></a></span><span> </span><span class="hs-glyph">=</span><span> </span><span class="annot"><span class="annottext">Bool
+</span><span class="hs-identifier hs-var">True</span></span><span class="hs-special">}</span><span> </span><span class="hs-glyph">-&gt;</span><span> </span><span class="annot"><span class="annottext">Text -&gt; Either Text Text
+forall a b. a -&gt; Either a b
+</span><span class="hs-identifier hs-var">Left</span></span><span> </span><span class="annot"><span class="annottext">(Text -&gt; Either Text Text) -&gt; Text -&gt; Either Text Text
+forall a b. (a -&gt; b) -&gt; a -&gt; b
+</span><span class="hs-operator hs-var">$</span></span><span> </span><span class="annot"><span class="annottext">String -&gt; Text
+</span><span class="hs-identifier hs-var">T.pack</span></span><span> </span><span class="annot"><span class="annottext">(String -&gt; Text) -&gt; String -&gt; Text
+forall a b. (a -&gt; b) -&gt; a -&gt; b
+</span><span class="hs-operator hs-var">$</span></span><span> </span><span class="annot"><span class="annottext">ShowS
+forall a. [a] -&gt; [a]
+</span><span class="hs-identifier hs-var">reverse</span></span><span> </span><span class="annot"><span class="annottext">String
+</span><a href="#local-6989586621679666345"><span class="hs-identifier hs-var">acc</span></a></span><span>
+</span><span id="line-209"></span><span>            </span><span class="hs-identifier">_</span><span> </span><span class="hs-glyph">-&gt;</span><span> </span><span class="annot"><span class="annottext">Text -&gt; Either Text Text
+forall a b. b -&gt; Either a b
+</span><span class="hs-identifier hs-var">Right</span></span><span> </span><span class="annot"><span class="hs-string">&quot;invalid escape sequence&quot;</span></span><span>
+</span><span id="line-210"></span><span>
+</span><span id="line-211"></span><span class="hs-comment">-- Component state is a helper record to assist with unescaping a string.</span><span>
+</span><span id="line-212"></span><span class="hs-comment">--</span><span>
+</span><span id="line-213"></span><span class="hs-comment">-- When we are processing a string, we have to ensure that ~ is followed by 0</span><span>
+</span><span id="line-214"></span><span class="hs-comment">-- or 1. Any other value is invalid. To track this, we update this component</span><span>
+</span><span id="line-215"></span><span class="hs-comment">-- state through a fold operation.</span><span>
+</span><span id="line-216"></span><span class="hs-keyword">data</span><span> </span><span id="ComponentState"><span class="annot"><a href="LaunchDarkly.Server.Reference.html#ComponentState"><span class="hs-identifier hs-var">ComponentState</span></a></span></span><span> </span><span class="hs-glyph">=</span><span> </span><span id="ComponentState"><span class="annot"><a href="LaunchDarkly.Server.Reference.html#ComponentState"><span class="hs-identifier hs-var">ComponentState</span></a></span></span><span>
+</span><span id="line-217"></span><span>    </span><span class="hs-special">{</span><span> </span><span id="%24sel%3Aacc%3AComponentState"><span class="annot"><span class="annottext">ComponentState -&gt; String
+</span><a href="LaunchDarkly.Server.Reference.html#%24sel%3Aacc%3AComponentState"><span class="hs-identifier hs-var hs-var">acc</span></a></span></span><span> </span><span class="hs-glyph">::</span><span> </span><span class="hs-glyph">!</span><span class="hs-special">[</span><span class="annot"><span class="hs-identifier hs-type">Char</span></span><span class="hs-special">]</span><span> </span><span class="hs-comment">-- Container to hold the piece of the input that has been successfully parsed.</span><span>
+</span><span id="line-218"></span><span>    </span><span class="hs-special">,</span><span> </span><span id="%24sel%3Avalid%3AComponentState"><span class="annot"><span class="annottext">ComponentState -&gt; Bool
+</span><a href="LaunchDarkly.Server.Reference.html#%24sel%3Avalid%3AComponentState"><span class="hs-identifier hs-var hs-var">valid</span></a></span></span><span> </span><span class="hs-glyph">::</span><span> </span><span class="hs-glyph">!</span><span class="annot"><span class="hs-identifier hs-type">Bool</span></span><span> </span><span class="hs-comment">-- Is the state currently valid?</span><span>
+</span><span id="line-219"></span><span>    </span><span class="hs-special">,</span><span> </span><span id="%24sel%3AinEscape%3AComponentState"><span class="annot"><span class="annottext">ComponentState -&gt; Bool
+</span><a href="LaunchDarkly.Server.Reference.html#%24sel%3AinEscape%3AComponentState"><span class="hs-identifier hs-var hs-var">inEscape</span></a></span></span><span> </span><span class="hs-glyph">::</span><span> </span><span class="hs-glyph">!</span><span class="annot"><span class="hs-identifier hs-type">Bool</span></span><span> </span><span class="hs-comment">-- Was the last character seen a tilde?</span><span>
+</span><span id="line-220"></span><span>    </span><span class="hs-special">}</span><span>
+</span><span id="line-221"></span><span>
+</span><span id="line-222"></span><span class="hs-comment">-- Intended to be used in a foldl operation to apply unescaping rules as</span><span>
+</span><span id="line-223"></span><span class="hs-comment">-- defined in 'unescapePath'.</span><span>
+</span><span id="line-224"></span><span class="hs-comment">--</span><span>
+</span><span id="line-225"></span><span class="hs-comment">-- Note that the 'ComponentState.acc' will be built backwards. This is because</span><span>
+</span><span id="line-226"></span><span class="hs-comment">-- prepending is faster in Haskell. Calling functions should reverse</span><span>
+</span><span id="line-227"></span><span class="hs-comment">-- accordingly.</span><span>
+</span><span id="line-228"></span><span class="annot"><a href="LaunchDarkly.Server.Reference.html#unescapeComponent"><span class="hs-identifier hs-type">unescapeComponent</span></a></span><span> </span><span class="hs-glyph">::</span><span> </span><span class="annot"><a href="LaunchDarkly.Server.Reference.html#ComponentState"><span class="hs-identifier hs-type">ComponentState</span></a></span><span> </span><span class="hs-glyph">-&gt;</span><span> </span><span class="annot"><span class="hs-identifier hs-type">Char</span></span><span> </span><span class="hs-glyph">-&gt;</span><span> </span><span class="annot"><a href="LaunchDarkly.Server.Reference.html#ComponentState"><span class="hs-identifier hs-type">ComponentState</span></a></span><span>
+</span><span id="line-229"></span><span class="hs-comment">-- Short circuit if we are already invalid</span><span>
+</span><span id="line-230"></span><span id="unescapeComponent"><span class="annot"><span class="annottext">unescapeComponent :: ComponentState -&gt; Char -&gt; ComponentState
+</span><a href="LaunchDarkly.Server.Reference.html#unescapeComponent"><span class="hs-identifier hs-var hs-var">unescapeComponent</span></a></span></span><span> </span><span id="local-6989586621679666342"><span class="annot"><span class="annottext">component :: ComponentState
+</span><a href="#local-6989586621679666342"><span class="hs-identifier hs-var">component</span></a></span></span><span class="hs-glyph">@</span><span class="hs-special">(</span><span class="annot"><a href="LaunchDarkly.Server.Reference.html#ComponentState"><span class="hs-identifier hs-type">ComponentState</span></a></span><span> </span><span class="hs-special">{</span><span class="annot"><span class="annottext">$sel:valid:ComponentState :: ComponentState -&gt; Bool
+</span><a href="LaunchDarkly.Server.Reference.html#%24sel%3Avalid%3AComponentState"><span class="hs-identifier hs-var">valid</span></a></span><span> </span><span class="hs-glyph">=</span><span> </span><span class="annot"><span class="annottext">Bool
+</span><span class="hs-identifier hs-var">False</span></span><span class="hs-special">}</span><span class="hs-special">)</span><span> </span><span class="hs-identifier">_</span><span> </span><span class="hs-glyph">=</span><span> </span><span class="annot"><span class="annottext">ComponentState
+</span><a href="#local-6989586621679666342"><span class="hs-identifier hs-var">component</span></a></span><span>
+</span><span id="line-231"></span><span class="hs-comment">-- Escape mode with a 0 or 1 means a valid escape sequence. We can append this</span><span>
+</span><span id="line-232"></span><span class="hs-comment">-- to the state's accumulator.</span><span>
+</span><span id="line-233"></span><span class="annot"><a href="LaunchDarkly.Server.Reference.html#unescapeComponent"><span class="hs-identifier hs-var">unescapeComponent</span></a></span><span> </span><span id="local-6989586621679666341"><span class="annot"><span class="annottext">component :: ComponentState
+</span><a href="#local-6989586621679666341"><span class="hs-identifier hs-var">component</span></a></span></span><span class="hs-glyph">@</span><span class="hs-special">(</span><span class="annot"><a href="LaunchDarkly.Server.Reference.html#ComponentState"><span class="hs-identifier hs-type">ComponentState</span></a></span><span> </span><span class="hs-special">{</span><span id="local-6989586621679666340"><span class="annot"><span class="annottext">String
+acc :: String
+$sel:acc:ComponentState :: ComponentState -&gt; String
+</span><a href="#local-6989586621679666340"><span class="hs-identifier hs-var hs-var">acc</span></a></span></span><span class="hs-special">,</span><span> </span><span class="annot"><span class="annottext">$sel:inEscape:ComponentState :: ComponentState -&gt; Bool
+</span><a href="LaunchDarkly.Server.Reference.html#%24sel%3AinEscape%3AComponentState"><span class="hs-identifier hs-var">inEscape</span></a></span><span> </span><span class="hs-glyph">=</span><span> </span><span class="annot"><span class="annottext">Bool
+</span><span class="hs-identifier hs-var">True</span></span><span class="hs-special">}</span><span class="hs-special">)</span><span> </span><span class="hs-char">'0'</span><span> </span><span class="hs-glyph">=</span><span> </span><span class="annot"><span class="annottext">ComponentState
+</span><a href="#local-6989586621679666341"><span class="hs-identifier hs-var">component</span></a></span><span> </span><span class="hs-special">{</span><span class="annot"><span class="annottext">$sel:acc:ComponentState :: String
+</span><a href="LaunchDarkly.Server.Reference.html#%24sel%3Aacc%3AComponentState"><span class="hs-identifier hs-var">acc</span></a></span><span> </span><span class="hs-glyph">=</span><span> </span><span class="annot"><span class="hs-char">'~'</span></span><span> </span><span class="annot"><span class="annottext">Char -&gt; ShowS
+forall a. a -&gt; [a] -&gt; [a]
+</span><span class="hs-glyph hs-var">:</span></span><span> </span><span class="annot"><span class="annottext">String
+</span><a href="#local-6989586621679666340"><span class="hs-identifier hs-var">acc</span></a></span><span class="hs-special">,</span><span> </span><span class="annot"><span class="annottext">$sel:valid:ComponentState :: Bool
+</span><a href="LaunchDarkly.Server.Reference.html#%24sel%3Avalid%3AComponentState"><span class="hs-identifier hs-var">valid</span></a></span><span> </span><span class="hs-glyph">=</span><span> </span><span class="annot"><span class="annottext">Bool
+</span><span class="hs-identifier hs-var">True</span></span><span class="hs-special">,</span><span> </span><span class="annot"><span class="annottext">$sel:inEscape:ComponentState :: Bool
+</span><a href="LaunchDarkly.Server.Reference.html#%24sel%3AinEscape%3AComponentState"><span class="hs-identifier hs-var">inEscape</span></a></span><span> </span><span class="hs-glyph">=</span><span> </span><span class="annot"><span class="annottext">Bool
+</span><span class="hs-identifier hs-var">False</span></span><span class="hs-special">}</span><span>
+</span><span id="line-234"></span><span class="annot"><a href="LaunchDarkly.Server.Reference.html#unescapeComponent"><span class="hs-identifier hs-var">unescapeComponent</span></a></span><span> </span><span id="local-6989586621679666339"><span class="annot"><span class="annottext">component :: ComponentState
+</span><a href="#local-6989586621679666339"><span class="hs-identifier hs-var">component</span></a></span></span><span class="hs-glyph">@</span><span class="hs-special">(</span><span class="annot"><a href="LaunchDarkly.Server.Reference.html#ComponentState"><span class="hs-identifier hs-type">ComponentState</span></a></span><span> </span><span class="hs-special">{</span><span id="local-6989586621679666338"><span class="annot"><span class="annottext">String
+acc :: String
+$sel:acc:ComponentState :: ComponentState -&gt; String
+</span><a href="#local-6989586621679666338"><span class="hs-identifier hs-var hs-var">acc</span></a></span></span><span class="hs-special">,</span><span> </span><span class="annot"><span class="annottext">$sel:inEscape:ComponentState :: ComponentState -&gt; Bool
+</span><a href="LaunchDarkly.Server.Reference.html#%24sel%3AinEscape%3AComponentState"><span class="hs-identifier hs-var">inEscape</span></a></span><span> </span><span class="hs-glyph">=</span><span> </span><span class="annot"><span class="annottext">Bool
+</span><span class="hs-identifier hs-var">True</span></span><span class="hs-special">}</span><span class="hs-special">)</span><span> </span><span class="hs-char">'1'</span><span> </span><span class="hs-glyph">=</span><span> </span><span class="annot"><span class="annottext">ComponentState
+</span><a href="#local-6989586621679666339"><span class="hs-identifier hs-var">component</span></a></span><span> </span><span class="hs-special">{</span><span class="annot"><span class="annottext">$sel:acc:ComponentState :: String
+</span><a href="LaunchDarkly.Server.Reference.html#%24sel%3Aacc%3AComponentState"><span class="hs-identifier hs-var">acc</span></a></span><span> </span><span class="hs-glyph">=</span><span> </span><span class="annot"><span class="hs-char">'/'</span></span><span> </span><span class="annot"><span class="annottext">Char -&gt; ShowS
+forall a. a -&gt; [a] -&gt; [a]
+</span><span class="hs-glyph hs-var">:</span></span><span> </span><span class="annot"><span class="annottext">String
+</span><a href="#local-6989586621679666338"><span class="hs-identifier hs-var">acc</span></a></span><span class="hs-special">,</span><span> </span><span class="annot"><span class="annottext">$sel:valid:ComponentState :: Bool
+</span><a href="LaunchDarkly.Server.Reference.html#%24sel%3Avalid%3AComponentState"><span class="hs-identifier hs-var">valid</span></a></span><span> </span><span class="hs-glyph">=</span><span> </span><span class="annot"><span class="annottext">Bool
+</span><span class="hs-identifier hs-var">True</span></span><span class="hs-special">,</span><span> </span><span class="annot"><span class="annottext">$sel:inEscape:ComponentState :: Bool
+</span><a href="LaunchDarkly.Server.Reference.html#%24sel%3AinEscape%3AComponentState"><span class="hs-identifier hs-var">inEscape</span></a></span><span> </span><span class="hs-glyph">=</span><span> </span><span class="annot"><span class="annottext">Bool
+</span><span class="hs-identifier hs-var">False</span></span><span class="hs-special">}</span><span>
+</span><span id="line-235"></span><span class="hs-comment">-- Any other character during an escape sequence isn't valid</span><span>
+</span><span id="line-236"></span><span class="annot"><a href="LaunchDarkly.Server.Reference.html#unescapeComponent"><span class="hs-identifier hs-var">unescapeComponent</span></a></span><span> </span><span id="local-6989586621679666337"><span class="annot"><span class="annottext">component :: ComponentState
+</span><a href="#local-6989586621679666337"><span class="hs-identifier hs-var">component</span></a></span></span><span class="hs-glyph">@</span><span class="hs-special">(</span><span class="annot"><a href="LaunchDarkly.Server.Reference.html#ComponentState"><span class="hs-identifier hs-type">ComponentState</span></a></span><span> </span><span class="hs-special">{</span><span class="annot"><span class="annottext">$sel:inEscape:ComponentState :: ComponentState -&gt; Bool
+</span><a href="LaunchDarkly.Server.Reference.html#%24sel%3AinEscape%3AComponentState"><span class="hs-identifier hs-var">inEscape</span></a></span><span> </span><span class="hs-glyph">=</span><span> </span><span class="annot"><span class="annottext">Bool
+</span><span class="hs-identifier hs-var">True</span></span><span class="hs-special">}</span><span class="hs-special">)</span><span> </span><span class="hs-identifier">_</span><span> </span><span class="hs-glyph">=</span><span> </span><span class="annot"><span class="annottext">ComponentState
+</span><a href="#local-6989586621679666337"><span class="hs-identifier hs-var">component</span></a></span><span> </span><span class="hs-special">{</span><span class="annot"><span class="annottext">$sel:valid:ComponentState :: Bool
+</span><a href="LaunchDarkly.Server.Reference.html#%24sel%3Avalid%3AComponentState"><span class="hs-identifier hs-var">valid</span></a></span><span> </span><span class="hs-glyph">=</span><span> </span><span class="annot"><span class="annottext">Bool
+</span><span class="hs-identifier hs-var">False</span></span><span class="hs-special">}</span><span>
+</span><span id="line-237"></span><span class="hs-comment">-- ~ means we should start escaping</span><span>
+</span><span id="line-238"></span><span class="annot"><a href="LaunchDarkly.Server.Reference.html#unescapeComponent"><span class="hs-identifier hs-var">unescapeComponent</span></a></span><span> </span><span id="local-6989586621679666336"><span class="annot"><span class="annottext">component :: ComponentState
+</span><a href="#local-6989586621679666336"><span class="hs-identifier hs-var">component</span></a></span></span><span> </span><span class="hs-char">'~'</span><span> </span><span class="hs-glyph">=</span><span> </span><span class="annot"><span class="annottext">ComponentState
+</span><a href="#local-6989586621679666336"><span class="hs-identifier hs-var">component</span></a></span><span> </span><span class="hs-special">{</span><span class="annot"><span class="annottext">$sel:inEscape:ComponentState :: Bool
+</span><a href="LaunchDarkly.Server.Reference.html#%24sel%3AinEscape%3AComponentState"><span class="hs-identifier hs-var">inEscape</span></a></span><span> </span><span class="hs-glyph">=</span><span> </span><span class="annot"><span class="annottext">Bool
+</span><span class="hs-identifier hs-var">True</span></span><span class="hs-special">}</span><span>
+</span><span id="line-239"></span><span class="hs-comment">-- Regular characters can be added without issue</span><span>
+</span><span id="line-240"></span><span class="annot"><a href="LaunchDarkly.Server.Reference.html#unescapeComponent"><span class="hs-identifier hs-var">unescapeComponent</span></a></span><span> </span><span id="local-6989586621679666335"><span class="annot"><span class="annottext">component :: ComponentState
+</span><a href="#local-6989586621679666335"><span class="hs-identifier hs-var">component</span></a></span></span><span class="hs-glyph">@</span><span class="hs-special">(</span><span class="annot"><a href="LaunchDarkly.Server.Reference.html#ComponentState"><span class="hs-identifier hs-type">ComponentState</span></a></span><span> </span><span class="hs-special">{</span><span id="local-6989586621679666334"><span class="annot"><span class="annottext">String
+acc :: String
+$sel:acc:ComponentState :: ComponentState -&gt; String
+</span><a href="#local-6989586621679666334"><span class="hs-identifier hs-var hs-var">acc</span></a></span></span><span class="hs-special">}</span><span class="hs-special">)</span><span> </span><span id="local-6989586621679666333"><span class="annot"><span class="annottext">c :: Char
+</span><a href="#local-6989586621679666333"><span class="hs-identifier hs-var">c</span></a></span></span><span> </span><span class="hs-glyph">=</span><span> </span><span class="annot"><span class="annottext">ComponentState
+</span><a href="#local-6989586621679666335"><span class="hs-identifier hs-var">component</span></a></span><span> </span><span class="hs-special">{</span><span class="annot"><span class="annottext">$sel:acc:ComponentState :: String
+</span><a href="LaunchDarkly.Server.Reference.html#%24sel%3Aacc%3AComponentState"><span class="hs-identifier hs-var">acc</span></a></span><span> </span><span class="hs-glyph">=</span><span> </span><span class="annot"><span class="annottext">Char
+</span><a href="#local-6989586621679666333"><span class="hs-identifier hs-var">c</span></a></span><span> </span><span class="annot"><span class="annottext">Char -&gt; ShowS
+forall a. a -&gt; [a] -&gt; [a]
+</span><span class="hs-glyph hs-var">:</span></span><span> </span><span class="annot"><span class="annottext">String
+</span><a href="#local-6989586621679666334"><span class="hs-identifier hs-var">acc</span></a></span><span class="hs-special">}</span><span>
+</span><span id="line-241"></span></pre></body></html>

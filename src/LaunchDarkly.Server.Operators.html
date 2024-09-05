@@ -1,0 +1,459 @@
+<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Transitional//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-transitional.dtd"><html xmlns="http://www.w3.org/1999/xhtml"><head><link rel="stylesheet" type="text/css" href="style.css" /><script type="text/javascript" src="highlight.js"></script></head><body><pre><span id="%24con2tag_KG3BwqkumNrJxOgA7mp7qc"></span><span class="hs-pragma">{-# LANGUAGE NoPatternSynonyms #-}</span><span>
+</span><span id="line-2"></span><span>
+</span><span id="line-3"></span><span class="hs-keyword">module</span><span> </span><span class="hs-identifier">LaunchDarkly.Server.Operators</span><span>
+</span><span id="line-4"></span><span>    </span><span class="hs-special">(</span><span> </span><span class="annot"><a href="LaunchDarkly.Server.Operators.html#Op"><span class="hs-identifier">Op</span></a></span><span> </span><span class="hs-special">(</span><span class="hs-glyph">..</span><span class="hs-special">)</span><span>
+</span><span id="line-5"></span><span>    </span><span class="hs-special">,</span><span> </span><span class="annot"><a href="LaunchDarkly.Server.Operators.html#getOperation"><span class="hs-identifier">getOperation</span></a></span><span>
+</span><span id="line-6"></span><span>    </span><span class="hs-special">)</span><span> </span><span class="hs-keyword">where</span><span>
+</span><span id="line-7"></span><span>
+</span><span id="line-8"></span><span class="hs-keyword">import</span><span> </span><span class="annot"><span class="hs-identifier">Control.Lens</span></span><span> </span><span class="hs-special">(</span><span class="annot"><span class="hs-operator">(.~)</span></span><span class="hs-special">)</span><span>
+</span><span id="line-9"></span><span class="hs-keyword">import</span><span> </span><span class="annot"><span class="hs-identifier">Control.Monad</span></span><span> </span><span class="hs-special">(</span><span class="annot"><span class="hs-identifier">liftM2</span></span><span class="hs-special">)</span><span>
+</span><span id="line-10"></span><span class="hs-keyword">import</span><span> </span><span class="annot"><span class="hs-identifier">Data.Aeson.Types</span></span><span> </span><span class="hs-special">(</span><span class="annot"><span class="hs-identifier">FromJSON</span></span><span class="hs-special">,</span><span> </span><span class="annot"><span class="hs-identifier">ToJSON</span></span><span> </span><span class="hs-special">(</span><span class="hs-glyph">..</span><span class="hs-special">)</span><span class="hs-special">,</span><span> </span><span class="annot"><span class="hs-identifier">Value</span></span><span> </span><span class="hs-special">(</span><span class="hs-glyph">..</span><span class="hs-special">)</span><span class="hs-special">,</span><span> </span><span class="annot"><span class="hs-identifier">parseJSON</span></span><span class="hs-special">,</span><span> </span><span class="annot"><span class="hs-identifier">withText</span></span><span class="hs-special">)</span><span>
+</span><span id="line-11"></span><span class="hs-keyword">import</span><span> </span><span class="annot"><span class="hs-identifier">Data.Char</span></span><span> </span><span class="hs-special">(</span><span class="annot"><span class="hs-identifier">isDigit</span></span><span class="hs-special">)</span><span>
+</span><span id="line-12"></span><span class="hs-keyword">import</span><span> </span><span class="annot"><span class="hs-identifier">Data.Either</span></span><span> </span><span class="hs-special">(</span><span class="annot"><span class="hs-identifier">fromRight</span></span><span class="hs-special">)</span><span>
+</span><span id="line-13"></span><span class="hs-keyword">import</span><span> </span><span class="annot"><span class="hs-identifier">Data.Maybe</span></span><span> </span><span class="hs-special">(</span><span class="annot"><span class="hs-identifier">fromMaybe</span></span><span class="hs-special">,</span><span> </span><span class="annot"><span class="hs-identifier">isJust</span></span><span class="hs-special">)</span><span>
+</span><span id="line-14"></span><span class="hs-keyword">import</span><span> </span><span class="annot"><span class="hs-identifier">Data.Scientific</span></span><span> </span><span class="hs-special">(</span><span class="annot"><span class="hs-identifier">Scientific</span></span><span class="hs-special">,</span><span> </span><span class="annot"><span class="hs-identifier">toRealFloat</span></span><span class="hs-special">)</span><span>
+</span><span id="line-15"></span><span class="hs-keyword">import</span><span> </span><span class="annot"><span class="hs-identifier">Data.SemVer</span></span><span> </span><span class="hs-special">(</span><span class="annot"><span class="hs-identifier">Version</span></span><span class="hs-special">,</span><span> </span><span class="annot"><span class="hs-identifier">fromText</span></span><span class="hs-special">,</span><span> </span><span class="annot"><span class="hs-identifier">metadata</span></span><span class="hs-special">,</span><span> </span><span class="annot"><span class="hs-identifier">toText</span></span><span class="hs-special">)</span><span>
+</span><span id="line-16"></span><span class="hs-keyword">import</span><span> </span><span class="annot"><span class="hs-identifier">Data.Text</span></span><span> </span><span class="hs-special">(</span><span class="annot"><span class="hs-identifier">Text</span></span><span class="hs-special">,</span><span> </span><span class="annot"><span class="hs-identifier">isInfixOf</span></span><span class="hs-special">,</span><span> </span><span class="annot"><span class="hs-identifier">isPrefixOf</span></span><span class="hs-special">,</span><span> </span><span class="annot"><span class="hs-identifier">isSuffixOf</span></span><span class="hs-special">,</span><span> </span><span class="annot"><span class="hs-identifier">unpack</span></span><span class="hs-special">)</span><span>
+</span><span id="line-17"></span><span class="hs-keyword">import</span><span> </span><span class="hs-keyword">qualified</span><span> </span><span class="annot"><span class="hs-identifier">Data.Text</span></span><span> </span><span class="hs-keyword">as</span><span> </span><span class="annot"><span class="hs-identifier">T</span></span><span>
+</span><span id="line-18"></span><span class="hs-keyword">import</span><span> </span><span class="annot"><span class="hs-identifier">Data.Text.Encoding</span></span><span> </span><span class="hs-special">(</span><span class="annot"><span class="hs-identifier">encodeUtf8</span></span><span class="hs-special">)</span><span>
+</span><span id="line-19"></span><span class="hs-keyword">import</span><span> </span><span class="annot"><span class="hs-identifier">Data.Time.Clock</span></span><span> </span><span class="hs-special">(</span><span class="annot"><span class="hs-identifier">UTCTime</span></span><span class="hs-special">)</span><span>
+</span><span id="line-20"></span><span class="hs-keyword">import</span><span> </span><span class="annot"><span class="hs-identifier">Data.Time.Clock.POSIX</span></span><span> </span><span class="hs-special">(</span><span class="annot"><span class="hs-identifier">POSIXTime</span></span><span class="hs-special">,</span><span> </span><span class="annot"><span class="hs-identifier">posixSecondsToUTCTime</span></span><span class="hs-special">)</span><span>
+</span><span id="line-21"></span><span class="hs-keyword">import</span><span> </span><span class="annot"><span class="hs-identifier">Data.Time.ISO8601</span></span><span> </span><span class="hs-special">(</span><span class="annot"><span class="hs-identifier">parseISO8601</span></span><span class="hs-special">)</span><span>
+</span><span id="line-22"></span><span class="hs-keyword">import</span><span> </span><span class="annot"><span class="hs-identifier">GHC.Generics</span></span><span> </span><span class="hs-special">(</span><span class="annot"><span class="hs-identifier">Generic</span></span><span class="hs-special">)</span><span>
+</span><span id="line-23"></span><span class="hs-keyword">import</span><span> </span><span class="annot"><span class="hs-identifier">Text.Regex.PCRE.Light</span></span><span> </span><span class="hs-special">(</span><span class="annot"><span class="hs-identifier">compileM</span></span><span class="hs-special">,</span><span> </span><span class="annot"><span class="hs-identifier">match</span></span><span class="hs-special">)</span><span>
+</span><span id="line-24"></span><span>
+</span><span id="line-25"></span><span id="local-6989586621679666237"><span id="local-6989586621679666238"></span></span><span class="hs-keyword">data</span><span> </span><span id="Op"><span class="annot"><a href="LaunchDarkly.Server.Operators.html#Op"><span class="hs-identifier hs-var">Op</span></a></span></span><span>
+</span><span id="line-26"></span><span>    </span><span class="hs-glyph">=</span><span> </span><span id="OpIn"><span class="annot"><a href="LaunchDarkly.Server.Operators.html#OpIn"><span class="hs-identifier hs-var">OpIn</span></a></span></span><span>
+</span><span id="line-27"></span><span>    </span><span class="hs-glyph">|</span><span> </span><span id="OpEndsWith"><span class="annot"><a href="LaunchDarkly.Server.Operators.html#OpEndsWith"><span class="hs-identifier hs-var">OpEndsWith</span></a></span></span><span>
+</span><span id="line-28"></span><span>    </span><span class="hs-glyph">|</span><span> </span><span id="OpStartsWith"><span class="annot"><a href="LaunchDarkly.Server.Operators.html#OpStartsWith"><span class="hs-identifier hs-var">OpStartsWith</span></a></span></span><span>
+</span><span id="line-29"></span><span>    </span><span class="hs-glyph">|</span><span> </span><span id="OpMatches"><span class="annot"><a href="LaunchDarkly.Server.Operators.html#OpMatches"><span class="hs-identifier hs-var">OpMatches</span></a></span></span><span>
+</span><span id="line-30"></span><span>    </span><span class="hs-glyph">|</span><span> </span><span id="OpContains"><span class="annot"><a href="LaunchDarkly.Server.Operators.html#OpContains"><span class="hs-identifier hs-var">OpContains</span></a></span></span><span>
+</span><span id="line-31"></span><span>    </span><span class="hs-glyph">|</span><span> </span><span id="OpLessThan"><span class="annot"><a href="LaunchDarkly.Server.Operators.html#OpLessThan"><span class="hs-identifier hs-var">OpLessThan</span></a></span></span><span>
+</span><span id="line-32"></span><span>    </span><span class="hs-glyph">|</span><span> </span><span id="OpLessThanOrEqual"><span class="annot"><a href="LaunchDarkly.Server.Operators.html#OpLessThanOrEqual"><span class="hs-identifier hs-var">OpLessThanOrEqual</span></a></span></span><span>
+</span><span id="line-33"></span><span>    </span><span class="hs-glyph">|</span><span> </span><span id="OpGreaterThan"><span class="annot"><a href="LaunchDarkly.Server.Operators.html#OpGreaterThan"><span class="hs-identifier hs-var">OpGreaterThan</span></a></span></span><span>
+</span><span id="line-34"></span><span>    </span><span class="hs-glyph">|</span><span> </span><span id="OpGreaterThanOrEqual"><span class="annot"><a href="LaunchDarkly.Server.Operators.html#OpGreaterThanOrEqual"><span class="hs-identifier hs-var">OpGreaterThanOrEqual</span></a></span></span><span>
+</span><span id="line-35"></span><span>    </span><span class="hs-glyph">|</span><span> </span><span id="OpBefore"><span class="annot"><a href="LaunchDarkly.Server.Operators.html#OpBefore"><span class="hs-identifier hs-var">OpBefore</span></a></span></span><span>
+</span><span id="line-36"></span><span>    </span><span class="hs-glyph">|</span><span> </span><span id="OpAfter"><span class="annot"><a href="LaunchDarkly.Server.Operators.html#OpAfter"><span class="hs-identifier hs-var">OpAfter</span></a></span></span><span>
+</span><span id="line-37"></span><span>    </span><span class="hs-glyph">|</span><span> </span><span id="OpSemVerEqual"><span class="annot"><a href="LaunchDarkly.Server.Operators.html#OpSemVerEqual"><span class="hs-identifier hs-var">OpSemVerEqual</span></a></span></span><span>
+</span><span id="line-38"></span><span>    </span><span class="hs-glyph">|</span><span> </span><span id="OpSemVerLessThan"><span class="annot"><a href="LaunchDarkly.Server.Operators.html#OpSemVerLessThan"><span class="hs-identifier hs-var">OpSemVerLessThan</span></a></span></span><span>
+</span><span id="line-39"></span><span>    </span><span class="hs-glyph">|</span><span> </span><span id="OpSemVerGreaterThan"><span class="annot"><a href="LaunchDarkly.Server.Operators.html#OpSemVerGreaterThan"><span class="hs-identifier hs-var">OpSemVerGreaterThan</span></a></span></span><span>
+</span><span id="line-40"></span><span>    </span><span class="hs-glyph">|</span><span> </span><span id="OpSegmentMatch"><span class="annot"><a href="LaunchDarkly.Server.Operators.html#OpSegmentMatch"><span class="hs-identifier hs-var">OpSegmentMatch</span></a></span></span><span>
+</span><span id="line-41"></span><span>    </span><span class="hs-glyph">|</span><span> </span><span id="OpUnknown"><span class="annot"><a href="LaunchDarkly.Server.Operators.html#OpUnknown"><span class="hs-identifier hs-var">OpUnknown</span></a></span></span><span>
+</span><span id="line-42"></span><span>    </span><span class="hs-keyword">deriving</span><span> </span><span class="hs-special">(</span><span class="annot"><span class="annottext">(forall x. Op -&gt; Rep Op x)
+-&gt; (forall x. Rep Op x -&gt; Op) -&gt; Generic Op
+forall x. Rep Op x -&gt; Op
+forall x. Op -&gt; Rep Op x
+forall a.
+(forall x. a -&gt; Rep a x) -&gt; (forall x. Rep a x -&gt; a) -&gt; Generic a
+$cto :: forall x. Rep Op x -&gt; Op
+$cfrom :: forall x. Op -&gt; Rep Op x
+</span><span class="hs-identifier hs-var hs-var hs-var hs-var">Generic</span></span><span class="hs-special">,</span><span> </span><span id="local-6989586621679666212"><span id="local-6989586621679666214"><span id="local-6989586621679666216"><span class="annot"><span class="annottext">Int -&gt; Op -&gt; ShowS
+[Op] -&gt; ShowS
+Op -&gt; String
+(Int -&gt; Op -&gt; ShowS)
+-&gt; (Op -&gt; String) -&gt; ([Op] -&gt; ShowS) -&gt; Show Op
+forall a.
+(Int -&gt; a -&gt; ShowS) -&gt; (a -&gt; String) -&gt; ([a] -&gt; ShowS) -&gt; Show a
+showList :: [Op] -&gt; ShowS
+$cshowList :: [Op] -&gt; ShowS
+show :: Op -&gt; String
+$cshow :: Op -&gt; String
+showsPrec :: Int -&gt; Op -&gt; ShowS
+$cshowsPrec :: Int -&gt; Op -&gt; ShowS
+</span><span class="hs-identifier hs-var hs-var hs-var hs-var hs-var hs-var hs-var hs-var">Show</span></span></span></span></span><span class="hs-special">,</span><span> </span><span id="local-6989586621679666207"><span id="local-6989586621679666209"><span class="annot"><span class="annottext">Op -&gt; Op -&gt; Bool
+(Op -&gt; Op -&gt; Bool) -&gt; (Op -&gt; Op -&gt; Bool) -&gt; Eq Op
+forall a. (a -&gt; a -&gt; Bool) -&gt; (a -&gt; a -&gt; Bool) -&gt; Eq a
+/= :: Op -&gt; Op -&gt; Bool
+$c/= :: Op -&gt; Op -&gt; Bool
+== :: Op -&gt; Op -&gt; Bool
+$c== :: Op -&gt; Op -&gt; Bool
+</span><span class="hs-identifier hs-var hs-var hs-var hs-var hs-var hs-var">Eq</span></span></span></span><span class="hs-special">)</span><span>
+</span><span id="line-43"></span><span>
+</span><span id="line-44"></span><span class="hs-keyword">instance</span><span> </span><span id="local-6989586621679666203"><span class="annot"><span class="hs-identifier hs-type">FromJSON</span></span><span> </span><span class="annot"><a href="LaunchDarkly.Server.Operators.html#Op"><span class="hs-identifier hs-type">Op</span></a></span></span><span> </span><span class="hs-keyword">where</span><span>
+</span><span id="line-45"></span><span>    </span><span id="local-6989586621679666201"><span class="annot"><span class="annottext">parseJSON :: Value -&gt; Parser Op
+</span><a href="#local-6989586621679666201"><span class="hs-identifier hs-var hs-var hs-var hs-var">parseJSON</span></a></span></span><span> </span><span class="hs-glyph">=</span><span> </span><span class="annot"><span class="annottext">String -&gt; (Text -&gt; Parser Op) -&gt; Value -&gt; Parser Op
+forall a. String -&gt; (Text -&gt; Parser a) -&gt; Value -&gt; Parser a
+</span><span class="hs-identifier hs-var">withText</span></span><span> </span><span class="annot"><span class="hs-string">&quot;Op&quot;</span></span><span> </span><span class="annot"><span class="annottext">((Text -&gt; Parser Op) -&gt; Value -&gt; Parser Op)
+-&gt; (Text -&gt; Parser Op) -&gt; Value -&gt; Parser Op
+forall a b. (a -&gt; b) -&gt; a -&gt; b
+</span><span class="hs-operator hs-var">$</span></span><span> </span><span class="hs-glyph">\</span><span id="local-6989586621679666200"><span class="annot"><span class="annottext">v :: Text
+</span><a href="#local-6989586621679666200"><span class="hs-identifier hs-var">v</span></a></span></span><span> </span><span class="hs-glyph">-&gt;</span><span> </span><span class="hs-keyword">case</span><span> </span><span class="annot"><span class="annottext">Text
+</span><a href="#local-6989586621679666200"><span class="hs-identifier hs-var">v</span></a></span><span> </span><span class="hs-keyword">of</span><span>
+</span><span id="line-46"></span><span>        </span><span class="hs-string">&quot;in&quot;</span><span> </span><span class="hs-glyph">-&gt;</span><span> </span><span class="annot"><span class="annottext">Op -&gt; Parser Op
+forall (f :: * -&gt; *) a. Applicative f =&gt; a -&gt; f a
+</span><span class="hs-identifier hs-var">pure</span></span><span> </span><span class="annot"><span class="annottext">Op
+</span><a href="LaunchDarkly.Server.Operators.html#OpIn"><span class="hs-identifier hs-var">OpIn</span></a></span><span>
+</span><span id="line-47"></span><span>        </span><span class="hs-string">&quot;endsWith&quot;</span><span> </span><span class="hs-glyph">-&gt;</span><span> </span><span class="annot"><span class="annottext">Op -&gt; Parser Op
+forall (f :: * -&gt; *) a. Applicative f =&gt; a -&gt; f a
+</span><span class="hs-identifier hs-var">pure</span></span><span> </span><span class="annot"><span class="annottext">Op
+</span><a href="LaunchDarkly.Server.Operators.html#OpEndsWith"><span class="hs-identifier hs-var">OpEndsWith</span></a></span><span>
+</span><span id="line-48"></span><span>        </span><span class="hs-string">&quot;startsWith&quot;</span><span> </span><span class="hs-glyph">-&gt;</span><span> </span><span class="annot"><span class="annottext">Op -&gt; Parser Op
+forall (f :: * -&gt; *) a. Applicative f =&gt; a -&gt; f a
+</span><span class="hs-identifier hs-var">pure</span></span><span> </span><span class="annot"><span class="annottext">Op
+</span><a href="LaunchDarkly.Server.Operators.html#OpStartsWith"><span class="hs-identifier hs-var">OpStartsWith</span></a></span><span>
+</span><span id="line-49"></span><span>        </span><span class="hs-string">&quot;matches&quot;</span><span> </span><span class="hs-glyph">-&gt;</span><span> </span><span class="annot"><span class="annottext">Op -&gt; Parser Op
+forall (f :: * -&gt; *) a. Applicative f =&gt; a -&gt; f a
+</span><span class="hs-identifier hs-var">pure</span></span><span> </span><span class="annot"><span class="annottext">Op
+</span><a href="LaunchDarkly.Server.Operators.html#OpMatches"><span class="hs-identifier hs-var">OpMatches</span></a></span><span>
+</span><span id="line-50"></span><span>        </span><span class="hs-string">&quot;contains&quot;</span><span> </span><span class="hs-glyph">-&gt;</span><span> </span><span class="annot"><span class="annottext">Op -&gt; Parser Op
+forall (f :: * -&gt; *) a. Applicative f =&gt; a -&gt; f a
+</span><span class="hs-identifier hs-var">pure</span></span><span> </span><span class="annot"><span class="annottext">Op
+</span><a href="LaunchDarkly.Server.Operators.html#OpContains"><span class="hs-identifier hs-var">OpContains</span></a></span><span>
+</span><span id="line-51"></span><span>        </span><span class="hs-string">&quot;lessThan&quot;</span><span> </span><span class="hs-glyph">-&gt;</span><span> </span><span class="annot"><span class="annottext">Op -&gt; Parser Op
+forall (f :: * -&gt; *) a. Applicative f =&gt; a -&gt; f a
+</span><span class="hs-identifier hs-var">pure</span></span><span> </span><span class="annot"><span class="annottext">Op
+</span><a href="LaunchDarkly.Server.Operators.html#OpLessThan"><span class="hs-identifier hs-var">OpLessThan</span></a></span><span>
+</span><span id="line-52"></span><span>        </span><span class="hs-string">&quot;lessThanOrEqual&quot;</span><span> </span><span class="hs-glyph">-&gt;</span><span> </span><span class="annot"><span class="annottext">Op -&gt; Parser Op
+forall (f :: * -&gt; *) a. Applicative f =&gt; a -&gt; f a
+</span><span class="hs-identifier hs-var">pure</span></span><span> </span><span class="annot"><span class="annottext">Op
+</span><a href="LaunchDarkly.Server.Operators.html#OpLessThanOrEqual"><span class="hs-identifier hs-var">OpLessThanOrEqual</span></a></span><span>
+</span><span id="line-53"></span><span>        </span><span class="hs-string">&quot;greaterThan&quot;</span><span> </span><span class="hs-glyph">-&gt;</span><span> </span><span class="annot"><span class="annottext">Op -&gt; Parser Op
+forall (f :: * -&gt; *) a. Applicative f =&gt; a -&gt; f a
+</span><span class="hs-identifier hs-var">pure</span></span><span> </span><span class="annot"><span class="annottext">Op
+</span><a href="LaunchDarkly.Server.Operators.html#OpGreaterThan"><span class="hs-identifier hs-var">OpGreaterThan</span></a></span><span>
+</span><span id="line-54"></span><span>        </span><span class="hs-string">&quot;greaterThanOrEqual&quot;</span><span> </span><span class="hs-glyph">-&gt;</span><span> </span><span class="annot"><span class="annottext">Op -&gt; Parser Op
+forall (f :: * -&gt; *) a. Applicative f =&gt; a -&gt; f a
+</span><span class="hs-identifier hs-var">pure</span></span><span> </span><span class="annot"><span class="annottext">Op
+</span><a href="LaunchDarkly.Server.Operators.html#OpGreaterThanOrEqual"><span class="hs-identifier hs-var">OpGreaterThanOrEqual</span></a></span><span>
+</span><span id="line-55"></span><span>        </span><span class="hs-string">&quot;before&quot;</span><span> </span><span class="hs-glyph">-&gt;</span><span> </span><span class="annot"><span class="annottext">Op -&gt; Parser Op
+forall (f :: * -&gt; *) a. Applicative f =&gt; a -&gt; f a
+</span><span class="hs-identifier hs-var">pure</span></span><span> </span><span class="annot"><span class="annottext">Op
+</span><a href="LaunchDarkly.Server.Operators.html#OpBefore"><span class="hs-identifier hs-var">OpBefore</span></a></span><span>
+</span><span id="line-56"></span><span>        </span><span class="hs-string">&quot;after&quot;</span><span> </span><span class="hs-glyph">-&gt;</span><span> </span><span class="annot"><span class="annottext">Op -&gt; Parser Op
+forall (f :: * -&gt; *) a. Applicative f =&gt; a -&gt; f a
+</span><span class="hs-identifier hs-var">pure</span></span><span> </span><span class="annot"><span class="annottext">Op
+</span><a href="LaunchDarkly.Server.Operators.html#OpAfter"><span class="hs-identifier hs-var">OpAfter</span></a></span><span>
+</span><span id="line-57"></span><span>        </span><span class="hs-string">&quot;semVerEqual&quot;</span><span> </span><span class="hs-glyph">-&gt;</span><span> </span><span class="annot"><span class="annottext">Op -&gt; Parser Op
+forall (f :: * -&gt; *) a. Applicative f =&gt; a -&gt; f a
+</span><span class="hs-identifier hs-var">pure</span></span><span> </span><span class="annot"><span class="annottext">Op
+</span><a href="LaunchDarkly.Server.Operators.html#OpSemVerEqual"><span class="hs-identifier hs-var">OpSemVerEqual</span></a></span><span>
+</span><span id="line-58"></span><span>        </span><span class="hs-string">&quot;semVerLessThan&quot;</span><span> </span><span class="hs-glyph">-&gt;</span><span> </span><span class="annot"><span class="annottext">Op -&gt; Parser Op
+forall (f :: * -&gt; *) a. Applicative f =&gt; a -&gt; f a
+</span><span class="hs-identifier hs-var">pure</span></span><span> </span><span class="annot"><span class="annottext">Op
+</span><a href="LaunchDarkly.Server.Operators.html#OpSemVerLessThan"><span class="hs-identifier hs-var">OpSemVerLessThan</span></a></span><span>
+</span><span id="line-59"></span><span>        </span><span class="hs-string">&quot;semVerGreaterThan&quot;</span><span> </span><span class="hs-glyph">-&gt;</span><span> </span><span class="annot"><span class="annottext">Op -&gt; Parser Op
+forall (f :: * -&gt; *) a. Applicative f =&gt; a -&gt; f a
+</span><span class="hs-identifier hs-var">pure</span></span><span> </span><span class="annot"><span class="annottext">Op
+</span><a href="LaunchDarkly.Server.Operators.html#OpSemVerGreaterThan"><span class="hs-identifier hs-var">OpSemVerGreaterThan</span></a></span><span>
+</span><span id="line-60"></span><span>        </span><span class="hs-string">&quot;segmentMatch&quot;</span><span> </span><span class="hs-glyph">-&gt;</span><span> </span><span class="annot"><span class="annottext">Op -&gt; Parser Op
+forall (f :: * -&gt; *) a. Applicative f =&gt; a -&gt; f a
+</span><span class="hs-identifier hs-var">pure</span></span><span> </span><span class="annot"><span class="annottext">Op
+</span><a href="LaunchDarkly.Server.Operators.html#OpSegmentMatch"><span class="hs-identifier hs-var">OpSegmentMatch</span></a></span><span>
+</span><span id="line-61"></span><span>        </span><span class="hs-identifier">_</span><span> </span><span class="hs-glyph">-&gt;</span><span> </span><span class="annot"><span class="annottext">Op -&gt; Parser Op
+forall (f :: * -&gt; *) a. Applicative f =&gt; a -&gt; f a
+</span><span class="hs-identifier hs-var">pure</span></span><span> </span><span class="annot"><span class="annottext">Op
+</span><a href="LaunchDarkly.Server.Operators.html#OpUnknown"><span class="hs-identifier hs-var">OpUnknown</span></a></span><span>
+</span><span id="line-62"></span><span>
+</span><span id="line-63"></span><span class="hs-keyword">instance</span><span> </span><span id="local-6989586621679666193"><span id="local-6989586621679666195"><span id="local-6989586621679666197"><span class="annot"><span class="hs-identifier hs-type">ToJSON</span></span><span> </span><span class="annot"><a href="LaunchDarkly.Server.Operators.html#Op"><span class="hs-identifier hs-type">Op</span></a></span></span></span></span><span> </span><span class="hs-keyword">where</span><span>
+</span><span id="line-64"></span><span>    </span><span id="local-6989586621679666191"><span class="annot"><span class="annottext">toJSON :: Op -&gt; Value
+</span><span class="hs-identifier hs-var hs-var hs-var hs-var">toJSON</span></span></span><span> </span><span id="local-6989586621679666189"><span class="annot"><span class="annottext">op :: Op
+</span><a href="#local-6989586621679666189"><span class="hs-identifier hs-var">op</span></a></span></span><span> </span><span class="hs-glyph">=</span><span> </span><span class="annot"><span class="annottext">Text -&gt; Value
+</span><span class="hs-identifier hs-var">String</span></span><span> </span><span class="annot"><span class="annottext">(Text -&gt; Value) -&gt; Text -&gt; Value
+forall a b. (a -&gt; b) -&gt; a -&gt; b
+</span><span class="hs-operator hs-var">$</span></span><span> </span><span class="hs-keyword">case</span><span> </span><span class="annot"><span class="annottext">Op
+</span><a href="#local-6989586621679666189"><span class="hs-identifier hs-var">op</span></a></span><span> </span><span class="hs-keyword">of</span><span>
+</span><span id="line-65"></span><span>        </span><span class="annot"><a href="LaunchDarkly.Server.Operators.html#OpIn"><span class="hs-identifier hs-type">OpIn</span></a></span><span> </span><span class="hs-glyph">-&gt;</span><span> </span><span class="annot"><span class="hs-string">&quot;in&quot;</span></span><span>
+</span><span id="line-66"></span><span>        </span><span class="annot"><a href="LaunchDarkly.Server.Operators.html#OpEndsWith"><span class="hs-identifier hs-type">OpEndsWith</span></a></span><span> </span><span class="hs-glyph">-&gt;</span><span> </span><span class="annot"><span class="hs-string">&quot;endsWith&quot;</span></span><span>
+</span><span id="line-67"></span><span>        </span><span class="annot"><a href="LaunchDarkly.Server.Operators.html#OpStartsWith"><span class="hs-identifier hs-type">OpStartsWith</span></a></span><span> </span><span class="hs-glyph">-&gt;</span><span> </span><span class="annot"><span class="hs-string">&quot;startsWith&quot;</span></span><span>
+</span><span id="line-68"></span><span>        </span><span class="annot"><a href="LaunchDarkly.Server.Operators.html#OpMatches"><span class="hs-identifier hs-type">OpMatches</span></a></span><span> </span><span class="hs-glyph">-&gt;</span><span> </span><span class="annot"><span class="hs-string">&quot;matches&quot;</span></span><span>
+</span><span id="line-69"></span><span>        </span><span class="annot"><a href="LaunchDarkly.Server.Operators.html#OpContains"><span class="hs-identifier hs-type">OpContains</span></a></span><span> </span><span class="hs-glyph">-&gt;</span><span> </span><span class="annot"><span class="hs-string">&quot;contains&quot;</span></span><span>
+</span><span id="line-70"></span><span>        </span><span class="annot"><a href="LaunchDarkly.Server.Operators.html#OpLessThan"><span class="hs-identifier hs-type">OpLessThan</span></a></span><span> </span><span class="hs-glyph">-&gt;</span><span> </span><span class="annot"><span class="hs-string">&quot;lessThan&quot;</span></span><span>
+</span><span id="line-71"></span><span>        </span><span class="annot"><a href="LaunchDarkly.Server.Operators.html#OpLessThanOrEqual"><span class="hs-identifier hs-type">OpLessThanOrEqual</span></a></span><span> </span><span class="hs-glyph">-&gt;</span><span> </span><span class="annot"><span class="hs-string">&quot;lessThanOrEqual&quot;</span></span><span>
+</span><span id="line-72"></span><span>        </span><span class="annot"><a href="LaunchDarkly.Server.Operators.html#OpGreaterThan"><span class="hs-identifier hs-type">OpGreaterThan</span></a></span><span> </span><span class="hs-glyph">-&gt;</span><span> </span><span class="annot"><span class="hs-string">&quot;greaterThan&quot;</span></span><span>
+</span><span id="line-73"></span><span>        </span><span class="annot"><a href="LaunchDarkly.Server.Operators.html#OpGreaterThanOrEqual"><span class="hs-identifier hs-type">OpGreaterThanOrEqual</span></a></span><span> </span><span class="hs-glyph">-&gt;</span><span> </span><span class="annot"><span class="hs-string">&quot;greaterThanOrEqual&quot;</span></span><span>
+</span><span id="line-74"></span><span>        </span><span class="annot"><a href="LaunchDarkly.Server.Operators.html#OpBefore"><span class="hs-identifier hs-type">OpBefore</span></a></span><span> </span><span class="hs-glyph">-&gt;</span><span> </span><span class="annot"><span class="hs-string">&quot;before&quot;</span></span><span>
+</span><span id="line-75"></span><span>        </span><span class="annot"><a href="LaunchDarkly.Server.Operators.html#OpAfter"><span class="hs-identifier hs-type">OpAfter</span></a></span><span> </span><span class="hs-glyph">-&gt;</span><span> </span><span class="annot"><span class="hs-string">&quot;after&quot;</span></span><span>
+</span><span id="line-76"></span><span>        </span><span class="annot"><a href="LaunchDarkly.Server.Operators.html#OpSemVerEqual"><span class="hs-identifier hs-type">OpSemVerEqual</span></a></span><span> </span><span class="hs-glyph">-&gt;</span><span> </span><span class="annot"><span class="hs-string">&quot;semVerEqual&quot;</span></span><span>
+</span><span id="line-77"></span><span>        </span><span class="annot"><a href="LaunchDarkly.Server.Operators.html#OpSemVerLessThan"><span class="hs-identifier hs-type">OpSemVerLessThan</span></a></span><span> </span><span class="hs-glyph">-&gt;</span><span> </span><span class="annot"><span class="hs-string">&quot;semVerLessThan&quot;</span></span><span>
+</span><span id="line-78"></span><span>        </span><span class="annot"><a href="LaunchDarkly.Server.Operators.html#OpSemVerGreaterThan"><span class="hs-identifier hs-type">OpSemVerGreaterThan</span></a></span><span> </span><span class="hs-glyph">-&gt;</span><span> </span><span class="annot"><span class="hs-string">&quot;semVerGreaterThan&quot;</span></span><span>
+</span><span id="line-79"></span><span>        </span><span class="annot"><a href="LaunchDarkly.Server.Operators.html#OpSegmentMatch"><span class="hs-identifier hs-type">OpSegmentMatch</span></a></span><span> </span><span class="hs-glyph">-&gt;</span><span> </span><span class="annot"><span class="hs-string">&quot;segmentMatch&quot;</span></span><span>
+</span><span id="line-80"></span><span>        </span><span class="annot"><a href="LaunchDarkly.Server.Operators.html#OpUnknown"><span class="hs-identifier hs-type">OpUnknown</span></a></span><span> </span><span class="hs-glyph">-&gt;</span><span> </span><span class="annot"><span class="hs-string">&quot;unknown&quot;</span></span><span>
+</span><span id="line-81"></span><span>
+</span><span id="line-82"></span><span class="annot"><a href="LaunchDarkly.Server.Operators.html#checkString"><span class="hs-identifier hs-type">checkString</span></a></span><span> </span><span class="hs-glyph">::</span><span> </span><span class="hs-special">(</span><span class="annot"><span class="hs-identifier hs-type">Text</span></span><span> </span><span class="hs-glyph">-&gt;</span><span> </span><span class="annot"><span class="hs-identifier hs-type">Text</span></span><span> </span><span class="hs-glyph">-&gt;</span><span> </span><span class="annot"><span class="hs-identifier hs-type">Bool</span></span><span class="hs-special">)</span><span> </span><span class="hs-glyph">-&gt;</span><span> </span><span class="annot"><span class="hs-identifier hs-type">Value</span></span><span> </span><span class="hs-glyph">-&gt;</span><span> </span><span class="annot"><span class="hs-identifier hs-type">Value</span></span><span> </span><span class="hs-glyph">-&gt;</span><span> </span><span class="annot"><span class="hs-identifier hs-type">Bool</span></span><span>
+</span><span id="line-83"></span><span id="checkString"><span class="annot"><span class="annottext">checkString :: (Text -&gt; Text -&gt; Bool) -&gt; Value -&gt; Value -&gt; Bool
+</span><a href="LaunchDarkly.Server.Operators.html#checkString"><span class="hs-identifier hs-var hs-var">checkString</span></a></span></span><span> </span><span id="local-6989586621679666186"><span class="annot"><span class="annottext">op :: Text -&gt; Text -&gt; Bool
+</span><a href="#local-6989586621679666186"><span class="hs-identifier hs-var">op</span></a></span></span><span> </span><span class="hs-special">(</span><span class="annot"><span class="hs-identifier hs-type">String</span></span><span> </span><span id="local-6989586621679666185"><span class="annot"><span class="annottext">x :: Text
+</span><a href="#local-6989586621679666185"><span class="hs-identifier hs-var">x</span></a></span></span><span class="hs-special">)</span><span> </span><span class="hs-special">(</span><span class="annot"><span class="hs-identifier hs-type">String</span></span><span> </span><span id="local-6989586621679666184"><span class="annot"><span class="annottext">y :: Text
+</span><a href="#local-6989586621679666184"><span class="hs-identifier hs-var">y</span></a></span></span><span class="hs-special">)</span><span> </span><span class="hs-glyph">=</span><span> </span><span class="annot"><span class="annottext">Text -&gt; Text -&gt; Bool
+</span><a href="#local-6989586621679666186"><span class="hs-identifier hs-var">op</span></a></span><span> </span><span class="annot"><span class="annottext">Text
+</span><a href="#local-6989586621679666185"><span class="hs-identifier hs-var">x</span></a></span><span> </span><span class="annot"><span class="annottext">Text
+</span><a href="#local-6989586621679666184"><span class="hs-identifier hs-var">y</span></a></span><span>
+</span><span id="line-84"></span><span class="annot"><a href="LaunchDarkly.Server.Operators.html#checkString"><span class="hs-identifier hs-var">checkString</span></a></span><span> </span><span class="hs-identifier">_</span><span> </span><span class="hs-identifier">_</span><span> </span><span class="hs-identifier">_</span><span> </span><span class="hs-glyph">=</span><span> </span><span class="annot"><span class="annottext">Bool
+</span><span class="hs-identifier hs-var">False</span></span><span>
+</span><span id="line-85"></span><span>
+</span><span id="line-86"></span><span class="annot"><a href="LaunchDarkly.Server.Operators.html#checkNumber"><span class="hs-identifier hs-type">checkNumber</span></a></span><span> </span><span class="hs-glyph">::</span><span> </span><span class="hs-special">(</span><span class="annot"><span class="hs-identifier hs-type">Scientific</span></span><span> </span><span class="hs-glyph">-&gt;</span><span> </span><span class="annot"><span class="hs-identifier hs-type">Scientific</span></span><span> </span><span class="hs-glyph">-&gt;</span><span> </span><span class="annot"><span class="hs-identifier hs-type">Bool</span></span><span class="hs-special">)</span><span> </span><span class="hs-glyph">-&gt;</span><span> </span><span class="annot"><span class="hs-identifier hs-type">Value</span></span><span> </span><span class="hs-glyph">-&gt;</span><span> </span><span class="annot"><span class="hs-identifier hs-type">Value</span></span><span> </span><span class="hs-glyph">-&gt;</span><span> </span><span class="annot"><span class="hs-identifier hs-type">Bool</span></span><span>
+</span><span id="line-87"></span><span id="checkNumber"><span class="annot"><span class="annottext">checkNumber :: (Scientific -&gt; Scientific -&gt; Bool) -&gt; Value -&gt; Value -&gt; Bool
+</span><a href="LaunchDarkly.Server.Operators.html#checkNumber"><span class="hs-identifier hs-var hs-var">checkNumber</span></a></span></span><span> </span><span id="local-6989586621679666182"><span class="annot"><span class="annottext">op :: Scientific -&gt; Scientific -&gt; Bool
+</span><a href="#local-6989586621679666182"><span class="hs-identifier hs-var">op</span></a></span></span><span> </span><span class="hs-special">(</span><span class="annot"><span class="hs-identifier hs-type">Number</span></span><span> </span><span id="local-6989586621679666180"><span class="annot"><span class="annottext">x :: Scientific
+</span><a href="#local-6989586621679666180"><span class="hs-identifier hs-var">x</span></a></span></span><span class="hs-special">)</span><span> </span><span class="hs-special">(</span><span class="annot"><span class="hs-identifier hs-type">Number</span></span><span> </span><span id="local-6989586621679666179"><span class="annot"><span class="annottext">y :: Scientific
+</span><a href="#local-6989586621679666179"><span class="hs-identifier hs-var">y</span></a></span></span><span class="hs-special">)</span><span> </span><span class="hs-glyph">=</span><span> </span><span class="annot"><span class="annottext">Scientific -&gt; Scientific -&gt; Bool
+</span><a href="#local-6989586621679666182"><span class="hs-identifier hs-var">op</span></a></span><span> </span><span class="annot"><span class="annottext">Scientific
+</span><a href="#local-6989586621679666180"><span class="hs-identifier hs-var">x</span></a></span><span> </span><span class="annot"><span class="annottext">Scientific
+</span><a href="#local-6989586621679666179"><span class="hs-identifier hs-var">y</span></a></span><span>
+</span><span id="line-88"></span><span class="annot"><a href="LaunchDarkly.Server.Operators.html#checkNumber"><span class="hs-identifier hs-var">checkNumber</span></a></span><span> </span><span class="hs-identifier">_</span><span> </span><span class="hs-identifier">_</span><span> </span><span class="hs-identifier">_</span><span> </span><span class="hs-glyph">=</span><span> </span><span class="annot"><span class="annottext">Bool
+</span><span class="hs-identifier hs-var">False</span></span><span>
+</span><span id="line-89"></span><span>
+</span><span id="line-90"></span><span class="annot"><a href="LaunchDarkly.Server.Operators.html#doubleToPOSIXTime"><span class="hs-identifier hs-type">doubleToPOSIXTime</span></a></span><span> </span><span class="hs-glyph">::</span><span> </span><span class="annot"><span class="hs-identifier hs-type">Double</span></span><span> </span><span class="hs-glyph">-&gt;</span><span> </span><span class="annot"><span class="hs-identifier hs-type">POSIXTime</span></span><span>
+</span><span id="line-91"></span><span id="doubleToPOSIXTime"><span class="annot"><span class="annottext">doubleToPOSIXTime :: Double -&gt; POSIXTime
+</span><a href="LaunchDarkly.Server.Operators.html#doubleToPOSIXTime"><span class="hs-identifier hs-var hs-var">doubleToPOSIXTime</span></a></span></span><span> </span><span class="hs-glyph">=</span><span> </span><span class="annot"><span class="annottext">Double -&gt; POSIXTime
+forall a b. (Real a, Fractional b) =&gt; a -&gt; b
+</span><span class="hs-identifier hs-var">realToFrac</span></span><span>
+</span><span id="line-92"></span><span>
+</span><span id="line-93"></span><span class="annot"><a href="LaunchDarkly.Server.Operators.html#parseTime"><span class="hs-identifier hs-type">parseTime</span></a></span><span> </span><span class="hs-glyph">::</span><span> </span><span class="annot"><span class="hs-identifier hs-type">Value</span></span><span> </span><span class="hs-glyph">-&gt;</span><span> </span><span class="annot"><span class="hs-identifier hs-type">Maybe</span></span><span> </span><span class="annot"><span class="hs-identifier hs-type">UTCTime</span></span><span>
+</span><span id="line-94"></span><span id="parseTime"><span class="annot"><span class="annottext">parseTime :: Value -&gt; Maybe UTCTime
+</span><a href="LaunchDarkly.Server.Operators.html#parseTime"><span class="hs-identifier hs-var hs-var">parseTime</span></a></span></span><span> </span><span class="hs-special">(</span><span class="annot"><span class="hs-identifier hs-type">Number</span></span><span> </span><span id="local-6989586621679666176"><span class="annot"><span class="annottext">x :: Scientific
+</span><a href="#local-6989586621679666176"><span class="hs-identifier hs-var">x</span></a></span></span><span class="hs-special">)</span><span> </span><span class="hs-glyph">=</span><span> </span><span class="annot"><span class="annottext">UTCTime -&gt; Maybe UTCTime
+forall a. a -&gt; Maybe a
+</span><span class="hs-identifier hs-var">Just</span></span><span> </span><span class="annot"><span class="annottext">(UTCTime -&gt; Maybe UTCTime) -&gt; UTCTime -&gt; Maybe UTCTime
+forall a b. (a -&gt; b) -&gt; a -&gt; b
+</span><span class="hs-operator hs-var">$</span></span><span> </span><span class="annot"><span class="annottext">POSIXTime -&gt; UTCTime
+</span><span class="hs-identifier hs-var">posixSecondsToUTCTime</span></span><span> </span><span class="annot"><span class="annottext">(POSIXTime -&gt; UTCTime) -&gt; POSIXTime -&gt; UTCTime
+forall a b. (a -&gt; b) -&gt; a -&gt; b
+</span><span class="hs-operator hs-var">$</span></span><span> </span><span class="annot"><span class="annottext">Double -&gt; POSIXTime
+</span><a href="LaunchDarkly.Server.Operators.html#doubleToPOSIXTime"><span class="hs-identifier hs-var">doubleToPOSIXTime</span></a></span><span> </span><span class="annot"><span class="annottext">(Double -&gt; POSIXTime) -&gt; Double -&gt; POSIXTime
+forall a b. (a -&gt; b) -&gt; a -&gt; b
+</span><span class="hs-operator hs-var">$</span></span><span> </span><span class="hs-special">(</span><span class="annot"><span class="annottext">Scientific -&gt; Double
+forall a. RealFloat a =&gt; Scientific -&gt; a
+</span><span class="hs-identifier hs-var">toRealFloat</span></span><span> </span><span class="annot"><span class="annottext">Scientific
+</span><a href="#local-6989586621679666176"><span class="hs-identifier hs-var">x</span></a></span><span class="hs-special">)</span><span> </span><span class="annot"><span class="annottext">Double -&gt; Double -&gt; Double
+forall a. Fractional a =&gt; a -&gt; a -&gt; a
+</span><span class="hs-operator hs-var">/</span></span><span> </span><span class="annot"><span class="hs-number">1000</span></span><span>
+</span><span id="line-95"></span><span class="annot"><a href="LaunchDarkly.Server.Operators.html#parseTime"><span class="hs-identifier hs-var">parseTime</span></a></span><span> </span><span class="hs-special">(</span><span class="annot"><span class="hs-identifier hs-type">String</span></span><span> </span><span id="local-6989586621679666174"><span class="annot"><span class="annottext">x :: Text
+</span><a href="#local-6989586621679666174"><span class="hs-identifier hs-var">x</span></a></span></span><span class="hs-special">)</span><span> </span><span class="hs-glyph">=</span><span> </span><span class="annot"><span class="annottext">String -&gt; Maybe UTCTime
+</span><span class="hs-identifier hs-var">parseISO8601</span></span><span> </span><span class="annot"><span class="annottext">(String -&gt; Maybe UTCTime) -&gt; String -&gt; Maybe UTCTime
+forall a b. (a -&gt; b) -&gt; a -&gt; b
+</span><span class="hs-operator hs-var">$</span></span><span> </span><span class="annot"><span class="annottext">Text -&gt; String
+</span><span class="hs-identifier hs-var">unpack</span></span><span> </span><span class="annot"><span class="annottext">Text
+</span><a href="#local-6989586621679666174"><span class="hs-identifier hs-var">x</span></a></span><span>
+</span><span id="line-96"></span><span class="annot"><a href="LaunchDarkly.Server.Operators.html#parseTime"><span class="hs-identifier hs-var">parseTime</span></a></span><span> </span><span class="hs-identifier">_</span><span> </span><span class="hs-glyph">=</span><span> </span><span class="annot"><span class="annottext">Maybe UTCTime
+forall a. Maybe a
+</span><span class="hs-identifier hs-var">Nothing</span></span><span>
+</span><span id="line-97"></span><span>
+</span><span id="line-98"></span><span class="annot"><a href="LaunchDarkly.Server.Operators.html#compareTime"><span class="hs-identifier hs-type">compareTime</span></a></span><span> </span><span class="hs-glyph">::</span><span> </span><span class="hs-special">(</span><span class="annot"><span class="hs-identifier hs-type">UTCTime</span></span><span> </span><span class="hs-glyph">-&gt;</span><span> </span><span class="annot"><span class="hs-identifier hs-type">UTCTime</span></span><span> </span><span class="hs-glyph">-&gt;</span><span> </span><span class="annot"><span class="hs-identifier hs-type">Bool</span></span><span class="hs-special">)</span><span> </span><span class="hs-glyph">-&gt;</span><span> </span><span class="annot"><span class="hs-identifier hs-type">Value</span></span><span> </span><span class="hs-glyph">-&gt;</span><span> </span><span class="annot"><span class="hs-identifier hs-type">Value</span></span><span> </span><span class="hs-glyph">-&gt;</span><span> </span><span class="annot"><span class="hs-identifier hs-type">Bool</span></span><span>
+</span><span id="line-99"></span><span id="compareTime"><span class="annot"><span class="annottext">compareTime :: (UTCTime -&gt; UTCTime -&gt; Bool) -&gt; Value -&gt; Value -&gt; Bool
+</span><a href="LaunchDarkly.Server.Operators.html#compareTime"><span class="hs-identifier hs-var hs-var">compareTime</span></a></span></span><span> </span><span id="local-6989586621679666172"><span class="annot"><span class="annottext">op :: UTCTime -&gt; UTCTime -&gt; Bool
+</span><a href="#local-6989586621679666172"><span class="hs-identifier hs-var">op</span></a></span></span><span> </span><span id="local-6989586621679666171"><span class="annot"><span class="annottext">x :: Value
+</span><a href="#local-6989586621679666171"><span class="hs-identifier hs-var">x</span></a></span></span><span> </span><span id="local-6989586621679666170"><span class="annot"><span class="annottext">y :: Value
+</span><a href="#local-6989586621679666170"><span class="hs-identifier hs-var">y</span></a></span></span><span> </span><span class="hs-glyph">=</span><span> </span><span class="annot"><span class="annottext">Bool -&gt; Maybe Bool -&gt; Bool
+forall a. a -&gt; Maybe a -&gt; a
+</span><span class="hs-identifier hs-var">fromMaybe</span></span><span> </span><span class="annot"><span class="annottext">Bool
+</span><span class="hs-identifier hs-var">False</span></span><span> </span><span class="annot"><span class="annottext">(Maybe Bool -&gt; Bool) -&gt; Maybe Bool -&gt; Bool
+forall a b. (a -&gt; b) -&gt; a -&gt; b
+</span><span class="hs-operator hs-var">$</span></span><span> </span><span class="annot"><span class="annottext">(UTCTime -&gt; UTCTime -&gt; Bool)
+-&gt; Maybe UTCTime -&gt; Maybe UTCTime -&gt; Maybe Bool
+forall (m :: * -&gt; *) a1 a2 r.
+Monad m =&gt;
+(a1 -&gt; a2 -&gt; r) -&gt; m a1 -&gt; m a2 -&gt; m r
+</span><span class="hs-identifier hs-var">liftM2</span></span><span> </span><span class="annot"><span class="annottext">UTCTime -&gt; UTCTime -&gt; Bool
+</span><a href="#local-6989586621679666172"><span class="hs-identifier hs-var">op</span></a></span><span> </span><span class="hs-special">(</span><span class="annot"><span class="annottext">Value -&gt; Maybe UTCTime
+</span><a href="LaunchDarkly.Server.Operators.html#parseTime"><span class="hs-identifier hs-var">parseTime</span></a></span><span> </span><span class="annot"><span class="annottext">Value
+</span><a href="#local-6989586621679666171"><span class="hs-identifier hs-var">x</span></a></span><span class="hs-special">)</span><span> </span><span class="hs-special">(</span><span class="annot"><span class="annottext">Value -&gt; Maybe UTCTime
+</span><a href="LaunchDarkly.Server.Operators.html#parseTime"><span class="hs-identifier hs-var">parseTime</span></a></span><span> </span><span class="annot"><span class="annottext">Value
+</span><a href="#local-6989586621679666170"><span class="hs-identifier hs-var">y</span></a></span><span class="hs-special">)</span><span>
+</span><span id="line-100"></span><span>
+</span><span id="line-101"></span><span class="annot"><a href="LaunchDarkly.Server.Operators.html#padSemVer"><span class="hs-identifier hs-type">padSemVer</span></a></span><span> </span><span class="hs-glyph">::</span><span> </span><span class="annot"><span class="hs-identifier hs-type">Text</span></span><span> </span><span class="hs-glyph">-&gt;</span><span> </span><span class="annot"><span class="hs-identifier hs-type">Text</span></span><span>
+</span><span id="line-102"></span><span id="padSemVer"><span class="annot"><span class="annottext">padSemVer :: Text -&gt; Text
+</span><a href="LaunchDarkly.Server.Operators.html#padSemVer"><span class="hs-identifier hs-var hs-var">padSemVer</span></a></span></span><span> </span><span id="local-6989586621679666168"><span class="annot"><span class="annottext">text :: Text
+</span><a href="#local-6989586621679666168"><span class="hs-identifier hs-var">text</span></a></span></span><span> </span><span class="hs-glyph">=</span><span> </span><span class="annot"><span class="annottext">[Text] -&gt; Text
+</span><span class="hs-identifier hs-var">T.concat</span></span><span> </span><span class="hs-special">[</span><span class="annot"><span class="annottext">Text
+</span><a href="#local-6989586621679666166"><span class="hs-identifier hs-var">l</span></a></span><span class="hs-special">,</span><span> </span><span class="annot"><span class="annottext">Text
+</span><a href="#local-6989586621679666165"><span class="hs-identifier hs-var">padding</span></a></span><span class="hs-special">,</span><span> </span><span class="annot"><span class="annottext">Text
+</span><a href="#local-6989586621679666164"><span class="hs-identifier hs-var">r</span></a></span><span class="hs-special">]</span><span>
+</span><span id="line-103"></span><span>  </span><span class="hs-keyword">where</span><span>
+</span><span id="line-104"></span><span>    </span><span class="hs-special">(</span><span id="local-6989586621679666166"><span class="annot"><span class="annottext">l :: Text
+</span><a href="#local-6989586621679666166"><span class="hs-identifier hs-var">l</span></a></span></span><span class="hs-special">,</span><span> </span><span id="local-6989586621679666164"><span class="annot"><span class="annottext">r :: Text
+</span><a href="#local-6989586621679666164"><span class="hs-identifier hs-var">r</span></a></span></span><span class="hs-special">)</span><span> </span><span class="hs-glyph">=</span><span> </span><span class="annot"><span class="annottext">(Char -&gt; Bool) -&gt; Text -&gt; (Text, Text)
+</span><span class="hs-identifier hs-var">T.span</span></span><span> </span><span class="hs-special">(</span><span class="hs-glyph">\</span><span id="local-6989586621679666162"><span class="annot"><span class="annottext">c :: Char
+</span><a href="#local-6989586621679666162"><span class="hs-identifier hs-var">c</span></a></span></span><span> </span><span class="hs-glyph">-&gt;</span><span> </span><span class="annot"><span class="annottext">Char -&gt; Bool
+</span><span class="hs-identifier hs-var">isDigit</span></span><span> </span><span class="annot"><span class="annottext">Char
+</span><a href="#local-6989586621679666162"><span class="hs-identifier hs-var">c</span></a></span><span> </span><span class="annot"><span class="annottext">Bool -&gt; Bool -&gt; Bool
+</span><span class="hs-operator hs-var">||</span></span><span> </span><span class="annot"><span class="annottext">Char
+</span><a href="#local-6989586621679666162"><span class="hs-identifier hs-var">c</span></a></span><span> </span><span class="annot"><span class="annottext">Char -&gt; Char -&gt; Bool
+forall a. Eq a =&gt; a -&gt; a -&gt; Bool
+</span><span class="hs-operator hs-var">==</span></span><span> </span><span class="annot"><span class="hs-char">'.'</span></span><span class="hs-special">)</span><span> </span><span class="annot"><span class="annottext">Text
+</span><a href="#local-6989586621679666168"><span class="hs-identifier hs-var">text</span></a></span><span>
+</span><span id="line-105"></span><span>    </span><span id="local-6989586621679666160"><span class="annot"><span class="annottext">dots :: Int
+</span><a href="#local-6989586621679666160"><span class="hs-identifier hs-var hs-var">dots</span></a></span></span><span> </span><span class="hs-glyph">=</span><span> </span><span class="annot"><span class="annottext">Text -&gt; Text -&gt; Int
+</span><span class="hs-identifier hs-var">T.count</span></span><span> </span><span class="annot"><span class="hs-string">&quot;.&quot;</span></span><span> </span><span class="annot"><span class="annottext">Text
+</span><a href="#local-6989586621679666166"><span class="hs-identifier hs-var">l</span></a></span><span>
+</span><span id="line-106"></span><span>    </span><span id="local-6989586621679666165"><span class="annot"><span class="annottext">padding :: Text
+</span><a href="#local-6989586621679666165"><span class="hs-identifier hs-var hs-var">padding</span></a></span></span><span> </span><span class="hs-glyph">=</span><span> </span><span class="hs-keyword">if</span><span> </span><span class="annot"><span class="annottext">Int
+</span><a href="#local-6989586621679666160"><span class="hs-identifier hs-var">dots</span></a></span><span> </span><span class="annot"><span class="annottext">Int -&gt; Int -&gt; Bool
+forall a. Ord a =&gt; a -&gt; a -&gt; Bool
+</span><span class="hs-operator hs-var">&lt;</span></span><span> </span><span class="annot"><span class="hs-number">2</span></span><span> </span><span class="hs-keyword">then</span><span> </span><span class="annot"><span class="annottext">Int -&gt; Text -&gt; Text
+</span><span class="hs-identifier hs-var">T.replicate</span></span><span> </span><span class="hs-special">(</span><span class="annot"><span class="hs-number">2</span></span><span> </span><span class="annot"><span class="annottext">Int -&gt; Int -&gt; Int
+forall a. Num a =&gt; a -&gt; a -&gt; a
+</span><span class="hs-glyph hs-var">-</span></span><span> </span><span class="annot"><span class="annottext">Int
+</span><a href="#local-6989586621679666160"><span class="hs-identifier hs-var">dots</span></a></span><span class="hs-special">)</span><span> </span><span class="annot"><span class="hs-string">&quot;.0&quot;</span></span><span> </span><span class="hs-keyword">else</span><span> </span><span class="annot"><span class="hs-string">&quot;&quot;</span></span><span>
+</span><span id="line-107"></span><span>
+</span><span id="line-108"></span><span class="annot"><a href="LaunchDarkly.Server.Operators.html#parseSemVer"><span class="hs-identifier hs-type">parseSemVer</span></a></span><span> </span><span class="hs-glyph">::</span><span> </span><span class="annot"><span class="hs-identifier hs-type">Text</span></span><span> </span><span class="hs-glyph">-&gt;</span><span> </span><span class="annot"><span class="hs-identifier hs-type">Either</span></span><span> </span><span class="annot"><span class="hs-identifier hs-type">String</span></span><span> </span><span class="annot"><span class="hs-identifier hs-type">Version</span></span><span>
+</span><span id="line-109"></span><span id="parseSemVer"><span class="annot"><span class="annottext">parseSemVer :: Text -&gt; Either String Version
+</span><a href="LaunchDarkly.Server.Operators.html#parseSemVer"><span class="hs-identifier hs-var hs-var">parseSemVer</span></a></span></span><span> </span><span id="local-6989586621679666155"><span class="annot"><span class="annottext">raw :: Text
+</span><a href="#local-6989586621679666155"><span class="hs-identifier hs-var">raw</span></a></span></span><span> </span><span class="hs-glyph">=</span><span>
+</span><span id="line-110"></span><span>    </span><span class="annot"><span class="annottext">(Version -&gt; Version)
+-&gt; Either String Version -&gt; Either String Version
+forall (f :: * -&gt; *) a b. Functor f =&gt; (a -&gt; b) -&gt; f a -&gt; f b
+</span><span class="hs-identifier hs-var">fmap</span></span><span> </span><span class="hs-special">(</span><span class="annot"><span class="annottext">([Identifier] -&gt; Identity [Identifier])
+-&gt; Version -&gt; Identity Version
+forall (f :: * -&gt; *).
+Functor f =&gt;
+([Identifier] -&gt; f [Identifier]) -&gt; Version -&gt; f Version
+</span><span class="hs-identifier hs-var">metadata</span></span><span> </span><span class="annot"><span class="annottext">(([Identifier] -&gt; Identity [Identifier])
+ -&gt; Version -&gt; Identity Version)
+-&gt; [Identifier] -&gt; Version -&gt; Version
+forall s t a b. ASetter s t a b -&gt; b -&gt; s -&gt; t
+</span><span class="hs-operator hs-var">.~</span></span><span> </span><span class="hs-special">[</span><span class="hs-special">]</span><span class="hs-special">)</span><span> </span><span class="hs-special">(</span><span class="annot"><span class="annottext">Text -&gt; Either String Version
+</span><span class="hs-identifier hs-var">fromText</span></span><span> </span><span class="annot"><span class="annottext">(Text -&gt; Either String Version) -&gt; Text -&gt; Either String Version
+forall a b. (a -&gt; b) -&gt; a -&gt; b
+</span><span class="hs-operator hs-var">$</span></span><span> </span><span class="annot"><span class="annottext">Text -&gt; Text
+</span><a href="LaunchDarkly.Server.Operators.html#padSemVer"><span class="hs-identifier hs-var">padSemVer</span></a></span><span> </span><span class="annot"><span class="annottext">Text
+</span><a href="#local-6989586621679666155"><span class="hs-identifier hs-var">raw</span></a></span><span class="hs-special">)</span><span> </span><span class="annot"><span class="annottext">Either String Version
+-&gt; (Version -&gt; Either String Version) -&gt; Either String Version
+forall (m :: * -&gt; *) a b. Monad m =&gt; m a -&gt; (a -&gt; m b) -&gt; m b
+</span><span class="hs-operator hs-var">&gt;&gt;=</span></span><span> </span><span class="hs-glyph">\</span><span id="local-6989586621679666154"><span class="annot"><span class="annottext">x :: Version
+</span><a href="#local-6989586621679666154"><span class="hs-identifier hs-var">x</span></a></span></span><span> </span><span class="hs-glyph">-&gt;</span><span>
+</span><span id="line-111"></span><span>        </span><span class="hs-keyword">if</span><span> </span><span class="annot"><span class="annottext">Text -&gt; Text -&gt; Bool
+</span><span class="hs-identifier hs-var">T.isPrefixOf</span></span><span> </span><span class="hs-special">(</span><span class="annot"><span class="annottext">Version -&gt; Text
+</span><span class="hs-identifier hs-var">toText</span></span><span> </span><span class="annot"><span class="annottext">Version
+</span><a href="#local-6989586621679666154"><span class="hs-identifier hs-var">x</span></a></span><span class="hs-special">)</span><span> </span><span class="hs-special">(</span><span class="annot"><span class="annottext">Text -&gt; Text
+</span><a href="LaunchDarkly.Server.Operators.html#padSemVer"><span class="hs-identifier hs-var">padSemVer</span></a></span><span> </span><span class="annot"><span class="annottext">Text
+</span><a href="#local-6989586621679666155"><span class="hs-identifier hs-var">raw</span></a></span><span class="hs-special">)</span><span> </span><span class="hs-keyword">then</span><span> </span><span class="annot"><span class="annottext">Version -&gt; Either String Version
+forall a b. b -&gt; Either a b
+</span><span class="hs-identifier hs-var">Right</span></span><span> </span><span class="annot"><span class="annottext">Version
+</span><a href="#local-6989586621679666154"><span class="hs-identifier hs-var">x</span></a></span><span> </span><span class="hs-keyword">else</span><span> </span><span class="annot"><span class="annottext">String -&gt; Either String Version
+forall a b. a -&gt; Either a b
+</span><span class="hs-identifier hs-var">Left</span></span><span> </span><span class="annot"><span class="hs-string">&quot;mismatch&quot;</span></span><span>
+</span><span id="line-112"></span><span>  </span><span class="hs-keyword">where</span><span>
+</span><span id="line-113"></span><span>
+</span><span id="line-114"></span><span class="annot"><a href="LaunchDarkly.Server.Operators.html#compareSemVer"><span class="hs-identifier hs-type">compareSemVer</span></a></span><span> </span><span class="hs-glyph">::</span><span> </span><span class="hs-special">(</span><span class="annot"><span class="hs-identifier hs-type">Version</span></span><span> </span><span class="hs-glyph">-&gt;</span><span> </span><span class="annot"><span class="hs-identifier hs-type">Version</span></span><span> </span><span class="hs-glyph">-&gt;</span><span> </span><span class="annot"><span class="hs-identifier hs-type">Bool</span></span><span class="hs-special">)</span><span> </span><span class="hs-glyph">-&gt;</span><span> </span><span class="annot"><span class="hs-identifier hs-type">Text</span></span><span> </span><span class="hs-glyph">-&gt;</span><span> </span><span class="annot"><span class="hs-identifier hs-type">Text</span></span><span> </span><span class="hs-glyph">-&gt;</span><span> </span><span class="annot"><span class="hs-identifier hs-type">Bool</span></span><span>
+</span><span id="line-115"></span><span id="compareSemVer"><span class="annot"><span class="annottext">compareSemVer :: (Version -&gt; Version -&gt; Bool) -&gt; Text -&gt; Text -&gt; Bool
+</span><a href="LaunchDarkly.Server.Operators.html#compareSemVer"><span class="hs-identifier hs-var hs-var">compareSemVer</span></a></span></span><span> </span><span id="local-6989586621679666152"><span class="annot"><span class="annottext">op :: Version -&gt; Version -&gt; Bool
+</span><a href="#local-6989586621679666152"><span class="hs-identifier hs-var">op</span></a></span></span><span> </span><span id="local-6989586621679666151"><span class="annot"><span class="annottext">x :: Text
+</span><a href="#local-6989586621679666151"><span class="hs-identifier hs-var">x</span></a></span></span><span> </span><span id="local-6989586621679666150"><span class="annot"><span class="annottext">y :: Text
+</span><a href="#local-6989586621679666150"><span class="hs-identifier hs-var">y</span></a></span></span><span> </span><span class="hs-glyph">=</span><span> </span><span class="annot"><span class="annottext">Bool -&gt; Either String Bool -&gt; Bool
+forall b a. b -&gt; Either a b -&gt; b
+</span><span class="hs-identifier hs-var">fromRight</span></span><span> </span><span class="annot"><span class="annottext">Bool
+</span><span class="hs-identifier hs-var">False</span></span><span> </span><span class="annot"><span class="annottext">(Either String Bool -&gt; Bool) -&gt; Either String Bool -&gt; Bool
+forall a b. (a -&gt; b) -&gt; a -&gt; b
+</span><span class="hs-operator hs-var">$</span></span><span> </span><span class="annot"><span class="annottext">(Version -&gt; Version -&gt; Bool)
+-&gt; Either String Version
+-&gt; Either String Version
+-&gt; Either String Bool
+forall (m :: * -&gt; *) a1 a2 r.
+Monad m =&gt;
+(a1 -&gt; a2 -&gt; r) -&gt; m a1 -&gt; m a2 -&gt; m r
+</span><span class="hs-identifier hs-var">liftM2</span></span><span> </span><span class="annot"><span class="annottext">Version -&gt; Version -&gt; Bool
+</span><a href="#local-6989586621679666152"><span class="hs-identifier hs-var">op</span></a></span><span> </span><span class="hs-special">(</span><span class="annot"><span class="annottext">Text -&gt; Either String Version
+</span><a href="LaunchDarkly.Server.Operators.html#parseSemVer"><span class="hs-identifier hs-var">parseSemVer</span></a></span><span> </span><span class="annot"><span class="annottext">Text
+</span><a href="#local-6989586621679666151"><span class="hs-identifier hs-var">x</span></a></span><span class="hs-special">)</span><span> </span><span class="hs-special">(</span><span class="annot"><span class="annottext">Text -&gt; Either String Version
+</span><a href="LaunchDarkly.Server.Operators.html#parseSemVer"><span class="hs-identifier hs-var">parseSemVer</span></a></span><span> </span><span class="annot"><span class="annottext">Text
+</span><a href="#local-6989586621679666150"><span class="hs-identifier hs-var">y</span></a></span><span class="hs-special">)</span><span>
+</span><span id="line-116"></span><span>
+</span><span id="line-117"></span><span class="annot"><a href="LaunchDarkly.Server.Operators.html#matches"><span class="hs-identifier hs-type">matches</span></a></span><span> </span><span class="hs-glyph">::</span><span> </span><span class="annot"><span class="hs-identifier hs-type">Text</span></span><span> </span><span class="hs-glyph">-&gt;</span><span> </span><span class="annot"><span class="hs-identifier hs-type">Text</span></span><span> </span><span class="hs-glyph">-&gt;</span><span> </span><span class="annot"><span class="hs-identifier hs-type">Bool</span></span><span>
+</span><span id="line-118"></span><span id="matches"><span class="annot"><span class="annottext">matches :: Text -&gt; Text -&gt; Bool
+</span><a href="LaunchDarkly.Server.Operators.html#matches"><span class="hs-identifier hs-var hs-var">matches</span></a></span></span><span> </span><span id="local-6989586621679666148"><span class="annot"><span class="annottext">text :: Text
+</span><a href="#local-6989586621679666148"><span class="hs-identifier hs-var">text</span></a></span></span><span> </span><span id="local-6989586621679666147"><span class="annot"><span class="annottext">pattern :: Text
+</span><a href="#local-6989586621679666147"><span class="hs-identifier hs-var">pattern</span></a></span></span><span> </span><span class="hs-glyph">=</span><span> </span><span class="hs-keyword">case</span><span> </span><span class="annot"><span class="annottext">ByteString -&gt; [PCREOption] -&gt; Either String Regex
+</span><span class="hs-identifier hs-var">compileM</span></span><span> </span><span class="hs-special">(</span><span class="annot"><span class="annottext">Text -&gt; ByteString
+</span><span class="hs-identifier hs-var">encodeUtf8</span></span><span> </span><span class="annot"><span class="annottext">Text
+</span><a href="#local-6989586621679666147"><span class="hs-identifier hs-var">pattern</span></a></span><span class="hs-special">)</span><span> </span><span class="hs-special">[</span><span class="hs-special">]</span><span> </span><span class="hs-keyword">of</span><span>
+</span><span id="line-119"></span><span>    </span><span class="annot"><span class="hs-identifier hs-type">Left</span></span><span> </span><span class="hs-identifier">_</span><span> </span><span class="hs-glyph">-&gt;</span><span> </span><span class="annot"><span class="annottext">Bool
+</span><span class="hs-identifier hs-var">False</span></span><span>
+</span><span id="line-120"></span><span>    </span><span class="annot"><span class="hs-identifier hs-type">Right</span></span><span> </span><span id="local-6989586621679666146"><span class="annot"><span class="annottext">compiled :: Regex
+</span><a href="#local-6989586621679666146"><span class="hs-identifier hs-var">compiled</span></a></span></span><span> </span><span class="hs-glyph">-&gt;</span><span> </span><span class="annot"><span class="annottext">Maybe [ByteString] -&gt; Bool
+forall a. Maybe a -&gt; Bool
+</span><span class="hs-identifier hs-var">isJust</span></span><span> </span><span class="annot"><span class="annottext">(Maybe [ByteString] -&gt; Bool) -&gt; Maybe [ByteString] -&gt; Bool
+forall a b. (a -&gt; b) -&gt; a -&gt; b
+</span><span class="hs-operator hs-var">$</span></span><span> </span><span class="annot"><span class="annottext">Regex -&gt; ByteString -&gt; [PCREExecOption] -&gt; Maybe [ByteString]
+</span><span class="hs-identifier hs-var">match</span></span><span> </span><span class="annot"><span class="annottext">Regex
+</span><a href="#local-6989586621679666146"><span class="hs-identifier hs-var">compiled</span></a></span><span> </span><span class="hs-special">(</span><span class="annot"><span class="annottext">Text -&gt; ByteString
+</span><span class="hs-identifier hs-var">encodeUtf8</span></span><span> </span><span class="annot"><span class="annottext">Text
+</span><a href="#local-6989586621679666148"><span class="hs-identifier hs-var">text</span></a></span><span class="hs-special">)</span><span> </span><span class="hs-special">[</span><span class="hs-special">]</span><span>
+</span><span id="line-121"></span><span>
+</span><span id="line-122"></span><span class="annot"><a href="LaunchDarkly.Server.Operators.html#getOperation"><span class="hs-identifier hs-type">getOperation</span></a></span><span> </span><span class="hs-glyph">::</span><span> </span><span class="annot"><a href="LaunchDarkly.Server.Operators.html#Op"><span class="hs-identifier hs-type">Op</span></a></span><span> </span><span class="hs-glyph">-&gt;</span><span> </span><span class="hs-special">(</span><span class="annot"><span class="hs-identifier hs-type">Value</span></span><span> </span><span class="hs-glyph">-&gt;</span><span> </span><span class="annot"><span class="hs-identifier hs-type">Value</span></span><span> </span><span class="hs-glyph">-&gt;</span><span> </span><span class="annot"><span class="hs-identifier hs-type">Bool</span></span><span class="hs-special">)</span><span>
+</span><span id="line-123"></span><span id="getOperation"><span class="annot"><span class="annottext">getOperation :: Op -&gt; Value -&gt; Value -&gt; Bool
+</span><a href="LaunchDarkly.Server.Operators.html#getOperation"><span class="hs-identifier hs-var hs-var">getOperation</span></a></span></span><span> </span><span id="local-6989586621679666145"><span class="annot"><span class="annottext">op :: Op
+</span><a href="#local-6989586621679666145"><span class="hs-identifier hs-var">op</span></a></span></span><span> </span><span class="hs-glyph">=</span><span> </span><span class="hs-keyword">case</span><span> </span><span class="annot"><span class="annottext">Op
+</span><a href="#local-6989586621679666145"><span class="hs-identifier hs-var">op</span></a></span><span> </span><span class="hs-keyword">of</span><span>
+</span><span id="line-124"></span><span>    </span><span class="annot"><a href="LaunchDarkly.Server.Operators.html#OpIn"><span class="hs-identifier hs-type">OpIn</span></a></span><span> </span><span class="hs-glyph">-&gt;</span><span> </span><span class="annot"><span class="annottext">Value -&gt; Value -&gt; Bool
+forall a. Eq a =&gt; a -&gt; a -&gt; Bool
+</span><span class="hs-operator hs-var">(==)</span></span><span>
+</span><span id="line-125"></span><span>    </span><span class="annot"><a href="LaunchDarkly.Server.Operators.html#OpEndsWith"><span class="hs-identifier hs-type">OpEndsWith</span></a></span><span> </span><span class="hs-glyph">-&gt;</span><span> </span><span class="annot"><span class="annottext">(Text -&gt; Text -&gt; Bool) -&gt; Value -&gt; Value -&gt; Bool
+</span><a href="LaunchDarkly.Server.Operators.html#checkString"><span class="hs-identifier hs-var">checkString</span></a></span><span> </span><span class="hs-special">(</span><span class="annot"><span class="annottext">(Text -&gt; Text -&gt; Bool) -&gt; Text -&gt; Text -&gt; Bool
+forall a b c. (a -&gt; b -&gt; c) -&gt; b -&gt; a -&gt; c
+</span><span class="hs-identifier hs-var">flip</span></span><span> </span><span class="annot"><span class="annottext">Text -&gt; Text -&gt; Bool
+</span><span class="hs-identifier hs-var">isSuffixOf</span></span><span class="hs-special">)</span><span>
+</span><span id="line-126"></span><span>    </span><span class="annot"><a href="LaunchDarkly.Server.Operators.html#OpStartsWith"><span class="hs-identifier hs-type">OpStartsWith</span></a></span><span> </span><span class="hs-glyph">-&gt;</span><span> </span><span class="annot"><span class="annottext">(Text -&gt; Text -&gt; Bool) -&gt; Value -&gt; Value -&gt; Bool
+</span><a href="LaunchDarkly.Server.Operators.html#checkString"><span class="hs-identifier hs-var">checkString</span></a></span><span> </span><span class="hs-special">(</span><span class="annot"><span class="annottext">(Text -&gt; Text -&gt; Bool) -&gt; Text -&gt; Text -&gt; Bool
+forall a b c. (a -&gt; b -&gt; c) -&gt; b -&gt; a -&gt; c
+</span><span class="hs-identifier hs-var">flip</span></span><span> </span><span class="annot"><span class="annottext">Text -&gt; Text -&gt; Bool
+</span><span class="hs-identifier hs-var">isPrefixOf</span></span><span class="hs-special">)</span><span>
+</span><span id="line-127"></span><span>    </span><span class="annot"><a href="LaunchDarkly.Server.Operators.html#OpContains"><span class="hs-identifier hs-type">OpContains</span></a></span><span> </span><span class="hs-glyph">-&gt;</span><span> </span><span class="annot"><span class="annottext">(Text -&gt; Text -&gt; Bool) -&gt; Value -&gt; Value -&gt; Bool
+</span><a href="LaunchDarkly.Server.Operators.html#checkString"><span class="hs-identifier hs-var">checkString</span></a></span><span> </span><span class="hs-special">(</span><span class="annot"><span class="annottext">(Text -&gt; Text -&gt; Bool) -&gt; Text -&gt; Text -&gt; Bool
+forall a b c. (a -&gt; b -&gt; c) -&gt; b -&gt; a -&gt; c
+</span><span class="hs-identifier hs-var">flip</span></span><span> </span><span class="annot"><span class="annottext">Text -&gt; Text -&gt; Bool
+</span><span class="hs-identifier hs-var">isInfixOf</span></span><span class="hs-special">)</span><span>
+</span><span id="line-128"></span><span>    </span><span class="annot"><a href="LaunchDarkly.Server.Operators.html#OpMatches"><span class="hs-identifier hs-type">OpMatches</span></a></span><span> </span><span class="hs-glyph">-&gt;</span><span> </span><span class="annot"><span class="annottext">(Text -&gt; Text -&gt; Bool) -&gt; Value -&gt; Value -&gt; Bool
+</span><a href="LaunchDarkly.Server.Operators.html#checkString"><span class="hs-identifier hs-var">checkString</span></a></span><span> </span><span class="annot"><span class="annottext">Text -&gt; Text -&gt; Bool
+</span><a href="LaunchDarkly.Server.Operators.html#matches"><span class="hs-identifier hs-var">matches</span></a></span><span>
+</span><span id="line-129"></span><span>    </span><span class="annot"><a href="LaunchDarkly.Server.Operators.html#OpLessThan"><span class="hs-identifier hs-type">OpLessThan</span></a></span><span> </span><span class="hs-glyph">-&gt;</span><span> </span><span class="annot"><span class="annottext">(Scientific -&gt; Scientific -&gt; Bool) -&gt; Value -&gt; Value -&gt; Bool
+</span><a href="LaunchDarkly.Server.Operators.html#checkNumber"><span class="hs-identifier hs-var">checkNumber</span></a></span><span> </span><span class="annot"><span class="annottext">Scientific -&gt; Scientific -&gt; Bool
+forall a. Ord a =&gt; a -&gt; a -&gt; Bool
+</span><span class="hs-operator hs-var">(&lt;)</span></span><span>
+</span><span id="line-130"></span><span>    </span><span class="annot"><a href="LaunchDarkly.Server.Operators.html#OpLessThanOrEqual"><span class="hs-identifier hs-type">OpLessThanOrEqual</span></a></span><span> </span><span class="hs-glyph">-&gt;</span><span> </span><span class="annot"><span class="annottext">(Scientific -&gt; Scientific -&gt; Bool) -&gt; Value -&gt; Value -&gt; Bool
+</span><a href="LaunchDarkly.Server.Operators.html#checkNumber"><span class="hs-identifier hs-var">checkNumber</span></a></span><span> </span><span class="annot"><span class="annottext">Scientific -&gt; Scientific -&gt; Bool
+forall a. Ord a =&gt; a -&gt; a -&gt; Bool
+</span><span class="hs-operator hs-var">(&lt;=)</span></span><span>
+</span><span id="line-131"></span><span>    </span><span class="annot"><a href="LaunchDarkly.Server.Operators.html#OpGreaterThan"><span class="hs-identifier hs-type">OpGreaterThan</span></a></span><span> </span><span class="hs-glyph">-&gt;</span><span> </span><span class="annot"><span class="annottext">(Scientific -&gt; Scientific -&gt; Bool) -&gt; Value -&gt; Value -&gt; Bool
+</span><a href="LaunchDarkly.Server.Operators.html#checkNumber"><span class="hs-identifier hs-var">checkNumber</span></a></span><span> </span><span class="annot"><span class="annottext">Scientific -&gt; Scientific -&gt; Bool
+forall a. Ord a =&gt; a -&gt; a -&gt; Bool
+</span><span class="hs-operator hs-var">(&gt;)</span></span><span>
+</span><span id="line-132"></span><span>    </span><span class="annot"><a href="LaunchDarkly.Server.Operators.html#OpGreaterThanOrEqual"><span class="hs-identifier hs-type">OpGreaterThanOrEqual</span></a></span><span> </span><span class="hs-glyph">-&gt;</span><span> </span><span class="annot"><span class="annottext">(Scientific -&gt; Scientific -&gt; Bool) -&gt; Value -&gt; Value -&gt; Bool
+</span><a href="LaunchDarkly.Server.Operators.html#checkNumber"><span class="hs-identifier hs-var">checkNumber</span></a></span><span> </span><span class="annot"><span class="annottext">Scientific -&gt; Scientific -&gt; Bool
+forall a. Ord a =&gt; a -&gt; a -&gt; Bool
+</span><span class="hs-operator hs-var">(&gt;=)</span></span><span>
+</span><span id="line-133"></span><span>    </span><span class="annot"><a href="LaunchDarkly.Server.Operators.html#OpBefore"><span class="hs-identifier hs-type">OpBefore</span></a></span><span> </span><span class="hs-glyph">-&gt;</span><span> </span><span class="annot"><span class="annottext">(UTCTime -&gt; UTCTime -&gt; Bool) -&gt; Value -&gt; Value -&gt; Bool
+</span><a href="LaunchDarkly.Server.Operators.html#compareTime"><span class="hs-identifier hs-var">compareTime</span></a></span><span> </span><span class="annot"><span class="annottext">UTCTime -&gt; UTCTime -&gt; Bool
+forall a. Ord a =&gt; a -&gt; a -&gt; Bool
+</span><span class="hs-operator hs-var">(&lt;)</span></span><span>
+</span><span id="line-134"></span><span>    </span><span class="annot"><a href="LaunchDarkly.Server.Operators.html#OpAfter"><span class="hs-identifier hs-type">OpAfter</span></a></span><span> </span><span class="hs-glyph">-&gt;</span><span> </span><span class="annot"><span class="annottext">(UTCTime -&gt; UTCTime -&gt; Bool) -&gt; Value -&gt; Value -&gt; Bool
+</span><a href="LaunchDarkly.Server.Operators.html#compareTime"><span class="hs-identifier hs-var">compareTime</span></a></span><span> </span><span class="annot"><span class="annottext">UTCTime -&gt; UTCTime -&gt; Bool
+forall a. Ord a =&gt; a -&gt; a -&gt; Bool
+</span><span class="hs-operator hs-var">(&gt;)</span></span><span>
+</span><span id="line-135"></span><span>    </span><span class="annot"><a href="LaunchDarkly.Server.Operators.html#OpSemVerEqual"><span class="hs-identifier hs-type">OpSemVerEqual</span></a></span><span> </span><span class="hs-glyph">-&gt;</span><span> </span><span class="annot"><span class="annottext">(Text -&gt; Text -&gt; Bool) -&gt; Value -&gt; Value -&gt; Bool
+</span><a href="LaunchDarkly.Server.Operators.html#checkString"><span class="hs-identifier hs-var">checkString</span></a></span><span> </span><span class="annot"><span class="annottext">((Text -&gt; Text -&gt; Bool) -&gt; Value -&gt; Value -&gt; Bool)
+-&gt; (Text -&gt; Text -&gt; Bool) -&gt; Value -&gt; Value -&gt; Bool
+forall a b. (a -&gt; b) -&gt; a -&gt; b
+</span><span class="hs-operator hs-var">$</span></span><span> </span><span class="annot"><span class="annottext">(Version -&gt; Version -&gt; Bool) -&gt; Text -&gt; Text -&gt; Bool
+</span><a href="LaunchDarkly.Server.Operators.html#compareSemVer"><span class="hs-identifier hs-var">compareSemVer</span></a></span><span> </span><span class="annot"><span class="annottext">Version -&gt; Version -&gt; Bool
+forall a. Eq a =&gt; a -&gt; a -&gt; Bool
+</span><span class="hs-operator hs-var">(==)</span></span><span>
+</span><span id="line-136"></span><span>    </span><span class="annot"><a href="LaunchDarkly.Server.Operators.html#OpSemVerLessThan"><span class="hs-identifier hs-type">OpSemVerLessThan</span></a></span><span> </span><span class="hs-glyph">-&gt;</span><span> </span><span class="annot"><span class="annottext">(Text -&gt; Text -&gt; Bool) -&gt; Value -&gt; Value -&gt; Bool
+</span><a href="LaunchDarkly.Server.Operators.html#checkString"><span class="hs-identifier hs-var">checkString</span></a></span><span> </span><span class="annot"><span class="annottext">((Text -&gt; Text -&gt; Bool) -&gt; Value -&gt; Value -&gt; Bool)
+-&gt; (Text -&gt; Text -&gt; Bool) -&gt; Value -&gt; Value -&gt; Bool
+forall a b. (a -&gt; b) -&gt; a -&gt; b
+</span><span class="hs-operator hs-var">$</span></span><span> </span><span class="annot"><span class="annottext">(Version -&gt; Version -&gt; Bool) -&gt; Text -&gt; Text -&gt; Bool
+</span><a href="LaunchDarkly.Server.Operators.html#compareSemVer"><span class="hs-identifier hs-var">compareSemVer</span></a></span><span> </span><span class="annot"><span class="annottext">Version -&gt; Version -&gt; Bool
+forall a. Ord a =&gt; a -&gt; a -&gt; Bool
+</span><span class="hs-operator hs-var">(&lt;)</span></span><span>
+</span><span id="line-137"></span><span>    </span><span class="annot"><a href="LaunchDarkly.Server.Operators.html#OpSemVerGreaterThan"><span class="hs-identifier hs-type">OpSemVerGreaterThan</span></a></span><span> </span><span class="hs-glyph">-&gt;</span><span> </span><span class="annot"><span class="annottext">(Text -&gt; Text -&gt; Bool) -&gt; Value -&gt; Value -&gt; Bool
+</span><a href="LaunchDarkly.Server.Operators.html#checkString"><span class="hs-identifier hs-var">checkString</span></a></span><span> </span><span class="annot"><span class="annottext">((Text -&gt; Text -&gt; Bool) -&gt; Value -&gt; Value -&gt; Bool)
+-&gt; (Text -&gt; Text -&gt; Bool) -&gt; Value -&gt; Value -&gt; Bool
+forall a b. (a -&gt; b) -&gt; a -&gt; b
+</span><span class="hs-operator hs-var">$</span></span><span> </span><span class="annot"><span class="annottext">(Version -&gt; Version -&gt; Bool) -&gt; Text -&gt; Text -&gt; Bool
+</span><a href="LaunchDarkly.Server.Operators.html#compareSemVer"><span class="hs-identifier hs-var">compareSemVer</span></a></span><span> </span><span class="annot"><span class="annottext">Version -&gt; Version -&gt; Bool
+forall a. Ord a =&gt; a -&gt; a -&gt; Bool
+</span><span class="hs-operator hs-var">(&gt;)</span></span><span>
+</span><span id="line-138"></span><span>    </span><span class="annot"><a href="LaunchDarkly.Server.Operators.html#OpSegmentMatch"><span class="hs-identifier hs-type">OpSegmentMatch</span></a></span><span> </span><span class="hs-glyph">-&gt;</span><span> </span><span class="annot"><span class="annottext">String -&gt; Value -&gt; Value -&gt; Bool
+forall a. HasCallStack =&gt; String -&gt; a
+</span><span class="hs-identifier hs-var">error</span></span><span> </span><span class="annot"><span class="hs-string">&quot;cannot get operation for OpSegmentMatch&quot;</span></span><span>
+</span><span id="line-139"></span><span>    </span><span class="annot"><a href="LaunchDarkly.Server.Operators.html#OpUnknown"><span class="hs-identifier hs-type">OpUnknown</span></a></span><span> </span><span class="hs-glyph">-&gt;</span><span> </span><span class="annot"><span class="annottext">(Value -&gt; Bool) -&gt; Value -&gt; Value -&gt; Bool
+forall a b. a -&gt; b -&gt; a
+</span><span class="hs-identifier hs-var">const</span></span><span> </span><span class="annot"><span class="annottext">((Value -&gt; Bool) -&gt; Value -&gt; Value -&gt; Bool)
+-&gt; (Value -&gt; Bool) -&gt; Value -&gt; Value -&gt; Bool
+forall a b. (a -&gt; b) -&gt; a -&gt; b
+</span><span class="hs-operator hs-var">$</span></span><span> </span><span class="annot"><span class="annottext">Bool -&gt; Value -&gt; Bool
+forall a b. a -&gt; b -&gt; a
+</span><span class="hs-identifier hs-var">const</span></span><span> </span><span class="annot"><span class="annottext">Bool
+</span><span class="hs-identifier hs-var">False</span></span><span>
+</span><span id="line-140"></span></pre></body></html>

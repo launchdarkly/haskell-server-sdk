@@ -1,0 +1,752 @@
+<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Transitional//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-transitional.dtd"><html xmlns="http://www.w3.org/1999/xhtml"><head><link rel="stylesheet" type="text/css" href="style.css" /><script type="text/javascript" src="highlight.js"></script></head><body><pre><span class="hs-pragma">{-# LANGUAGE BangPatterns #-}</span><span>
+</span><span id="line-2"></span><span>
+</span><span id="line-3"></span><span class="hs-comment">-- |</span><span>
+</span><span id="line-4"></span><span class="hs-comment">-- Integration between the LaunchDarkly SDK and file data.</span><span>
+</span><span id="line-5"></span><span class="hs-comment">--</span><span>
+</span><span id="line-6"></span><span class="hs-comment">--  The file data source allows you to use local files as a source of feature</span><span>
+</span><span id="line-7"></span><span class="hs-comment">--  flag state. This would typically be used in a test environment, to operate</span><span>
+</span><span id="line-8"></span><span class="hs-comment">--  using a predetermined feature flag state without an actual LaunchDarkly</span><span>
+</span><span id="line-9"></span><span class="hs-comment">--  connection. See 'dataSourceFactory' for details.</span><span>
+</span><span id="line-10"></span><span class="hs-comment">--</span><span>
+</span><span id="line-11"></span><span class="hs-comment">--  @since 2.2.1</span><span>
+</span><span id="line-12"></span><span class="hs-keyword">module</span><span> </span><span class="hs-identifier">LaunchDarkly.Server.Integrations.FileData</span><span>
+</span><span id="line-13"></span><span>    </span><span class="hs-special">(</span><span> </span><span class="annot"><a href="LaunchDarkly.Server.Integrations.FileData.html#dataSourceFactory"><span class="hs-identifier">dataSourceFactory</span></a></span><span>
+</span><span id="line-14"></span><span>    </span><span class="hs-special">)</span><span>
+</span><span id="line-15"></span><span class="hs-keyword">where</span><span>
+</span><span id="line-16"></span><span>
+</span><span id="line-17"></span><span class="hs-keyword">import</span><span> </span><span class="annot"><span class="hs-identifier">Control.Applicative</span></span><span> </span><span class="hs-special">(</span><span class="annot"><span class="hs-operator">(&lt;|&gt;)</span></span><span class="hs-special">)</span><span>
+</span><span id="line-18"></span><span class="hs-keyword">import</span><span> </span><span class="annot"><span class="hs-identifier">Data.Aeson</span></span><span> </span><span class="hs-special">(</span><span class="annot"><span class="hs-identifier">FromJSON</span></span><span class="hs-special">,</span><span> </span><span class="annot"><span class="hs-identifier">Value</span></span><span class="hs-special">,</span><span> </span><span class="annot"><span class="hs-identifier">decode</span></span><span class="hs-special">)</span><span>
+</span><span id="line-19"></span><span class="hs-keyword">import</span><span> </span><span class="hs-keyword">qualified</span><span> </span><span class="annot"><span class="hs-identifier">Data.ByteString.Lazy</span></span><span> </span><span class="hs-keyword">as</span><span> </span><span class="annot"><span class="hs-identifier">BSL</span></span><span>
+</span><span id="line-20"></span><span class="hs-keyword">import</span><span> </span><span class="annot"><span class="hs-identifier">Data.Generics.Product</span></span><span> </span><span class="hs-special">(</span><span class="annot"><span class="hs-identifier">getField</span></span><span class="hs-special">)</span><span>
+</span><span id="line-21"></span><span class="hs-keyword">import</span><span> </span><span class="annot"><span class="hs-identifier">Data.HashSet</span></span><span> </span><span class="hs-special">(</span><span class="annot"><span class="hs-identifier">HashSet</span></span><span class="hs-special">)</span><span>
+</span><span id="line-22"></span><span class="hs-keyword">import</span><span> </span><span class="annot"><span class="hs-identifier">Data.IORef</span></span><span> </span><span class="hs-special">(</span><span class="annot"><span class="hs-identifier">newIORef</span></span><span class="hs-special">,</span><span> </span><span class="annot"><span class="hs-identifier">readIORef</span></span><span class="hs-special">,</span><span> </span><span class="annot"><span class="hs-identifier">writeIORef</span></span><span class="hs-special">)</span><span>
+</span><span id="line-23"></span><span class="hs-keyword">import</span><span> </span><span class="annot"><span class="hs-identifier">Data.Maybe</span></span><span> </span><span class="hs-special">(</span><span class="annot"><span class="hs-identifier">fromMaybe</span></span><span class="hs-special">)</span><span>
+</span><span id="line-24"></span><span class="hs-keyword">import</span><span> </span><span class="annot"><span class="hs-identifier">Data.Text</span></span><span> </span><span class="hs-special">(</span><span class="annot"><span class="hs-identifier">Text</span></span><span class="hs-special">)</span><span>
+</span><span id="line-25"></span><span class="hs-keyword">import</span><span> </span><span class="hs-keyword">qualified</span><span> </span><span class="annot"><span class="hs-identifier">Data.Yaml</span></span><span> </span><span class="hs-keyword">as</span><span> </span><span class="annot"><span class="hs-identifier">Yaml</span></span><span>
+</span><span id="line-26"></span><span class="hs-keyword">import</span><span> </span><span class="annot"><span class="hs-identifier">GHC.Generics</span></span><span> </span><span class="hs-special">(</span><span class="annot"><span class="hs-identifier">Generic</span></span><span class="hs-special">)</span><span>
+</span><span id="line-27"></span><span class="hs-keyword">import</span><span> </span><span class="annot"><span class="hs-identifier">GHC.Natural</span></span><span> </span><span class="hs-special">(</span><span class="annot"><span class="hs-identifier">Natural</span></span><span class="hs-special">)</span><span>
+</span><span id="line-28"></span><span class="hs-keyword">import</span><span> </span><span class="annot"><a href="LaunchDarkly.AesonCompat.html"><span class="hs-identifier">LaunchDarkly.AesonCompat</span></a></span><span> </span><span class="hs-special">(</span><span class="annot"><a href="LaunchDarkly.AesonCompat.html#KeyMap"><span class="hs-identifier">KeyMap</span></a></span><span class="hs-special">,</span><span> </span><span class="annot"><a href="LaunchDarkly.AesonCompat.html#mapWithKey"><span class="hs-identifier">mapWithKey</span></a></span><span class="hs-special">)</span><span>
+</span><span id="line-29"></span><span class="hs-keyword">import</span><span> </span><span class="annot"><a href="LaunchDarkly.Server.Client.Status.html"><span class="hs-identifier">LaunchDarkly.Server.Client.Status</span></a></span><span>
+</span><span id="line-30"></span><span class="hs-keyword">import</span><span> </span><span class="annot"><a href="LaunchDarkly.Server.DataSource.Internal.html"><span class="hs-identifier">LaunchDarkly.Server.DataSource.Internal</span></a></span><span> </span><span class="hs-special">(</span><span class="annot"><a href="LaunchDarkly.Server.DataSource.Internal.html#DataSource"><span class="hs-identifier">DataSource</span></a></span><span> </span><span class="hs-special">(</span><span class="hs-glyph">..</span><span class="hs-special">)</span><span class="hs-special">,</span><span> </span><span class="annot"><a href="LaunchDarkly.Server.DataSource.Internal.html#DataSourceFactory"><span class="hs-identifier">DataSourceFactory</span></a></span><span class="hs-special">,</span><span> </span><span class="annot"><a href="LaunchDarkly.Server.DataSource.Internal.html#DataSourceUpdates"><span class="hs-identifier">DataSourceUpdates</span></a></span><span> </span><span class="hs-special">(</span><span class="hs-glyph">..</span><span class="hs-special">)</span><span class="hs-special">)</span><span>
+</span><span id="line-31"></span><span class="hs-keyword">import</span><span> </span><span class="hs-keyword">qualified</span><span> </span><span class="annot"><a href="LaunchDarkly.Server.Features.html"><span class="hs-identifier">LaunchDarkly.Server.Features</span></a></span><span> </span><span class="hs-keyword">as</span><span> </span><span class="annot"><span class="hs-identifier">F</span></span><span>
+</span><span id="line-32"></span><span>
+</span><span id="line-33"></span><span id="local-6989586621679668276"><span id="local-6989586621679668277"></span></span><span class="hs-keyword">data</span><span> </span><span id="FileFlag"><span class="annot"><a href="LaunchDarkly.Server.Integrations.FileData.html#FileFlag"><span class="hs-identifier hs-var">FileFlag</span></a></span></span><span> </span><span class="hs-glyph">=</span><span> </span><span id="FileFlag"><span class="annot"><a href="LaunchDarkly.Server.Integrations.FileData.html#FileFlag"><span class="hs-identifier hs-var">FileFlag</span></a></span></span><span>
+</span><span id="line-34"></span><span>    </span><span class="hs-special">{</span><span> </span><span id="%24sel%3Aversion%3AFileFlag"><span class="annot"><span class="annottext">FileFlag -&gt; Maybe Natural
+</span><a href="LaunchDarkly.Server.Integrations.FileData.html#%24sel%3Aversion%3AFileFlag"><span class="hs-identifier hs-var hs-var">version</span></a></span></span><span> </span><span class="hs-glyph">::</span><span> </span><span class="annot"><span class="hs-identifier hs-type">Maybe</span></span><span> </span><span class="annot"><span class="hs-identifier hs-type">Natural</span></span><span>
+</span><span id="line-35"></span><span>    </span><span class="hs-special">,</span><span> </span><span id="%24sel%3Aon%3AFileFlag"><span class="annot"><span class="annottext">FileFlag -&gt; Maybe Bool
+</span><a href="LaunchDarkly.Server.Integrations.FileData.html#%24sel%3Aon%3AFileFlag"><span class="hs-identifier hs-var hs-var">on</span></a></span></span><span> </span><span class="hs-glyph">::</span><span> </span><span class="annot"><span class="hs-identifier hs-type">Maybe</span></span><span> </span><span class="annot"><span class="hs-identifier hs-type">Bool</span></span><span>
+</span><span id="line-36"></span><span>    </span><span class="hs-special">,</span><span> </span><span id="%24sel%3Atargets%3AFileFlag"><span class="annot"><span class="annottext">FileFlag -&gt; Maybe [Target]
+</span><a href="LaunchDarkly.Server.Integrations.FileData.html#%24sel%3Atargets%3AFileFlag"><span class="hs-identifier hs-var hs-var">targets</span></a></span></span><span> </span><span class="hs-glyph">::</span><span> </span><span class="annot"><span class="hs-identifier hs-type">Maybe</span></span><span> </span><span class="hs-special">[</span><span class="annot"><a href="LaunchDarkly.Server.Features.html#Target"><span class="hs-identifier hs-type">F.Target</span></a></span><span class="hs-special">]</span><span>
+</span><span id="line-37"></span><span>    </span><span class="hs-special">,</span><span> </span><span id="%24sel%3AcontextTargets%3AFileFlag"><span class="annot"><span class="annottext">FileFlag -&gt; Maybe [Target]
+</span><a href="LaunchDarkly.Server.Integrations.FileData.html#%24sel%3AcontextTargets%3AFileFlag"><span class="hs-identifier hs-var hs-var">contextTargets</span></a></span></span><span> </span><span class="hs-glyph">::</span><span> </span><span class="annot"><span class="hs-identifier hs-type">Maybe</span></span><span> </span><span class="hs-special">[</span><span class="annot"><a href="LaunchDarkly.Server.Features.html#Target"><span class="hs-identifier hs-type">F.Target</span></a></span><span class="hs-special">]</span><span>
+</span><span id="line-38"></span><span>    </span><span class="hs-special">,</span><span> </span><span id="%24sel%3Arules%3AFileFlag"><span class="annot"><span class="annottext">FileFlag -&gt; Maybe [Rule]
+</span><a href="LaunchDarkly.Server.Integrations.FileData.html#%24sel%3Arules%3AFileFlag"><span class="hs-identifier hs-var hs-var">rules</span></a></span></span><span> </span><span class="hs-glyph">::</span><span> </span><span class="annot"><span class="hs-identifier hs-type">Maybe</span></span><span> </span><span class="hs-special">[</span><span class="annot"><a href="LaunchDarkly.Server.Features.html#Rule"><span class="hs-identifier hs-type">F.Rule</span></a></span><span class="hs-special">]</span><span>
+</span><span id="line-39"></span><span>    </span><span class="hs-special">,</span><span> </span><span id="%24sel%3Afallthrough%3AFileFlag"><span class="annot"><span class="annottext">FileFlag -&gt; Maybe VariationOrRollout
+</span><a href="LaunchDarkly.Server.Integrations.FileData.html#%24sel%3Afallthrough%3AFileFlag"><span class="hs-identifier hs-var hs-var">fallthrough</span></a></span></span><span> </span><span class="hs-glyph">::</span><span> </span><span class="annot"><span class="hs-identifier hs-type">Maybe</span></span><span> </span><span class="annot"><a href="LaunchDarkly.Server.Features.html#VariationOrRollout"><span class="hs-identifier hs-type">F.VariationOrRollout</span></a></span><span>
+</span><span id="line-40"></span><span>    </span><span class="hs-special">,</span><span> </span><span id="%24sel%3AoffVariation%3AFileFlag"><span class="annot"><span class="annottext">FileFlag -&gt; Maybe Integer
+</span><a href="LaunchDarkly.Server.Integrations.FileData.html#%24sel%3AoffVariation%3AFileFlag"><span class="hs-identifier hs-var hs-var">offVariation</span></a></span></span><span> </span><span class="hs-glyph">::</span><span> </span><span class="annot"><span class="hs-identifier hs-type">Maybe</span></span><span> </span><span class="annot"><span class="hs-identifier hs-type">Integer</span></span><span>
+</span><span id="line-41"></span><span>    </span><span class="hs-special">,</span><span> </span><span id="%24sel%3Avariations%3AFileFlag"><span class="annot"><span class="annottext">FileFlag -&gt; [Value]
+</span><a href="LaunchDarkly.Server.Integrations.FileData.html#%24sel%3Avariations%3AFileFlag"><span class="hs-identifier hs-var hs-var">variations</span></a></span></span><span> </span><span class="hs-glyph">::</span><span> </span><span class="hs-glyph">!</span><span class="hs-special">[</span><span class="annot"><span class="hs-identifier hs-type">Value</span></span><span class="hs-special">]</span><span>
+</span><span id="line-42"></span><span>    </span><span class="hs-special">}</span><span>
+</span><span id="line-43"></span><span>    </span><span class="hs-keyword">deriving</span><span> </span><span class="hs-special">(</span><span class="annot"><span class="annottext">(forall x. FileFlag -&gt; Rep FileFlag x)
+-&gt; (forall x. Rep FileFlag x -&gt; FileFlag) -&gt; Generic FileFlag
+forall x. Rep FileFlag x -&gt; FileFlag
+forall x. FileFlag -&gt; Rep FileFlag x
+forall a.
+(forall x. a -&gt; Rep a x) -&gt; (forall x. Rep a x -&gt; a) -&gt; Generic a
+$cto :: forall x. Rep FileFlag x -&gt; FileFlag
+$cfrom :: forall x. FileFlag -&gt; Rep FileFlag x
+</span><span class="hs-identifier hs-var hs-var hs-var hs-var">Generic</span></span><span class="hs-special">,</span><span> </span><span id="local-6989586621679668260"><span id="local-6989586621679668262"><span class="annot"><span class="annottext">Value -&gt; Parser [FileFlag]
+Value -&gt; Parser FileFlag
+(Value -&gt; Parser FileFlag)
+-&gt; (Value -&gt; Parser [FileFlag]) -&gt; FromJSON FileFlag
+forall a.
+(Value -&gt; Parser a) -&gt; (Value -&gt; Parser [a]) -&gt; FromJSON a
+parseJSONList :: Value -&gt; Parser [FileFlag]
+$cparseJSONList :: Value -&gt; Parser [FileFlag]
+parseJSON :: Value -&gt; Parser FileFlag
+$cparseJSON :: Value -&gt; Parser FileFlag
+</span><span class="hs-identifier hs-var hs-var hs-var hs-var hs-var hs-var">FromJSON</span></span></span></span><span class="hs-special">,</span><span> </span><span id="local-6989586621679668253"><span id="local-6989586621679668255"><span id="local-6989586621679668257"><span class="annot"><span class="annottext">Int -&gt; FileFlag -&gt; ShowS
+[FileFlag] -&gt; ShowS
+FileFlag -&gt; String
+(Int -&gt; FileFlag -&gt; ShowS)
+-&gt; (FileFlag -&gt; String) -&gt; ([FileFlag] -&gt; ShowS) -&gt; Show FileFlag
+forall a.
+(Int -&gt; a -&gt; ShowS) -&gt; (a -&gt; String) -&gt; ([a] -&gt; ShowS) -&gt; Show a
+showList :: [FileFlag] -&gt; ShowS
+$cshowList :: [FileFlag] -&gt; ShowS
+show :: FileFlag -&gt; String
+$cshow :: FileFlag -&gt; String
+showsPrec :: Int -&gt; FileFlag -&gt; ShowS
+$cshowsPrec :: Int -&gt; FileFlag -&gt; ShowS
+</span><span class="hs-identifier hs-var hs-var hs-var hs-var hs-var hs-var hs-var hs-var">Show</span></span></span></span></span><span class="hs-special">,</span><span> </span><span id="local-6989586621679668248"><span id="local-6989586621679668250"><span class="annot"><span class="annottext">FileFlag -&gt; FileFlag -&gt; Bool
+(FileFlag -&gt; FileFlag -&gt; Bool)
+-&gt; (FileFlag -&gt; FileFlag -&gt; Bool) -&gt; Eq FileFlag
+forall a. (a -&gt; a -&gt; Bool) -&gt; (a -&gt; a -&gt; Bool) -&gt; Eq a
+/= :: FileFlag -&gt; FileFlag -&gt; Bool
+$c/= :: FileFlag -&gt; FileFlag -&gt; Bool
+== :: FileFlag -&gt; FileFlag -&gt; Bool
+$c== :: FileFlag -&gt; FileFlag -&gt; Bool
+</span><span class="hs-identifier hs-var hs-var hs-var hs-var hs-var hs-var">Eq</span></span></span></span><span class="hs-special">)</span><span>
+</span><span id="line-44"></span><span>
+</span><span id="line-45"></span><span class="annot"><a href="LaunchDarkly.Server.Integrations.FileData.html#expandSimpleFlag"><span class="hs-identifier hs-type">expandSimpleFlag</span></a></span><span> </span><span class="hs-glyph">::</span><span> </span><span class="annot"><span class="hs-identifier hs-type">Value</span></span><span> </span><span class="hs-glyph">-&gt;</span><span> </span><span class="annot"><a href="LaunchDarkly.Server.Integrations.FileData.html#FileFlag"><span class="hs-identifier hs-type">FileFlag</span></a></span><span>
+</span><span id="line-46"></span><span id="expandSimpleFlag"><span class="annot"><span class="annottext">expandSimpleFlag :: Value -&gt; FileFlag
+</span><a href="LaunchDarkly.Server.Integrations.FileData.html#expandSimpleFlag"><span class="hs-identifier hs-var hs-var">expandSimpleFlag</span></a></span></span><span> </span><span id="local-6989586621679668245"><span class="annot"><span class="annottext">value :: Value
+</span><a href="#local-6989586621679668245"><span class="hs-identifier hs-var">value</span></a></span></span><span> </span><span class="hs-glyph">=</span><span>
+</span><span id="line-47"></span><span>    </span><span class="annot"><span class="annottext">$WFileFlag :: Maybe Natural
+-&gt; Maybe Bool
+-&gt; Maybe [Target]
+-&gt; Maybe [Target]
+-&gt; Maybe [Rule]
+-&gt; Maybe VariationOrRollout
+-&gt; Maybe Integer
+-&gt; [Value]
+-&gt; FileFlag
+</span><a href="LaunchDarkly.Server.Integrations.FileData.html#%24WFileFlag"><span class="hs-identifier hs-type hs-type">FileFlag</span></a></span><span>
+</span><span id="line-48"></span><span>        </span><span class="hs-special">{</span><span> </span><span class="annot"><span class="annottext">$sel:version:FileFlag :: Maybe Natural
+</span><a href="LaunchDarkly.Server.Integrations.FileData.html#%24sel%3Aversion%3AFileFlag"><span class="hs-identifier hs-var">version</span></a></span><span> </span><span class="hs-glyph">=</span><span> </span><span class="annot"><span class="annottext">Maybe Natural
+forall a. Maybe a
+</span><span class="hs-identifier hs-var">Nothing</span></span><span>
+</span><span id="line-49"></span><span>        </span><span class="hs-special">,</span><span> </span><span class="annot"><span class="annottext">$sel:on:FileFlag :: Maybe Bool
+</span><a href="LaunchDarkly.Server.Integrations.FileData.html#%24sel%3Aon%3AFileFlag"><span class="hs-identifier hs-var">on</span></a></span><span> </span><span class="hs-glyph">=</span><span> </span><span class="annot"><span class="annottext">Maybe Bool
+forall a. Maybe a
+</span><span class="hs-identifier hs-var">Nothing</span></span><span>
+</span><span id="line-50"></span><span>        </span><span class="hs-special">,</span><span> </span><span class="annot"><span class="annottext">$sel:targets:FileFlag :: Maybe [Target]
+</span><a href="LaunchDarkly.Server.Integrations.FileData.html#%24sel%3Atargets%3AFileFlag"><span class="hs-identifier hs-var">targets</span></a></span><span> </span><span class="hs-glyph">=</span><span> </span><span class="annot"><span class="annottext">Maybe [Target]
+forall a. Maybe a
+</span><span class="hs-identifier hs-var">Nothing</span></span><span>
+</span><span id="line-51"></span><span>        </span><span class="hs-special">,</span><span> </span><span class="annot"><span class="annottext">$sel:contextTargets:FileFlag :: Maybe [Target]
+</span><a href="LaunchDarkly.Server.Integrations.FileData.html#%24sel%3AcontextTargets%3AFileFlag"><span class="hs-identifier hs-var">contextTargets</span></a></span><span> </span><span class="hs-glyph">=</span><span> </span><span class="annot"><span class="annottext">Maybe [Target]
+forall a. Maybe a
+</span><span class="hs-identifier hs-var">Nothing</span></span><span>
+</span><span id="line-52"></span><span>        </span><span class="hs-special">,</span><span> </span><span class="annot"><span class="annottext">$sel:rules:FileFlag :: Maybe [Rule]
+</span><a href="LaunchDarkly.Server.Integrations.FileData.html#%24sel%3Arules%3AFileFlag"><span class="hs-identifier hs-var">rules</span></a></span><span> </span><span class="hs-glyph">=</span><span> </span><span class="annot"><span class="annottext">Maybe [Rule]
+forall a. Maybe a
+</span><span class="hs-identifier hs-var">Nothing</span></span><span>
+</span><span id="line-53"></span><span>        </span><span class="hs-special">,</span><span> </span><span class="annot"><span class="annottext">$sel:fallthrough:FileFlag :: Maybe VariationOrRollout
+</span><a href="LaunchDarkly.Server.Integrations.FileData.html#%24sel%3Afallthrough%3AFileFlag"><span class="hs-identifier hs-var">fallthrough</span></a></span><span> </span><span class="hs-glyph">=</span><span> </span><span class="annot"><span class="annottext">VariationOrRollout -&gt; Maybe VariationOrRollout
+forall a. a -&gt; Maybe a
+</span><span class="hs-identifier hs-var">Just</span></span><span> </span><span class="hs-special">(</span><span class="annot"><span class="annottext">Maybe Integer -&gt; Maybe Rollout -&gt; VariationOrRollout
+</span><a href="LaunchDarkly.Server.Features.html#VariationOrRollout"><span class="hs-identifier hs-var">F.VariationOrRollout</span></a></span><span> </span><span class="hs-special">(</span><span class="annot"><span class="annottext">Integer -&gt; Maybe Integer
+forall a. a -&gt; Maybe a
+</span><span class="hs-identifier hs-var">Just</span></span><span> </span><span class="annot"><span class="hs-number">0</span></span><span class="hs-special">)</span><span> </span><span class="annot"><span class="annottext">Maybe Rollout
+forall a. Maybe a
+</span><span class="hs-identifier hs-var">Nothing</span></span><span class="hs-special">)</span><span>
+</span><span id="line-54"></span><span>        </span><span class="hs-special">,</span><span> </span><span class="annot"><span class="annottext">$sel:offVariation:FileFlag :: Maybe Integer
+</span><a href="LaunchDarkly.Server.Integrations.FileData.html#%24sel%3AoffVariation%3AFileFlag"><span class="hs-identifier hs-var">offVariation</span></a></span><span> </span><span class="hs-glyph">=</span><span> </span><span class="annot"><span class="annottext">Integer -&gt; Maybe Integer
+forall a. a -&gt; Maybe a
+</span><span class="hs-identifier hs-var">Just</span></span><span> </span><span class="annot"><span class="hs-number">0</span></span><span>
+</span><span id="line-55"></span><span>        </span><span class="hs-special">,</span><span> </span><span class="annot"><span class="annottext">$sel:variations:FileFlag :: [Value]
+</span><a href="LaunchDarkly.Server.Integrations.FileData.html#%24sel%3Avariations%3AFileFlag"><span class="hs-identifier hs-var">variations</span></a></span><span> </span><span class="hs-glyph">=</span><span> </span><span class="hs-special">[</span><span class="annot"><span class="annottext">Value
+</span><a href="#local-6989586621679668245"><span class="hs-identifier hs-var">value</span></a></span><span class="hs-special">]</span><span>
+</span><span id="line-56"></span><span>        </span><span class="hs-special">}</span><span>
+</span><span id="line-57"></span><span>
+</span><span id="line-58"></span><span class="annot"><a href="LaunchDarkly.Server.Integrations.FileData.html#fromFileFlag"><span class="hs-identifier hs-type">fromFileFlag</span></a></span><span> </span><span class="hs-glyph">::</span><span> </span><span class="annot"><span class="hs-identifier hs-type">Text</span></span><span> </span><span class="hs-glyph">-&gt;</span><span> </span><span class="annot"><a href="LaunchDarkly.Server.Integrations.FileData.html#FileFlag"><span class="hs-identifier hs-type">FileFlag</span></a></span><span> </span><span class="hs-glyph">-&gt;</span><span> </span><span class="annot"><a href="LaunchDarkly.Server.Features.html#Flag"><span class="hs-identifier hs-type">F.Flag</span></a></span><span>
+</span><span id="line-59"></span><span id="fromFileFlag"><span class="annot"><span class="annottext">fromFileFlag :: Text -&gt; FileFlag -&gt; Flag
+</span><a href="LaunchDarkly.Server.Integrations.FileData.html#fromFileFlag"><span class="hs-identifier hs-var hs-var">fromFileFlag</span></a></span></span><span> </span><span id="local-6989586621679668241"><span class="annot"><span class="annottext">key :: Text
+</span><a href="#local-6989586621679668241"><span class="hs-identifier hs-var">key</span></a></span></span><span> </span><span id="local-6989586621679668240"><span class="annot"><span class="annottext">fileFlag :: FileFlag
+</span><a href="#local-6989586621679668240"><span class="hs-identifier hs-var">fileFlag</span></a></span></span><span> </span><span class="hs-glyph">=</span><span>
+</span><span id="line-60"></span><span>    </span><span class="annot"><span class="annottext">$WFlag :: Text
+-&gt; Natural
+-&gt; Bool
+-&gt; Bool
+-&gt; Bool
+-&gt; Bool
+-&gt; [Prerequisite]
+-&gt; Text
+-&gt; [Target]
+-&gt; [Target]
+-&gt; [Rule]
+-&gt; VariationOrRollout
+-&gt; Maybe Integer
+-&gt; [Value]
+-&gt; Maybe Natural
+-&gt; ClientSideAvailability
+-&gt; Flag
+</span><a href="LaunchDarkly.Server.Features.html#%24WFlag"><span class="hs-identifier hs-type hs-type">F.Flag</span></a></span><span>
+</span><span id="line-61"></span><span>        </span><span class="hs-special">{</span><span> </span><span class="annot"><span class="annottext">$sel:key:Flag :: Text
+</span><a href="LaunchDarkly.Server.Features.html#%24sel%3Akey%3AFlag"><span class="hs-identifier hs-var">F.key</span></a></span><span> </span><span class="hs-glyph">=</span><span> </span><span class="annot"><span class="annottext">Text
+</span><a href="#local-6989586621679668241"><span class="hs-identifier hs-var">key</span></a></span><span>
+</span><span id="line-62"></span><span>        </span><span class="hs-special">,</span><span> </span><span class="annot"><span class="annottext">$sel:version:Flag :: Natural
+</span><a href="LaunchDarkly.Server.Features.html#%24sel%3Aversion%3AFlag"><span class="hs-identifier hs-var">F.version</span></a></span><span> </span><span class="hs-glyph">=</span><span> </span><span class="annot"><span class="annottext">Natural -&gt; Maybe Natural -&gt; Natural
+forall a. a -&gt; Maybe a -&gt; a
+</span><span class="hs-identifier hs-var">fromMaybe</span></span><span> </span><span class="annot"><span class="hs-number">1</span></span><span> </span><span class="annot"><span class="annottext">(Maybe Natural -&gt; Natural) -&gt; Maybe Natural -&gt; Natural
+forall a b. (a -&gt; b) -&gt; a -&gt; b
+</span><span class="hs-operator hs-var">$</span></span><span> </span><span class="annot"><span class="annottext">FileFlag -&gt; Maybe Natural
+forall (f :: Symbol) a s. HasField' f s a =&gt; s -&gt; a
+</span><span class="hs-identifier hs-var">getField</span></span><span> </span><span class="hs-glyph">@</span><span class="annot"><span class="hs-string">&quot;version&quot;</span></span><span> </span><span class="annot"><span class="annottext">FileFlag
+</span><a href="#local-6989586621679668240"><span class="hs-identifier hs-var">fileFlag</span></a></span><span>
+</span><span id="line-63"></span><span>        </span><span class="hs-special">,</span><span> </span><span class="annot"><span class="annottext">$sel:on:Flag :: Bool
+</span><a href="LaunchDarkly.Server.Features.html#%24sel%3Aon%3AFlag"><span class="hs-identifier hs-var">F.on</span></a></span><span> </span><span class="hs-glyph">=</span><span> </span><span class="annot"><span class="annottext">Bool -&gt; Maybe Bool -&gt; Bool
+forall a. a -&gt; Maybe a -&gt; a
+</span><span class="hs-identifier hs-var">fromMaybe</span></span><span> </span><span class="annot"><span class="annottext">Bool
+</span><span class="hs-identifier hs-var">True</span></span><span> </span><span class="annot"><span class="annottext">(Maybe Bool -&gt; Bool) -&gt; Maybe Bool -&gt; Bool
+forall a b. (a -&gt; b) -&gt; a -&gt; b
+</span><span class="hs-operator hs-var">$</span></span><span> </span><span class="annot"><span class="annottext">FileFlag -&gt; Maybe Bool
+</span><a href="LaunchDarkly.Server.Integrations.FileData.html#%24sel%3Aon%3AFileFlag"><span class="hs-identifier hs-var hs-var">on</span></a></span><span> </span><span class="annot"><span class="annottext">FileFlag
+</span><a href="#local-6989586621679668240"><span class="hs-identifier hs-var">fileFlag</span></a></span><span>
+</span><span id="line-64"></span><span>        </span><span class="hs-special">,</span><span> </span><span class="annot"><span class="annottext">$sel:trackEvents:Flag :: Bool
+</span><a href="LaunchDarkly.Server.Features.html#%24sel%3AtrackEvents%3AFlag"><span class="hs-identifier hs-var">F.trackEvents</span></a></span><span> </span><span class="hs-glyph">=</span><span> </span><span class="annot"><span class="annottext">Bool
+</span><span class="hs-identifier hs-var">False</span></span><span>
+</span><span id="line-65"></span><span>        </span><span class="hs-special">,</span><span> </span><span class="annot"><span class="annottext">$sel:trackEventsFallthrough:Flag :: Bool
+</span><a href="LaunchDarkly.Server.Features.html#%24sel%3AtrackEventsFallthrough%3AFlag"><span class="hs-identifier hs-var">F.trackEventsFallthrough</span></a></span><span> </span><span class="hs-glyph">=</span><span> </span><span class="annot"><span class="annottext">Bool
+</span><span class="hs-identifier hs-var">False</span></span><span>
+</span><span id="line-66"></span><span>        </span><span class="hs-special">,</span><span> </span><span class="annot"><span class="annottext">$sel:deleted:Flag :: Bool
+</span><a href="LaunchDarkly.Server.Features.html#%24sel%3Adeleted%3AFlag"><span class="hs-identifier hs-var">F.deleted</span></a></span><span> </span><span class="hs-glyph">=</span><span> </span><span class="annot"><span class="annottext">Bool
+</span><span class="hs-identifier hs-var">False</span></span><span>
+</span><span id="line-67"></span><span>        </span><span class="hs-special">,</span><span> </span><span class="annot"><span class="annottext">$sel:prerequisites:Flag :: [Prerequisite]
+</span><a href="LaunchDarkly.Server.Features.html#%24sel%3Aprerequisites%3AFlag"><span class="hs-identifier hs-var">F.prerequisites</span></a></span><span> </span><span class="hs-glyph">=</span><span> </span><span class="hs-special">[</span><span class="hs-special">]</span><span>
+</span><span id="line-68"></span><span>        </span><span class="hs-special">,</span><span> </span><span class="annot"><span class="annottext">$sel:salt:Flag :: Text
+</span><a href="LaunchDarkly.Server.Features.html#%24sel%3Asalt%3AFlag"><span class="hs-identifier hs-var">F.salt</span></a></span><span> </span><span class="hs-glyph">=</span><span> </span><span class="annot"><span class="hs-string">&quot;&quot;</span></span><span>
+</span><span id="line-69"></span><span>        </span><span class="hs-special">,</span><span> </span><span class="annot"><span class="annottext">$sel:targets:Flag :: [Target]
+</span><a href="LaunchDarkly.Server.Features.html#%24sel%3Atargets%3AFlag"><span class="hs-identifier hs-var">F.targets</span></a></span><span> </span><span class="hs-glyph">=</span><span> </span><span class="annot"><span class="annottext">[Target] -&gt; Maybe [Target] -&gt; [Target]
+forall a. a -&gt; Maybe a -&gt; a
+</span><span class="hs-identifier hs-var">fromMaybe</span></span><span> </span><span class="hs-special">[</span><span class="hs-special">]</span><span> </span><span class="annot"><span class="annottext">(Maybe [Target] -&gt; [Target]) -&gt; Maybe [Target] -&gt; [Target]
+forall a b. (a -&gt; b) -&gt; a -&gt; b
+</span><span class="hs-operator hs-var">$</span></span><span> </span><span class="annot"><span class="annottext">FileFlag -&gt; Maybe [Target]
+</span><a href="LaunchDarkly.Server.Integrations.FileData.html#%24sel%3Atargets%3AFileFlag"><span class="hs-identifier hs-var hs-var">targets</span></a></span><span> </span><span class="annot"><span class="annottext">FileFlag
+</span><a href="#local-6989586621679668240"><span class="hs-identifier hs-var">fileFlag</span></a></span><span>
+</span><span id="line-70"></span><span>        </span><span class="hs-special">,</span><span> </span><span class="annot"><span class="annottext">$sel:contextTargets:Flag :: [Target]
+</span><a href="LaunchDarkly.Server.Features.html#%24sel%3AcontextTargets%3AFlag"><span class="hs-identifier hs-var">F.contextTargets</span></a></span><span> </span><span class="hs-glyph">=</span><span> </span><span class="annot"><span class="annottext">[Target] -&gt; Maybe [Target] -&gt; [Target]
+forall a. a -&gt; Maybe a -&gt; a
+</span><span class="hs-identifier hs-var">fromMaybe</span></span><span> </span><span class="hs-special">[</span><span class="hs-special">]</span><span> </span><span class="annot"><span class="annottext">(Maybe [Target] -&gt; [Target]) -&gt; Maybe [Target] -&gt; [Target]
+forall a b. (a -&gt; b) -&gt; a -&gt; b
+</span><span class="hs-operator hs-var">$</span></span><span> </span><span class="annot"><span class="annottext">FileFlag -&gt; Maybe [Target]
+</span><a href="LaunchDarkly.Server.Integrations.FileData.html#%24sel%3AcontextTargets%3AFileFlag"><span class="hs-identifier hs-var hs-var">contextTargets</span></a></span><span> </span><span class="annot"><span class="annottext">FileFlag
+</span><a href="#local-6989586621679668240"><span class="hs-identifier hs-var">fileFlag</span></a></span><span>
+</span><span id="line-71"></span><span>        </span><span class="hs-special">,</span><span> </span><span class="annot"><span class="annottext">$sel:rules:Flag :: [Rule]
+</span><a href="LaunchDarkly.Server.Features.html#%24sel%3Arules%3AFlag"><span class="hs-identifier hs-var">F.rules</span></a></span><span> </span><span class="hs-glyph">=</span><span> </span><span class="annot"><span class="annottext">[Rule] -&gt; Maybe [Rule] -&gt; [Rule]
+forall a. a -&gt; Maybe a -&gt; a
+</span><span class="hs-identifier hs-var">fromMaybe</span></span><span> </span><span class="hs-special">[</span><span class="hs-special">]</span><span> </span><span class="annot"><span class="annottext">(Maybe [Rule] -&gt; [Rule]) -&gt; Maybe [Rule] -&gt; [Rule]
+forall a b. (a -&gt; b) -&gt; a -&gt; b
+</span><span class="hs-operator hs-var">$</span></span><span> </span><span class="annot"><span class="annottext">FileFlag -&gt; Maybe [Rule]
+forall (f :: Symbol) a s. HasField' f s a =&gt; s -&gt; a
+</span><span class="hs-identifier hs-var">getField</span></span><span> </span><span class="hs-glyph">@</span><span class="annot"><span class="hs-string">&quot;rules&quot;</span></span><span> </span><span class="annot"><span class="annottext">FileFlag
+</span><a href="#local-6989586621679668240"><span class="hs-identifier hs-var">fileFlag</span></a></span><span>
+</span><span id="line-72"></span><span>        </span><span class="hs-special">,</span><span> </span><span class="annot"><span class="annottext">$sel:fallthrough:Flag :: VariationOrRollout
+</span><a href="LaunchDarkly.Server.Features.html#%24sel%3Afallthrough%3AFlag"><span class="hs-identifier hs-var">F.fallthrough</span></a></span><span> </span><span class="hs-glyph">=</span><span> </span><span class="annot"><span class="annottext">VariationOrRollout
+-&gt; Maybe VariationOrRollout -&gt; VariationOrRollout
+forall a. a -&gt; Maybe a -&gt; a
+</span><span class="hs-identifier hs-var">fromMaybe</span></span><span> </span><span class="annot"><span class="annottext">VariationOrRollout
+</span><a href="LaunchDarkly.Server.Integrations.FileData.html#noFallthrough"><span class="hs-identifier hs-var">noFallthrough</span></a></span><span> </span><span class="annot"><span class="annottext">(Maybe VariationOrRollout -&gt; VariationOrRollout)
+-&gt; Maybe VariationOrRollout -&gt; VariationOrRollout
+forall a b. (a -&gt; b) -&gt; a -&gt; b
+</span><span class="hs-operator hs-var">$</span></span><span> </span><span class="annot"><span class="annottext">FileFlag -&gt; Maybe VariationOrRollout
+</span><a href="LaunchDarkly.Server.Integrations.FileData.html#%24sel%3Afallthrough%3AFileFlag"><span class="hs-identifier hs-var hs-var">fallthrough</span></a></span><span> </span><span class="annot"><span class="annottext">FileFlag
+</span><a href="#local-6989586621679668240"><span class="hs-identifier hs-var">fileFlag</span></a></span><span>
+</span><span id="line-73"></span><span>        </span><span class="hs-special">,</span><span> </span><span class="annot"><span class="annottext">$sel:offVariation:Flag :: Maybe Integer
+</span><a href="LaunchDarkly.Server.Features.html#%24sel%3AoffVariation%3AFlag"><span class="hs-identifier hs-var">F.offVariation</span></a></span><span> </span><span class="hs-glyph">=</span><span> </span><span class="annot"><span class="annottext">FileFlag -&gt; Maybe Integer
+</span><a href="LaunchDarkly.Server.Integrations.FileData.html#%24sel%3AoffVariation%3AFileFlag"><span class="hs-identifier hs-var hs-var">offVariation</span></a></span><span> </span><span class="annot"><span class="annottext">FileFlag
+</span><a href="#local-6989586621679668240"><span class="hs-identifier hs-var">fileFlag</span></a></span><span>
+</span><span id="line-74"></span><span>        </span><span class="hs-special">,</span><span> </span><span class="annot"><span class="annottext">$sel:variations:Flag :: [Value]
+</span><a href="LaunchDarkly.Server.Features.html#%24sel%3Avariations%3AFlag"><span class="hs-identifier hs-var">F.variations</span></a></span><span> </span><span class="hs-glyph">=</span><span> </span><span class="annot"><span class="annottext">FileFlag -&gt; [Value]
+</span><a href="LaunchDarkly.Server.Integrations.FileData.html#%24sel%3Avariations%3AFileFlag"><span class="hs-identifier hs-var hs-var">variations</span></a></span><span> </span><span class="annot"><span class="annottext">FileFlag
+</span><a href="#local-6989586621679668240"><span class="hs-identifier hs-var">fileFlag</span></a></span><span>
+</span><span id="line-75"></span><span>        </span><span class="hs-special">,</span><span> </span><span class="annot"><span class="annottext">$sel:debugEventsUntilDate:Flag :: Maybe Natural
+</span><a href="LaunchDarkly.Server.Features.html#%24sel%3AdebugEventsUntilDate%3AFlag"><span class="hs-identifier hs-var">F.debugEventsUntilDate</span></a></span><span> </span><span class="hs-glyph">=</span><span> </span><span class="annot"><span class="annottext">Maybe Natural
+forall a. Maybe a
+</span><span class="hs-identifier hs-var">Nothing</span></span><span>
+</span><span id="line-76"></span><span>        </span><span class="hs-special">,</span><span> </span><span class="annot"><span class="annottext">$sel:clientSideAvailability:Flag :: ClientSideAvailability
+</span><a href="LaunchDarkly.Server.Features.html#%24sel%3AclientSideAvailability%3AFlag"><span class="hs-identifier hs-var">F.clientSideAvailability</span></a></span><span> </span><span class="hs-glyph">=</span><span> </span><span class="annot"><span class="annottext">Bool -&gt; Bool -&gt; Bool -&gt; ClientSideAvailability
+</span><a href="LaunchDarkly.Server.Features.html#ClientSideAvailability"><span class="hs-identifier hs-var">F.ClientSideAvailability</span></a></span><span> </span><span class="annot"><span class="annottext">Bool
+</span><span class="hs-identifier hs-var">False</span></span><span> </span><span class="annot"><span class="annottext">Bool
+</span><span class="hs-identifier hs-var">False</span></span><span> </span><span class="annot"><span class="annottext">Bool
+</span><span class="hs-identifier hs-var">False</span></span><span>
+</span><span id="line-77"></span><span>        </span><span class="hs-special">}</span><span>
+</span><span id="line-78"></span><span>
+</span><span id="line-79"></span><span class="annot"><a href="LaunchDarkly.Server.Integrations.FileData.html#noFallthrough"><span class="hs-identifier hs-type">noFallthrough</span></a></span><span> </span><span class="hs-glyph">::</span><span> </span><span class="annot"><a href="LaunchDarkly.Server.Features.html#VariationOrRollout"><span class="hs-identifier hs-type">F.VariationOrRollout</span></a></span><span>
+</span><span id="line-80"></span><span id="noFallthrough"><span class="annot"><span class="annottext">noFallthrough :: VariationOrRollout
+</span><a href="LaunchDarkly.Server.Integrations.FileData.html#noFallthrough"><span class="hs-identifier hs-var hs-var">noFallthrough</span></a></span></span><span> </span><span class="hs-glyph">=</span><span>
+</span><span id="line-81"></span><span>    </span><span class="annot"><span class="annottext">Maybe Integer -&gt; Maybe Rollout -&gt; VariationOrRollout
+</span><a href="LaunchDarkly.Server.Features.html#VariationOrRollout"><span class="hs-identifier hs-var">F.VariationOrRollout</span></a></span><span> </span><span class="annot"><span class="annottext">Maybe Integer
+forall a. Maybe a
+</span><span class="hs-identifier hs-var">Nothing</span></span><span> </span><span class="annot"><span class="annottext">Maybe Rollout
+forall a. Maybe a
+</span><span class="hs-identifier hs-var">Nothing</span></span><span>
+</span><span id="line-82"></span><span>
+</span><span id="line-83"></span><span id="local-6989586621679668218"><span id="local-6989586621679668219"></span></span><span class="hs-keyword">data</span><span> </span><span id="FileSegment"><span class="annot"><a href="LaunchDarkly.Server.Integrations.FileData.html#FileSegment"><span class="hs-identifier hs-var">FileSegment</span></a></span></span><span> </span><span class="hs-glyph">=</span><span> </span><span id="FileSegment"><span class="annot"><a href="LaunchDarkly.Server.Integrations.FileData.html#FileSegment"><span class="hs-identifier hs-var">FileSegment</span></a></span></span><span>
+</span><span id="line-84"></span><span>    </span><span class="hs-special">{</span><span> </span><span id="%24sel%3Aincluded%3AFileSegment"><span class="annot"><span class="annottext">FileSegment -&gt; Maybe (HashSet Text)
+</span><a href="LaunchDarkly.Server.Integrations.FileData.html#%24sel%3Aincluded%3AFileSegment"><span class="hs-identifier hs-var hs-var">included</span></a></span></span><span> </span><span class="hs-glyph">::</span><span> </span><span class="annot"><span class="hs-identifier hs-type">Maybe</span></span><span> </span><span class="hs-special">(</span><span class="annot"><span class="hs-identifier hs-type">HashSet</span></span><span> </span><span class="annot"><span class="hs-identifier hs-type">Text</span></span><span class="hs-special">)</span><span>
+</span><span id="line-85"></span><span>    </span><span class="hs-special">,</span><span> </span><span id="%24sel%3AincludedContexts%3AFileSegment"><span class="annot"><span class="annottext">FileSegment -&gt; Maybe [SegmentTarget]
+</span><a href="LaunchDarkly.Server.Integrations.FileData.html#%24sel%3AincludedContexts%3AFileSegment"><span class="hs-identifier hs-var hs-var">includedContexts</span></a></span></span><span> </span><span class="hs-glyph">::</span><span> </span><span class="annot"><span class="hs-identifier hs-type">Maybe</span></span><span> </span><span class="hs-special">[</span><span class="annot"><a href="LaunchDarkly.Server.Features.html#SegmentTarget"><span class="hs-identifier hs-type">F.SegmentTarget</span></a></span><span class="hs-special">]</span><span>
+</span><span id="line-86"></span><span>    </span><span class="hs-special">,</span><span> </span><span id="%24sel%3Aexcluded%3AFileSegment"><span class="annot"><span class="annottext">FileSegment -&gt; Maybe (HashSet Text)
+</span><a href="LaunchDarkly.Server.Integrations.FileData.html#%24sel%3Aexcluded%3AFileSegment"><span class="hs-identifier hs-var hs-var">excluded</span></a></span></span><span> </span><span class="hs-glyph">::</span><span> </span><span class="annot"><span class="hs-identifier hs-type">Maybe</span></span><span> </span><span class="hs-special">(</span><span class="annot"><span class="hs-identifier hs-type">HashSet</span></span><span> </span><span class="annot"><span class="hs-identifier hs-type">Text</span></span><span class="hs-special">)</span><span>
+</span><span id="line-87"></span><span>    </span><span class="hs-special">,</span><span> </span><span id="%24sel%3AexcludedContexts%3AFileSegment"><span class="annot"><span class="annottext">FileSegment -&gt; Maybe [SegmentTarget]
+</span><a href="LaunchDarkly.Server.Integrations.FileData.html#%24sel%3AexcludedContexts%3AFileSegment"><span class="hs-identifier hs-var hs-var">excludedContexts</span></a></span></span><span> </span><span class="hs-glyph">::</span><span> </span><span class="annot"><span class="hs-identifier hs-type">Maybe</span></span><span> </span><span class="hs-special">[</span><span class="annot"><a href="LaunchDarkly.Server.Features.html#SegmentTarget"><span class="hs-identifier hs-type">F.SegmentTarget</span></a></span><span class="hs-special">]</span><span>
+</span><span id="line-88"></span><span>    </span><span class="hs-special">,</span><span> </span><span id="%24sel%3Arules%3AFileSegment"><span class="annot"><span class="annottext">FileSegment -&gt; Maybe [SegmentRule]
+</span><a href="LaunchDarkly.Server.Integrations.FileData.html#%24sel%3Arules%3AFileSegment"><span class="hs-identifier hs-var hs-var">rules</span></a></span></span><span> </span><span class="hs-glyph">::</span><span> </span><span class="annot"><span class="hs-identifier hs-type">Maybe</span></span><span> </span><span class="hs-special">[</span><span class="annot"><a href="LaunchDarkly.Server.Features.html#SegmentRule"><span class="hs-identifier hs-type">F.SegmentRule</span></a></span><span class="hs-special">]</span><span>
+</span><span id="line-89"></span><span>    </span><span class="hs-special">,</span><span> </span><span id="%24sel%3Aversion%3AFileSegment"><span class="annot"><span class="annottext">FileSegment -&gt; Maybe Natural
+</span><a href="LaunchDarkly.Server.Integrations.FileData.html#%24sel%3Aversion%3AFileSegment"><span class="hs-identifier hs-var hs-var">version</span></a></span></span><span> </span><span class="hs-glyph">::</span><span> </span><span class="annot"><span class="hs-identifier hs-type">Maybe</span></span><span> </span><span class="annot"><span class="hs-identifier hs-type">Natural</span></span><span>
+</span><span id="line-90"></span><span>    </span><span class="hs-special">}</span><span>
+</span><span id="line-91"></span><span>    </span><span class="hs-keyword">deriving</span><span> </span><span class="hs-special">(</span><span class="annot"><span class="annottext">(forall x. FileSegment -&gt; Rep FileSegment x)
+-&gt; (forall x. Rep FileSegment x -&gt; FileSegment)
+-&gt; Generic FileSegment
+forall x. Rep FileSegment x -&gt; FileSegment
+forall x. FileSegment -&gt; Rep FileSegment x
+forall a.
+(forall x. a -&gt; Rep a x) -&gt; (forall x. Rep a x -&gt; a) -&gt; Generic a
+$cto :: forall x. Rep FileSegment x -&gt; FileSegment
+$cfrom :: forall x. FileSegment -&gt; Rep FileSegment x
+</span><span class="hs-identifier hs-var hs-var hs-var hs-var">Generic</span></span><span class="hs-special">,</span><span> </span><span id="local-6989586621679668205"><span id="local-6989586621679668207"><span class="annot"><span class="annottext">Value -&gt; Parser [FileSegment]
+Value -&gt; Parser FileSegment
+(Value -&gt; Parser FileSegment)
+-&gt; (Value -&gt; Parser [FileSegment]) -&gt; FromJSON FileSegment
+forall a.
+(Value -&gt; Parser a) -&gt; (Value -&gt; Parser [a]) -&gt; FromJSON a
+parseJSONList :: Value -&gt; Parser [FileSegment]
+$cparseJSONList :: Value -&gt; Parser [FileSegment]
+parseJSON :: Value -&gt; Parser FileSegment
+$cparseJSON :: Value -&gt; Parser FileSegment
+</span><a href="#local-6989586621679668205"><span class="hs-identifier hs-var hs-var hs-var hs-var hs-var hs-var">FromJSON</span></a></span></span></span><span class="hs-special">,</span><span> </span><span id="local-6989586621679668199"><span id="local-6989586621679668201"><span id="local-6989586621679668203"><span class="annot"><span class="annottext">Int -&gt; FileSegment -&gt; ShowS
+[FileSegment] -&gt; ShowS
+FileSegment -&gt; String
+(Int -&gt; FileSegment -&gt; ShowS)
+-&gt; (FileSegment -&gt; String)
+-&gt; ([FileSegment] -&gt; ShowS)
+-&gt; Show FileSegment
+forall a.
+(Int -&gt; a -&gt; ShowS) -&gt; (a -&gt; String) -&gt; ([a] -&gt; ShowS) -&gt; Show a
+showList :: [FileSegment] -&gt; ShowS
+$cshowList :: [FileSegment] -&gt; ShowS
+show :: FileSegment -&gt; String
+$cshow :: FileSegment -&gt; String
+showsPrec :: Int -&gt; FileSegment -&gt; ShowS
+$cshowsPrec :: Int -&gt; FileSegment -&gt; ShowS
+</span><span class="hs-identifier hs-var hs-var hs-var hs-var hs-var hs-var hs-var hs-var">Show</span></span></span></span></span><span class="hs-special">,</span><span> </span><span id="local-6989586621679668195"><span id="local-6989586621679668197"><span class="annot"><span class="annottext">FileSegment -&gt; FileSegment -&gt; Bool
+(FileSegment -&gt; FileSegment -&gt; Bool)
+-&gt; (FileSegment -&gt; FileSegment -&gt; Bool) -&gt; Eq FileSegment
+forall a. (a -&gt; a -&gt; Bool) -&gt; (a -&gt; a -&gt; Bool) -&gt; Eq a
+/= :: FileSegment -&gt; FileSegment -&gt; Bool
+$c/= :: FileSegment -&gt; FileSegment -&gt; Bool
+== :: FileSegment -&gt; FileSegment -&gt; Bool
+$c== :: FileSegment -&gt; FileSegment -&gt; Bool
+</span><span class="hs-identifier hs-var hs-var hs-var hs-var hs-var hs-var">Eq</span></span></span></span><span class="hs-special">)</span><span>
+</span><span id="line-92"></span><span>
+</span><span id="line-93"></span><span class="annot"><a href="LaunchDarkly.Server.Integrations.FileData.html#fromFileSegment"><span class="hs-identifier hs-type">fromFileSegment</span></a></span><span> </span><span class="hs-glyph">::</span><span> </span><span class="annot"><span class="hs-identifier hs-type">Text</span></span><span> </span><span class="hs-glyph">-&gt;</span><span> </span><span class="annot"><a href="LaunchDarkly.Server.Integrations.FileData.html#FileSegment"><span class="hs-identifier hs-type">FileSegment</span></a></span><span> </span><span class="hs-glyph">-&gt;</span><span> </span><span class="annot"><a href="LaunchDarkly.Server.Features.html#Segment"><span class="hs-identifier hs-type">F.Segment</span></a></span><span>
+</span><span id="line-94"></span><span id="fromFileSegment"><span class="annot"><span class="annottext">fromFileSegment :: Text -&gt; FileSegment -&gt; Segment
+</span><a href="LaunchDarkly.Server.Integrations.FileData.html#fromFileSegment"><span class="hs-identifier hs-var hs-var">fromFileSegment</span></a></span></span><span> </span><span id="local-6989586621679668193"><span class="annot"><span class="annottext">key :: Text
+</span><a href="#local-6989586621679668193"><span class="hs-identifier hs-var">key</span></a></span></span><span> </span><span id="local-6989586621679668192"><span class="annot"><span class="annottext">fileSegment :: FileSegment
+</span><a href="#local-6989586621679668192"><span class="hs-identifier hs-var">fileSegment</span></a></span></span><span> </span><span class="hs-glyph">=</span><span>
+</span><span id="line-95"></span><span>    </span><span class="annot"><span class="annottext">$WSegment :: Text
+-&gt; HashSet Text
+-&gt; [SegmentTarget]
+-&gt; HashSet Text
+-&gt; [SegmentTarget]
+-&gt; Text
+-&gt; [SegmentRule]
+-&gt; Natural
+-&gt; Bool
+-&gt; Segment
+</span><a href="LaunchDarkly.Server.Features.html#%24WSegment"><span class="hs-identifier hs-type hs-type">F.Segment</span></a></span><span>
+</span><span id="line-96"></span><span>        </span><span class="hs-special">{</span><span> </span><span class="annot"><span class="annottext">$sel:key:Segment :: Text
+</span><a href="LaunchDarkly.Server.Features.html#%24sel%3Akey%3ASegment"><span class="hs-identifier hs-var">F.key</span></a></span><span> </span><span class="hs-glyph">=</span><span> </span><span class="annot"><span class="annottext">Text
+</span><a href="#local-6989586621679668193"><span class="hs-identifier hs-var">key</span></a></span><span>
+</span><span id="line-97"></span><span>        </span><span class="hs-special">,</span><span> </span><span class="annot"><span class="annottext">$sel:version:Segment :: Natural
+</span><a href="LaunchDarkly.Server.Features.html#%24sel%3Aversion%3ASegment"><span class="hs-identifier hs-var">F.version</span></a></span><span> </span><span class="hs-glyph">=</span><span> </span><span class="annot"><span class="annottext">Natural -&gt; Maybe Natural -&gt; Natural
+forall a. a -&gt; Maybe a -&gt; a
+</span><span class="hs-identifier hs-var">fromMaybe</span></span><span> </span><span class="annot"><span class="hs-number">1</span></span><span> </span><span class="annot"><span class="annottext">(Maybe Natural -&gt; Natural) -&gt; Maybe Natural -&gt; Natural
+forall a b. (a -&gt; b) -&gt; a -&gt; b
+</span><span class="hs-operator hs-var">$</span></span><span> </span><span class="annot"><span class="annottext">FileSegment -&gt; Maybe Natural
+forall (f :: Symbol) a s. HasField' f s a =&gt; s -&gt; a
+</span><span class="hs-identifier hs-var">getField</span></span><span> </span><span class="hs-glyph">@</span><span class="annot"><span class="hs-string">&quot;version&quot;</span></span><span> </span><span class="annot"><span class="annottext">FileSegment
+</span><a href="#local-6989586621679668192"><span class="hs-identifier hs-var">fileSegment</span></a></span><span>
+</span><span id="line-98"></span><span>        </span><span class="hs-special">,</span><span> </span><span class="annot"><span class="annottext">$sel:included:Segment :: HashSet Text
+</span><a href="LaunchDarkly.Server.Features.html#%24sel%3Aincluded%3ASegment"><span class="hs-identifier hs-var">F.included</span></a></span><span> </span><span class="hs-glyph">=</span><span> </span><span class="annot"><span class="annottext">HashSet Text -&gt; Maybe (HashSet Text) -&gt; HashSet Text
+forall a. a -&gt; Maybe a -&gt; a
+</span><span class="hs-identifier hs-var">fromMaybe</span></span><span> </span><span class="annot"><span class="annottext">HashSet Text
+forall a. Monoid a =&gt; a
+</span><span class="hs-identifier hs-var">mempty</span></span><span> </span><span class="annot"><span class="annottext">(Maybe (HashSet Text) -&gt; HashSet Text)
+-&gt; Maybe (HashSet Text) -&gt; HashSet Text
+forall a b. (a -&gt; b) -&gt; a -&gt; b
+</span><span class="hs-operator hs-var">$</span></span><span> </span><span class="annot"><span class="annottext">FileSegment -&gt; Maybe (HashSet Text)
+</span><a href="LaunchDarkly.Server.Integrations.FileData.html#%24sel%3Aincluded%3AFileSegment"><span class="hs-identifier hs-var hs-var">included</span></a></span><span> </span><span class="annot"><span class="annottext">FileSegment
+</span><a href="#local-6989586621679668192"><span class="hs-identifier hs-var">fileSegment</span></a></span><span>
+</span><span id="line-99"></span><span>        </span><span class="hs-special">,</span><span> </span><span class="annot"><span class="annottext">$sel:includedContexts:Segment :: [SegmentTarget]
+</span><a href="LaunchDarkly.Server.Features.html#%24sel%3AincludedContexts%3ASegment"><span class="hs-identifier hs-var">F.includedContexts</span></a></span><span> </span><span class="hs-glyph">=</span><span> </span><span class="annot"><span class="annottext">[SegmentTarget] -&gt; Maybe [SegmentTarget] -&gt; [SegmentTarget]
+forall a. a -&gt; Maybe a -&gt; a
+</span><span class="hs-identifier hs-var">fromMaybe</span></span><span> </span><span class="annot"><span class="annottext">[SegmentTarget]
+forall a. Monoid a =&gt; a
+</span><span class="hs-identifier hs-var">mempty</span></span><span> </span><span class="annot"><span class="annottext">(Maybe [SegmentTarget] -&gt; [SegmentTarget])
+-&gt; Maybe [SegmentTarget] -&gt; [SegmentTarget]
+forall a b. (a -&gt; b) -&gt; a -&gt; b
+</span><span class="hs-operator hs-var">$</span></span><span> </span><span class="annot"><span class="annottext">FileSegment -&gt; Maybe [SegmentTarget]
+</span><a href="LaunchDarkly.Server.Integrations.FileData.html#%24sel%3AincludedContexts%3AFileSegment"><span class="hs-identifier hs-var hs-var">includedContexts</span></a></span><span> </span><span class="annot"><span class="annottext">FileSegment
+</span><a href="#local-6989586621679668192"><span class="hs-identifier hs-var">fileSegment</span></a></span><span>
+</span><span id="line-100"></span><span>        </span><span class="hs-special">,</span><span> </span><span class="annot"><span class="annottext">$sel:excluded:Segment :: HashSet Text
+</span><a href="LaunchDarkly.Server.Features.html#%24sel%3Aexcluded%3ASegment"><span class="hs-identifier hs-var">F.excluded</span></a></span><span> </span><span class="hs-glyph">=</span><span> </span><span class="annot"><span class="annottext">HashSet Text -&gt; Maybe (HashSet Text) -&gt; HashSet Text
+forall a. a -&gt; Maybe a -&gt; a
+</span><span class="hs-identifier hs-var">fromMaybe</span></span><span> </span><span class="annot"><span class="annottext">HashSet Text
+forall a. Monoid a =&gt; a
+</span><span class="hs-identifier hs-var">mempty</span></span><span> </span><span class="annot"><span class="annottext">(Maybe (HashSet Text) -&gt; HashSet Text)
+-&gt; Maybe (HashSet Text) -&gt; HashSet Text
+forall a b. (a -&gt; b) -&gt; a -&gt; b
+</span><span class="hs-operator hs-var">$</span></span><span> </span><span class="annot"><span class="annottext">FileSegment -&gt; Maybe (HashSet Text)
+</span><a href="LaunchDarkly.Server.Integrations.FileData.html#%24sel%3Aexcluded%3AFileSegment"><span class="hs-identifier hs-var hs-var">excluded</span></a></span><span> </span><span class="annot"><span class="annottext">FileSegment
+</span><a href="#local-6989586621679668192"><span class="hs-identifier hs-var">fileSegment</span></a></span><span>
+</span><span id="line-101"></span><span>        </span><span class="hs-special">,</span><span> </span><span class="annot"><span class="annottext">$sel:excludedContexts:Segment :: [SegmentTarget]
+</span><a href="LaunchDarkly.Server.Features.html#%24sel%3AexcludedContexts%3ASegment"><span class="hs-identifier hs-var">F.excludedContexts</span></a></span><span> </span><span class="hs-glyph">=</span><span> </span><span class="annot"><span class="annottext">[SegmentTarget] -&gt; Maybe [SegmentTarget] -&gt; [SegmentTarget]
+forall a. a -&gt; Maybe a -&gt; a
+</span><span class="hs-identifier hs-var">fromMaybe</span></span><span> </span><span class="annot"><span class="annottext">[SegmentTarget]
+forall a. Monoid a =&gt; a
+</span><span class="hs-identifier hs-var">mempty</span></span><span> </span><span class="annot"><span class="annottext">(Maybe [SegmentTarget] -&gt; [SegmentTarget])
+-&gt; Maybe [SegmentTarget] -&gt; [SegmentTarget]
+forall a b. (a -&gt; b) -&gt; a -&gt; b
+</span><span class="hs-operator hs-var">$</span></span><span> </span><span class="annot"><span class="annottext">FileSegment -&gt; Maybe [SegmentTarget]
+</span><a href="LaunchDarkly.Server.Integrations.FileData.html#%24sel%3AexcludedContexts%3AFileSegment"><span class="hs-identifier hs-var hs-var">excludedContexts</span></a></span><span> </span><span class="annot"><span class="annottext">FileSegment
+</span><a href="#local-6989586621679668192"><span class="hs-identifier hs-var">fileSegment</span></a></span><span>
+</span><span id="line-102"></span><span>        </span><span class="hs-special">,</span><span> </span><span class="annot"><span class="annottext">$sel:salt:Segment :: Text
+</span><a href="LaunchDarkly.Server.Features.html#%24sel%3Asalt%3ASegment"><span class="hs-identifier hs-var">F.salt</span></a></span><span> </span><span class="hs-glyph">=</span><span> </span><span class="annot"><span class="hs-string">&quot;&quot;</span></span><span>
+</span><span id="line-103"></span><span>        </span><span class="hs-special">,</span><span> </span><span class="annot"><span class="annottext">$sel:rules:Segment :: [SegmentRule]
+</span><a href="LaunchDarkly.Server.Features.html#%24sel%3Arules%3ASegment"><span class="hs-identifier hs-var">F.rules</span></a></span><span> </span><span class="hs-glyph">=</span><span> </span><span class="annot"><span class="annottext">[SegmentRule] -&gt; Maybe [SegmentRule] -&gt; [SegmentRule]
+forall a. a -&gt; Maybe a -&gt; a
+</span><span class="hs-identifier hs-var">fromMaybe</span></span><span> </span><span class="hs-special">[</span><span class="hs-special">]</span><span> </span><span class="annot"><span class="annottext">(Maybe [SegmentRule] -&gt; [SegmentRule])
+-&gt; Maybe [SegmentRule] -&gt; [SegmentRule]
+forall a b. (a -&gt; b) -&gt; a -&gt; b
+</span><span class="hs-operator hs-var">$</span></span><span> </span><span class="annot"><span class="annottext">FileSegment -&gt; Maybe [SegmentRule]
+forall (f :: Symbol) a s. HasField' f s a =&gt; s -&gt; a
+</span><span class="hs-identifier hs-var">getField</span></span><span> </span><span class="hs-glyph">@</span><span class="annot"><span class="hs-string">&quot;rules&quot;</span></span><span> </span><span class="annot"><span class="annottext">FileSegment
+</span><a href="#local-6989586621679668192"><span class="hs-identifier hs-var">fileSegment</span></a></span><span>
+</span><span id="line-104"></span><span>        </span><span class="hs-special">,</span><span> </span><span class="annot"><span class="annottext">$sel:deleted:Segment :: Bool
+</span><a href="LaunchDarkly.Server.Features.html#%24sel%3Adeleted%3ASegment"><span class="hs-identifier hs-var">F.deleted</span></a></span><span> </span><span class="hs-glyph">=</span><span> </span><span class="annot"><span class="annottext">Bool
+</span><span class="hs-identifier hs-var">False</span></span><span>
+</span><span id="line-105"></span><span>        </span><span class="hs-special">}</span><span>
+</span><span id="line-106"></span><span>
+</span><span id="line-107"></span><span id="local-6989586621679668179"><span id="local-6989586621679668180"></span></span><span class="hs-keyword">data</span><span> </span><span id="FileBody"><span class="annot"><a href="LaunchDarkly.Server.Integrations.FileData.html#FileBody"><span class="hs-identifier hs-var">FileBody</span></a></span></span><span> </span><span class="hs-glyph">=</span><span> </span><span id="FileBody"><span class="annot"><a href="LaunchDarkly.Server.Integrations.FileData.html#FileBody"><span class="hs-identifier hs-var">FileBody</span></a></span></span><span>
+</span><span id="line-108"></span><span>    </span><span class="hs-special">{</span><span> </span><span id="%24sel%3Aflags%3AFileBody"><span class="annot"><span class="annottext">FileBody -&gt; Maybe (KeyMap FileFlag)
+</span><a href="LaunchDarkly.Server.Integrations.FileData.html#%24sel%3Aflags%3AFileBody"><span class="hs-identifier hs-var hs-var">flags</span></a></span></span><span> </span><span class="hs-glyph">::</span><span> </span><span class="annot"><span class="hs-identifier hs-type">Maybe</span></span><span> </span><span class="hs-special">(</span><span class="annot"><a href="LaunchDarkly.AesonCompat.html#KeyMap"><span class="hs-identifier hs-type">KeyMap</span></a></span><span> </span><span class="annot"><a href="LaunchDarkly.Server.Integrations.FileData.html#FileFlag"><span class="hs-identifier hs-type">FileFlag</span></a></span><span class="hs-special">)</span><span>
+</span><span id="line-109"></span><span>    </span><span class="hs-special">,</span><span> </span><span id="%24sel%3AflagValues%3AFileBody"><span class="annot"><span class="annottext">FileBody -&gt; Maybe (KeyMap Value)
+</span><a href="LaunchDarkly.Server.Integrations.FileData.html#%24sel%3AflagValues%3AFileBody"><span class="hs-identifier hs-var hs-var">flagValues</span></a></span></span><span> </span><span class="hs-glyph">::</span><span> </span><span class="annot"><span class="hs-identifier hs-type">Maybe</span></span><span> </span><span class="hs-special">(</span><span class="annot"><a href="LaunchDarkly.AesonCompat.html#KeyMap"><span class="hs-identifier hs-type">KeyMap</span></a></span><span> </span><span class="annot"><span class="hs-identifier hs-type">Value</span></span><span class="hs-special">)</span><span>
+</span><span id="line-110"></span><span>    </span><span class="hs-special">,</span><span> </span><span id="%24sel%3Asegments%3AFileBody"><span class="annot"><span class="annottext">FileBody -&gt; Maybe (KeyMap FileSegment)
+</span><a href="LaunchDarkly.Server.Integrations.FileData.html#%24sel%3Asegments%3AFileBody"><span class="hs-identifier hs-var hs-var">segments</span></a></span></span><span> </span><span class="hs-glyph">::</span><span> </span><span class="annot"><span class="hs-identifier hs-type">Maybe</span></span><span> </span><span class="hs-special">(</span><span class="annot"><a href="LaunchDarkly.AesonCompat.html#KeyMap"><span class="hs-identifier hs-type">KeyMap</span></a></span><span> </span><span class="annot"><a href="LaunchDarkly.Server.Integrations.FileData.html#FileSegment"><span class="hs-identifier hs-type">FileSegment</span></a></span><span class="hs-special">)</span><span>
+</span><span id="line-111"></span><span>    </span><span class="hs-special">}</span><span>
+</span><span id="line-112"></span><span>    </span><span class="hs-keyword">deriving</span><span> </span><span class="hs-special">(</span><span class="annot"><span class="annottext">(forall x. FileBody -&gt; Rep FileBody x)
+-&gt; (forall x. Rep FileBody x -&gt; FileBody) -&gt; Generic FileBody
+forall x. Rep FileBody x -&gt; FileBody
+forall x. FileBody -&gt; Rep FileBody x
+forall a.
+(forall x. a -&gt; Rep a x) -&gt; (forall x. Rep a x -&gt; a) -&gt; Generic a
+$cto :: forall x. Rep FileBody x -&gt; FileBody
+$cfrom :: forall x. FileBody -&gt; Rep FileBody x
+</span><span class="hs-identifier hs-var hs-var hs-var hs-var">Generic</span></span><span class="hs-special">,</span><span> </span><span id="local-6989586621679668167"><span id="local-6989586621679668169"><span id="local-6989586621679668171"><span class="annot"><span class="annottext">Int -&gt; FileBody -&gt; ShowS
+[FileBody] -&gt; ShowS
+FileBody -&gt; String
+(Int -&gt; FileBody -&gt; ShowS)
+-&gt; (FileBody -&gt; String) -&gt; ([FileBody] -&gt; ShowS) -&gt; Show FileBody
+forall a.
+(Int -&gt; a -&gt; ShowS) -&gt; (a -&gt; String) -&gt; ([a] -&gt; ShowS) -&gt; Show a
+showList :: [FileBody] -&gt; ShowS
+$cshowList :: [FileBody] -&gt; ShowS
+show :: FileBody -&gt; String
+$cshow :: FileBody -&gt; String
+showsPrec :: Int -&gt; FileBody -&gt; ShowS
+$cshowsPrec :: Int -&gt; FileBody -&gt; ShowS
+</span><span class="hs-identifier hs-var hs-var hs-var hs-var hs-var hs-var hs-var hs-var">Show</span></span></span></span></span><span class="hs-special">,</span><span> </span><span id="local-6989586621679668163"><span id="local-6989586621679668165"><span class="annot"><span class="annottext">Value -&gt; Parser [FileBody]
+Value -&gt; Parser FileBody
+(Value -&gt; Parser FileBody)
+-&gt; (Value -&gt; Parser [FileBody]) -&gt; FromJSON FileBody
+forall a.
+(Value -&gt; Parser a) -&gt; (Value -&gt; Parser [a]) -&gt; FromJSON a
+parseJSONList :: Value -&gt; Parser [FileBody]
+$cparseJSONList :: Value -&gt; Parser [FileBody]
+parseJSON :: Value -&gt; Parser FileBody
+$cparseJSON :: Value -&gt; Parser FileBody
+</span><a href="#local-6989586621679668163"><span class="hs-identifier hs-var hs-var hs-var hs-var hs-var hs-var">FromJSON</span></a></span></span></span><span class="hs-special">)</span><span>
+</span><span id="line-113"></span><span>
+</span><span id="line-114"></span><span class="hs-keyword">instance</span><span> </span><span id="local-6989586621679668158"><span id="local-6989586621679668160"><span class="annot"><span class="hs-identifier hs-type">Semigroup</span></span><span> </span><span class="annot"><a href="LaunchDarkly.Server.Integrations.FileData.html#FileBody"><span class="hs-identifier hs-type">FileBody</span></a></span></span></span><span> </span><span class="hs-keyword">where</span><span>
+</span><span id="line-115"></span><span>    </span><span id="local-6989586621679668156"><span class="annot"><span class="annottext">f1 :: FileBody
+</span><a href="#local-6989586621679668156"><span class="hs-identifier hs-var">f1</span></a></span></span><span> </span><span id="local-6989586621679668155"><span class="annot"><span class="annottext">&lt;&gt; :: FileBody -&gt; FileBody -&gt; FileBody
+</span><span class="hs-operator hs-var hs-var hs-var hs-var">&lt;&gt;</span></span></span><span> </span><span id="local-6989586621679668154"><span class="annot"><span class="annottext">f2 :: FileBody
+</span><a href="#local-6989586621679668154"><span class="hs-identifier hs-var">f2</span></a></span></span><span> </span><span class="hs-glyph">=</span><span>
+</span><span id="line-116"></span><span>        </span><span class="annot"><span class="annottext">FileBody :: Maybe (KeyMap FileFlag)
+-&gt; Maybe (KeyMap Value) -&gt; Maybe (KeyMap FileSegment) -&gt; FileBody
+</span><a href="LaunchDarkly.Server.Integrations.FileData.html#FileBody"><span class="hs-identifier hs-type hs-type">FileBody</span></a></span><span>
+</span><span id="line-117"></span><span>            </span><span class="hs-special">{</span><span> </span><span class="annot"><span class="annottext">$sel:flags:FileBody :: Maybe (KeyMap FileFlag)
+</span><a href="LaunchDarkly.Server.Integrations.FileData.html#%24sel%3Aflags%3AFileBody"><span class="hs-identifier hs-var">flags</span></a></span><span> </span><span class="hs-glyph">=</span><span> </span><span class="annot"><span class="annottext">FileBody -&gt; Maybe (KeyMap FileFlag)
+</span><a href="LaunchDarkly.Server.Integrations.FileData.html#%24sel%3Aflags%3AFileBody"><span class="hs-identifier hs-var hs-var">flags</span></a></span><span> </span><span class="annot"><span class="annottext">FileBody
+</span><a href="#local-6989586621679668156"><span class="hs-identifier hs-var">f1</span></a></span><span> </span><span class="annot"><span class="annottext">Maybe (KeyMap FileFlag)
+-&gt; Maybe (KeyMap FileFlag) -&gt; Maybe (KeyMap FileFlag)
+forall a. Semigroup a =&gt; a -&gt; a -&gt; a
+</span><span class="hs-operator hs-var">&lt;&gt;</span></span><span> </span><span class="annot"><span class="annottext">FileBody -&gt; Maybe (KeyMap FileFlag)
+</span><a href="LaunchDarkly.Server.Integrations.FileData.html#%24sel%3Aflags%3AFileBody"><span class="hs-identifier hs-var hs-var">flags</span></a></span><span> </span><span class="annot"><span class="annottext">FileBody
+</span><a href="#local-6989586621679668154"><span class="hs-identifier hs-var">f2</span></a></span><span>
+</span><span id="line-118"></span><span>            </span><span class="hs-special">,</span><span> </span><span class="annot"><span class="annottext">$sel:flagValues:FileBody :: Maybe (KeyMap Value)
+</span><a href="LaunchDarkly.Server.Integrations.FileData.html#%24sel%3AflagValues%3AFileBody"><span class="hs-identifier hs-var">flagValues</span></a></span><span> </span><span class="hs-glyph">=</span><span> </span><span class="annot"><span class="annottext">FileBody -&gt; Maybe (KeyMap Value)
+</span><a href="LaunchDarkly.Server.Integrations.FileData.html#%24sel%3AflagValues%3AFileBody"><span class="hs-identifier hs-var hs-var">flagValues</span></a></span><span> </span><span class="annot"><span class="annottext">FileBody
+</span><a href="#local-6989586621679668156"><span class="hs-identifier hs-var">f1</span></a></span><span> </span><span class="annot"><span class="annottext">Maybe (KeyMap Value)
+-&gt; Maybe (KeyMap Value) -&gt; Maybe (KeyMap Value)
+forall a. Semigroup a =&gt; a -&gt; a -&gt; a
+</span><span class="hs-operator hs-var">&lt;&gt;</span></span><span> </span><span class="annot"><span class="annottext">FileBody -&gt; Maybe (KeyMap Value)
+</span><a href="LaunchDarkly.Server.Integrations.FileData.html#%24sel%3AflagValues%3AFileBody"><span class="hs-identifier hs-var hs-var">flagValues</span></a></span><span> </span><span class="annot"><span class="annottext">FileBody
+</span><a href="#local-6989586621679668154"><span class="hs-identifier hs-var">f2</span></a></span><span>
+</span><span id="line-119"></span><span>            </span><span class="hs-special">,</span><span> </span><span class="annot"><span class="annottext">$sel:segments:FileBody :: Maybe (KeyMap FileSegment)
+</span><a href="LaunchDarkly.Server.Integrations.FileData.html#%24sel%3Asegments%3AFileBody"><span class="hs-identifier hs-var">segments</span></a></span><span> </span><span class="hs-glyph">=</span><span> </span><span class="annot"><span class="annottext">FileBody -&gt; Maybe (KeyMap FileSegment)
+</span><a href="LaunchDarkly.Server.Integrations.FileData.html#%24sel%3Asegments%3AFileBody"><span class="hs-identifier hs-var hs-var">segments</span></a></span><span> </span><span class="annot"><span class="annottext">FileBody
+</span><a href="#local-6989586621679668156"><span class="hs-identifier hs-var">f1</span></a></span><span> </span><span class="annot"><span class="annottext">Maybe (KeyMap FileSegment)
+-&gt; Maybe (KeyMap FileSegment) -&gt; Maybe (KeyMap FileSegment)
+forall a. Semigroup a =&gt; a -&gt; a -&gt; a
+</span><span class="hs-operator hs-var">&lt;&gt;</span></span><span> </span><span class="annot"><span class="annottext">FileBody -&gt; Maybe (KeyMap FileSegment)
+</span><a href="LaunchDarkly.Server.Integrations.FileData.html#%24sel%3Asegments%3AFileBody"><span class="hs-identifier hs-var hs-var">segments</span></a></span><span> </span><span class="annot"><span class="annottext">FileBody
+</span><a href="#local-6989586621679668154"><span class="hs-identifier hs-var">f2</span></a></span><span>
+</span><span id="line-120"></span><span>            </span><span class="hs-special">}</span><span>
+</span><span id="line-121"></span><span class="hs-keyword">instance</span><span> </span><span id="local-6989586621679668148"><span class="annot"><span class="hs-identifier hs-type">Monoid</span></span><span> </span><span class="annot"><a href="LaunchDarkly.Server.Integrations.FileData.html#FileBody"><span class="hs-identifier hs-type">FileBody</span></a></span></span><span> </span><span class="hs-keyword">where</span><span>
+</span><span id="line-122"></span><span>    </span><span id="local-6989586621679668146"><span class="annot"><span class="annottext">mempty :: FileBody
+</span><span class="hs-identifier hs-var hs-var hs-var hs-var">mempty</span></span></span><span> </span><span class="hs-glyph">=</span><span>
+</span><span id="line-123"></span><span>        </span><span class="annot"><span class="annottext">FileBody :: Maybe (KeyMap FileFlag)
+-&gt; Maybe (KeyMap Value) -&gt; Maybe (KeyMap FileSegment) -&gt; FileBody
+</span><a href="LaunchDarkly.Server.Integrations.FileData.html#FileBody"><span class="hs-identifier hs-type hs-type">FileBody</span></a></span><span>
+</span><span id="line-124"></span><span>            </span><span class="hs-special">{</span><span> </span><span class="annot"><span class="annottext">$sel:flags:FileBody :: Maybe (KeyMap FileFlag)
+</span><a href="LaunchDarkly.Server.Integrations.FileData.html#%24sel%3Aflags%3AFileBody"><span class="hs-identifier hs-var">flags</span></a></span><span> </span><span class="hs-glyph">=</span><span> </span><span class="annot"><span class="annottext">Maybe (KeyMap FileFlag)
+forall a. Monoid a =&gt; a
+</span><span class="hs-identifier hs-var">mempty</span></span><span>
+</span><span id="line-125"></span><span>            </span><span class="hs-special">,</span><span> </span><span class="annot"><span class="annottext">$sel:flagValues:FileBody :: Maybe (KeyMap Value)
+</span><a href="LaunchDarkly.Server.Integrations.FileData.html#%24sel%3AflagValues%3AFileBody"><span class="hs-identifier hs-var">flagValues</span></a></span><span> </span><span class="hs-glyph">=</span><span> </span><span class="annot"><span class="annottext">Maybe (KeyMap Value)
+forall a. Monoid a =&gt; a
+</span><span class="hs-identifier hs-var">mempty</span></span><span>
+</span><span id="line-126"></span><span>            </span><span class="hs-special">,</span><span> </span><span class="annot"><span class="annottext">$sel:segments:FileBody :: Maybe (KeyMap FileSegment)
+</span><a href="LaunchDarkly.Server.Integrations.FileData.html#%24sel%3Asegments%3AFileBody"><span class="hs-identifier hs-var">segments</span></a></span><span> </span><span class="hs-glyph">=</span><span> </span><span class="annot"><span class="annottext">Maybe (KeyMap FileSegment)
+forall a. Monoid a =&gt; a
+</span><span class="hs-identifier hs-var">mempty</span></span><span>
+</span><span id="line-127"></span><span>            </span><span class="hs-special">}</span><span>
+</span><span id="line-128"></span><span>    </span><span id="local-6989586621679668145"><span class="annot"><span class="annottext">mappend :: FileBody -&gt; FileBody -&gt; FileBody
+</span><span class="hs-identifier hs-var hs-var hs-var hs-var">mappend</span></span></span><span> </span><span class="hs-glyph">=</span><span> </span><span class="annot"><span class="annottext">FileBody -&gt; FileBody -&gt; FileBody
+forall a. Semigroup a =&gt; a -&gt; a -&gt; a
+</span><span class="hs-operator hs-var">(&lt;&gt;)</span></span><span>
+</span><span id="line-129"></span><span>
+</span><span id="line-130"></span><span class="hs-comment">-- |</span><span>
+</span><span id="line-131"></span><span class="hs-comment">-- Creates a @DataSourceFactory@ which uses the configured file data sources.</span><span>
+</span><span id="line-132"></span><span class="hs-comment">--</span><span>
+</span><span id="line-133"></span><span class="hs-comment">-- This allows you to use local files as a source of feature flag state,</span><span>
+</span><span id="line-134"></span><span class="hs-comment">-- instead of using an actual LaunchDarkly connection.</span><span>
+</span><span id="line-135"></span><span class="hs-comment">--</span><span>
+</span><span id="line-136"></span><span class="hs-comment">-- To use the file dataSource you can add it to the</span><span>
+</span><span id="line-137"></span><span class="hs-comment">-- 'LaunchDarkly.Server.Config' using</span><span>
+</span><span id="line-138"></span><span class="hs-comment">-- 'LaunchDarkly.Server.Config.configSetDataSourceFactory'</span><span>
+</span><span id="line-139"></span><span class="hs-comment">--</span><span>
+</span><span id="line-140"></span><span class="hs-comment">-- @</span><span>
+</span><span id="line-141"></span><span class="hs-comment">-- let config = configSetDataSourceFactory (FileData.dataSourceFactory [&quot;./testData/flags.json&quot;]) $</span><span>
+</span><span id="line-142"></span><span class="hs-comment">--              makeConfig &quot;sdk-key&quot;</span><span>
+</span><span id="line-143"></span><span class="hs-comment">-- client &lt;- makeClient config</span><span>
+</span><span id="line-144"></span><span class="hs-comment">-- @</span><span>
+</span><span id="line-145"></span><span class="hs-comment">--</span><span>
+</span><span id="line-146"></span><span class="hs-comment">-- This will cause the client /not/ to connect to LaunchDarkly to get feature</span><span>
+</span><span id="line-147"></span><span class="hs-comment">-- flags. The client may still make network connections to send analytics</span><span>
+</span><span id="line-148"></span><span class="hs-comment">-- events, unless you have disabled this with</span><span>
+</span><span id="line-149"></span><span class="hs-comment">-- 'LaunchDarkly.Server.Config.configSetSendEvents' to @False@. IMPORTANT: Do</span><span>
+</span><span id="line-150"></span><span class="hs-comment">-- /not/ set 'LaunchDarkly.Server.Config.configSetOffline' to @True@; doing so</span><span>
+</span><span id="line-151"></span><span class="hs-comment">-- would not just put the SDK \&quot;offline\&quot; with regard to LaunchDarkly, but will</span><span>
+</span><span id="line-152"></span><span class="hs-comment">-- completely turn off all flag data sources to the SDK /including the file</span><span>
+</span><span id="line-153"></span><span class="hs-comment">-- data source/.</span><span>
+</span><span id="line-154"></span><span class="hs-comment">--</span><span>
+</span><span id="line-155"></span><span class="hs-comment">-- Flag data files can be either JSON or YAML. They contain an object with</span><span>
+</span><span id="line-156"></span><span class="hs-comment">-- three possible properties:</span><span>
+</span><span id="line-157"></span><span class="hs-comment">--</span><span>
+</span><span id="line-158"></span><span class="hs-comment">--      [@flags@]: Feature flag definitions.</span><span>
+</span><span id="line-159"></span><span class="hs-comment">--      [@flagValues@]: Simplified feature flags that contain only a value.</span><span>
+</span><span id="line-160"></span><span class="hs-comment">--      [@segments@]: Context segment definitions.</span><span>
+</span><span id="line-161"></span><span class="hs-comment">--</span><span>
+</span><span id="line-162"></span><span class="hs-comment">-- The format of the data in @flags@ and @segments@ is defined by the</span><span>
+</span><span id="line-163"></span><span class="hs-comment">-- LaunchDarkly application and is subject to change. Rather than trying to</span><span>
+</span><span id="line-164"></span><span class="hs-comment">-- construct these objects yourself, it is simpler to request existing flags</span><span>
+</span><span id="line-165"></span><span class="hs-comment">-- directly from the LaunchDarkly server in JSON format, and use this output as</span><span>
+</span><span id="line-166"></span><span class="hs-comment">-- the starting point for your file. In Linux you would do this:</span><span>
+</span><span id="line-167"></span><span class="hs-comment">--</span><span>
+</span><span id="line-168"></span><span class="hs-comment">-- @</span><span>
+</span><span id="line-169"></span><span class="hs-comment">-- curl -H &quot;Authorization: {your sdk key}&quot; https://sdk.launchdarkly.com/sdk/latest-all</span><span>
+</span><span id="line-170"></span><span class="hs-comment">-- @</span><span>
+</span><span id="line-171"></span><span class="hs-comment">--</span><span>
+</span><span id="line-172"></span><span class="hs-comment">-- The output will look something like this (but with many more properties):</span><span>
+</span><span id="line-173"></span><span class="hs-comment">--</span><span>
+</span><span id="line-174"></span><span class="hs-comment">-- @</span><span>
+</span><span id="line-175"></span><span class="hs-comment">-- {</span><span>
+</span><span id="line-176"></span><span class="hs-comment">--     &quot;flags&quot;: {</span><span>
+</span><span id="line-177"></span><span class="hs-comment">--         &quot;flag-key-1&quot;: {</span><span>
+</span><span id="line-178"></span><span class="hs-comment">--             &quot;key&quot;: &quot;flag-key-1&quot;,</span><span>
+</span><span id="line-179"></span><span class="hs-comment">--             &quot;on&quot;: true,</span><span>
+</span><span id="line-180"></span><span class="hs-comment">--             &quot;variations&quot;: [ &quot;a&quot;, &quot;b&quot; ]</span><span>
+</span><span id="line-181"></span><span class="hs-comment">--         },</span><span>
+</span><span id="line-182"></span><span class="hs-comment">--         &quot;flag-key-2&quot;: {</span><span>
+</span><span id="line-183"></span><span class="hs-comment">--             &quot;key&quot;: &quot;flag-key-2&quot;,</span><span>
+</span><span id="line-184"></span><span class="hs-comment">--             &quot;on&quot;: true,</span><span>
+</span><span id="line-185"></span><span class="hs-comment">--             &quot;variations&quot;: [ &quot;c&quot;, &quot;d&quot; ]</span><span>
+</span><span id="line-186"></span><span class="hs-comment">--         }</span><span>
+</span><span id="line-187"></span><span class="hs-comment">--     },</span><span>
+</span><span id="line-188"></span><span class="hs-comment">--     &quot;segments&quot;: {</span><span>
+</span><span id="line-189"></span><span class="hs-comment">--         &quot;segment-key-1&quot;: {</span><span>
+</span><span id="line-190"></span><span class="hs-comment">--             &quot;key&quot;: &quot;segment-key-1&quot;,</span><span>
+</span><span id="line-191"></span><span class="hs-comment">--             &quot;includes&quot;: [ &quot;user-key-1&quot; ]</span><span>
+</span><span id="line-192"></span><span class="hs-comment">--         }</span><span>
+</span><span id="line-193"></span><span class="hs-comment">--     }</span><span>
+</span><span id="line-194"></span><span class="hs-comment">-- }</span><span>
+</span><span id="line-195"></span><span class="hs-comment">-- @</span><span>
+</span><span id="line-196"></span><span class="hs-comment">--</span><span>
+</span><span id="line-197"></span><span class="hs-comment">-- Data in this format allows the SDK to exactly duplicate all the kinds of</span><span>
+</span><span id="line-198"></span><span class="hs-comment">-- flag behavior supported by LaunchDarkly. However, in many cases you will not</span><span>
+</span><span id="line-199"></span><span class="hs-comment">-- need this complexity, but will just want to set specific flag keys to</span><span>
+</span><span id="line-200"></span><span class="hs-comment">-- specific values. For that, you can use a much simpler format:</span><span>
+</span><span id="line-201"></span><span class="hs-comment">--</span><span>
+</span><span id="line-202"></span><span class="hs-comment">-- @</span><span>
+</span><span id="line-203"></span><span class="hs-comment">-- {</span><span>
+</span><span id="line-204"></span><span class="hs-comment">--     &quot;flagValues&quot;: {</span><span>
+</span><span id="line-205"></span><span class="hs-comment">--         &quot;my-string-flag-key&quot;: &quot;value-1&quot;,</span><span>
+</span><span id="line-206"></span><span class="hs-comment">--         &quot;my-boolean-flag-key&quot;: true,</span><span>
+</span><span id="line-207"></span><span class="hs-comment">--         &quot;my-integer-flag-key&quot;: 3</span><span>
+</span><span id="line-208"></span><span class="hs-comment">--     }</span><span>
+</span><span id="line-209"></span><span class="hs-comment">-- }</span><span>
+</span><span id="line-210"></span><span class="hs-comment">-- @</span><span>
+</span><span id="line-211"></span><span class="hs-comment">--</span><span>
+</span><span id="line-212"></span><span class="hs-comment">-- Or, in YAML:</span><span>
+</span><span id="line-213"></span><span class="hs-comment">--</span><span>
+</span><span id="line-214"></span><span class="hs-comment">-- @</span><span>
+</span><span id="line-215"></span><span class="hs-comment">-- flagValues:</span><span>
+</span><span id="line-216"></span><span class="hs-comment">--   my-string-flag-key: &quot;value-1&quot;</span><span>
+</span><span id="line-217"></span><span class="hs-comment">--   my-boolean-flag-key: true</span><span>
+</span><span id="line-218"></span><span class="hs-comment">-- @</span><span>
+</span><span id="line-219"></span><span class="hs-comment">--</span><span>
+</span><span id="line-220"></span><span class="hs-comment">-- It is also possible to specify both @flags@ and @flagValues@, if you want</span><span>
+</span><span id="line-221"></span><span class="hs-comment">-- some flags to have simple values and others to have complex behavior.</span><span>
+</span><span id="line-222"></span><span class="hs-comment">-- However, it is an error to use the same flag key or segment key more than</span><span>
+</span><span id="line-223"></span><span class="hs-comment">-- once, either in a single file or across multiple files.</span><span>
+</span><span id="line-224"></span><span class="hs-comment">--</span><span>
+</span><span id="line-225"></span><span class="hs-comment">-- If the data source encounters any error in any file(malformed content, a</span><span>
+</span><span id="line-226"></span><span class="hs-comment">-- missing file) it will not load flags from that file. If the data source</span><span>
+</span><span id="line-227"></span><span class="hs-comment">-- encounters a duplicate key it will ignore that duplicate entry.</span><span>
+</span><span id="line-228"></span><span class="hs-comment">--</span><span>
+</span><span id="line-229"></span><span class="hs-comment">-- @since 2.2.1</span><span>
+</span><span id="line-230"></span><span class="annot"><a href="LaunchDarkly.Server.Integrations.FileData.html#dataSourceFactory"><span class="hs-identifier hs-type">dataSourceFactory</span></a></span><span> </span><span class="hs-glyph">::</span><span> </span><span class="hs-special">[</span><span class="annot"><span class="hs-identifier hs-type">FilePath</span></span><span class="hs-special">]</span><span> </span><span class="hs-glyph">-&gt;</span><span> </span><span class="annot"><a href="LaunchDarkly.Server.DataSource.Internal.html#DataSourceFactory"><span class="hs-identifier hs-type">DataSourceFactory</span></a></span><span>
+</span><span id="line-231"></span><span id="dataSourceFactory"><span class="annot"><span class="annottext">dataSourceFactory :: [String] -&gt; DataSourceFactory
+</span><a href="LaunchDarkly.Server.Integrations.FileData.html#dataSourceFactory"><span class="hs-identifier hs-var hs-var">dataSourceFactory</span></a></span></span><span> </span><span id="local-6989586621679668143"><span class="annot"><span class="annottext">sources :: [String]
+</span><a href="#local-6989586621679668143"><span class="hs-identifier hs-var">sources</span></a></span></span><span> </span><span id="local-6989586621679668142"><span class="annot"><span class="annottext">_clientContext :: ClientContext
+</span><a href="#local-6989586621679668142"><span class="hs-identifier hs-var">_clientContext</span></a></span></span><span> </span><span id="local-6989586621679668141"><span class="annot"><span class="annottext">dataSourceUpdates :: DataSourceUpdates
+</span><a href="#local-6989586621679668141"><span class="hs-identifier hs-var">dataSourceUpdates</span></a></span></span><span> </span><span class="hs-glyph">=</span><span> </span><span class="hs-keyword">do</span><span>
+</span><span id="line-232"></span><span>    </span><span id="local-6989586621679668140"><span class="annot"><span class="annottext">IORef Bool
+</span><a href="#local-6989586621679668140"><span class="hs-identifier hs-var">inited</span></a></span></span><span> </span><span class="hs-glyph">&lt;-</span><span> </span><span class="annot"><span class="annottext">Bool -&gt; IO (IORef Bool)
+forall a. a -&gt; IO (IORef a)
+</span><span class="hs-identifier hs-var">newIORef</span></span><span> </span><span class="annot"><span class="annottext">Bool
+</span><span class="hs-identifier hs-var">False</span></span><span>
+</span><span id="line-233"></span><span>    </span><span class="hs-keyword">let</span><span> </span><span id="local-6989586621679668139"><span class="annot"><span class="annottext">dataSourceIsInitialized :: IO Bool
+</span><a href="#local-6989586621679668139"><span class="hs-identifier hs-var hs-var">dataSourceIsInitialized</span></a></span></span><span> </span><span class="hs-glyph">=</span><span>
+</span><span id="line-234"></span><span>            </span><span class="annot"><span class="annottext">IORef Bool -&gt; IO Bool
+forall a. IORef a -&gt; IO a
+</span><span class="hs-identifier hs-var">readIORef</span></span><span> </span><span class="annot"><span class="annottext">IORef Bool
+</span><a href="#local-6989586621679668140"><span class="hs-identifier hs-var">inited</span></a></span><span>
+</span><span id="line-235"></span><span>        </span><span id="local-6989586621679668138"><span class="annot"><span class="annottext">dataSourceStart :: IO ()
+</span><a href="#local-6989586621679668138"><span class="hs-identifier hs-var hs-var">dataSourceStart</span></a></span></span><span> </span><span class="hs-glyph">=</span><span> </span><span class="hs-keyword">do</span><span>
+</span><span id="line-236"></span><span>            </span><span class="annot"><a href="LaunchDarkly.Server.Integrations.FileData.html#FileBody"><span class="hs-identifier hs-type">FileBody</span></a></span><span> </span><span id="local-6989586621679668137"><span class="annot"><span class="annottext">mFlags :: Maybe (KeyMap FileFlag)
+</span><a href="#local-6989586621679668137"><span class="hs-identifier hs-var">mFlags</span></a></span></span><span> </span><span id="local-6989586621679668136"><span class="annot"><span class="annottext">mFlagValues :: Maybe (KeyMap Value)
+</span><a href="#local-6989586621679668136"><span class="hs-identifier hs-var">mFlagValues</span></a></span></span><span> </span><span id="local-6989586621679668135"><span class="annot"><span class="annottext">mSegments :: Maybe (KeyMap FileSegment)
+</span><a href="#local-6989586621679668135"><span class="hs-identifier hs-var">mSegments</span></a></span></span><span> </span><span class="hs-glyph">&lt;-</span><span> </span><span class="annot"><span class="annottext">[FileBody] -&gt; FileBody
+forall a. Monoid a =&gt; [a] -&gt; a
+</span><span class="hs-identifier hs-var">mconcat</span></span><span> </span><span class="annot"><span class="annottext">([FileBody] -&gt; FileBody) -&gt; IO [FileBody] -&gt; IO FileBody
+forall (f :: * -&gt; *) a b. Functor f =&gt; (a -&gt; b) -&gt; f a -&gt; f b
+</span><span class="hs-operator hs-var">&lt;$&gt;</span></span><span> </span><span class="annot"><span class="annottext">(String -&gt; IO FileBody) -&gt; [String] -&gt; IO [FileBody]
+forall (t :: * -&gt; *) (f :: * -&gt; *) a b.
+(Traversable t, Applicative f) =&gt;
+(a -&gt; f b) -&gt; t a -&gt; f (t b)
+</span><span class="hs-identifier hs-var">traverse</span></span><span> </span><span class="annot"><span class="annottext">String -&gt; IO FileBody
+</span><a href="LaunchDarkly.Server.Integrations.FileData.html#loadFile"><span class="hs-identifier hs-var">loadFile</span></a></span><span> </span><span class="annot"><span class="annottext">[String]
+</span><a href="#local-6989586621679668143"><span class="hs-identifier hs-var">sources</span></a></span><span>
+</span><span id="line-237"></span><span>            </span><span class="hs-keyword">let</span><span> </span><span id="local-6989586621679668131"><span class="annot"><span class="annottext">mSimpleFlags :: Maybe (KeyMap FileFlag)
+</span><a href="#local-6989586621679668131"><span class="hs-identifier hs-var hs-var">mSimpleFlags</span></a></span></span><span> </span><span class="hs-glyph">=</span><span> </span><span class="annot"><span class="annottext">(KeyMap Value -&gt; KeyMap FileFlag)
+-&gt; Maybe (KeyMap Value) -&gt; Maybe (KeyMap FileFlag)
+forall (f :: * -&gt; *) a b. Functor f =&gt; (a -&gt; b) -&gt; f a -&gt; f b
+</span><span class="hs-identifier hs-var">fmap</span></span><span> </span><span class="hs-special">(</span><span class="annot"><span class="annottext">(Value -&gt; FileFlag) -&gt; KeyMap Value -&gt; KeyMap FileFlag
+forall (f :: * -&gt; *) a b. Functor f =&gt; (a -&gt; b) -&gt; f a -&gt; f b
+</span><span class="hs-identifier hs-var">fmap</span></span><span> </span><span class="annot"><span class="annottext">Value -&gt; FileFlag
+</span><a href="LaunchDarkly.Server.Integrations.FileData.html#expandSimpleFlag"><span class="hs-identifier hs-var">expandSimpleFlag</span></a></span><span class="hs-special">)</span><span> </span><span class="annot"><span class="annottext">Maybe (KeyMap Value)
+</span><a href="#local-6989586621679668136"><span class="hs-identifier hs-var">mFlagValues</span></a></span><span>
+</span><span id="line-238"></span><span>                </span><span id="local-6989586621679668130"><span class="annot"><span class="annottext">flags' :: HashMap Text Flag
+</span><a href="#local-6989586621679668130"><span class="hs-identifier hs-var hs-var">flags'</span></a></span></span><span> </span><span class="hs-glyph">=</span><span> </span><span class="annot"><span class="annottext">HashMap Text Flag
+-&gt; (KeyMap FileFlag -&gt; HashMap Text Flag)
+-&gt; Maybe (KeyMap FileFlag)
+-&gt; HashMap Text Flag
+forall b a. b -&gt; (a -&gt; b) -&gt; Maybe a -&gt; b
+</span><span class="hs-identifier hs-var">maybe</span></span><span> </span><span class="annot"><span class="annottext">HashMap Text Flag
+forall a. Monoid a =&gt; a
+</span><span class="hs-identifier hs-var">mempty</span></span><span> </span><span class="hs-special">(</span><span class="annot"><span class="annottext">(Text -&gt; FileFlag -&gt; Flag) -&gt; KeyMap FileFlag -&gt; HashMap Text Flag
+forall v1 v2.
+(Text -&gt; v1 -&gt; v2) -&gt; HashMap Text v1 -&gt; HashMap Text v2
+</span><a href="LaunchDarkly.AesonCompat.html#mapWithKey"><span class="hs-identifier hs-var">mapWithKey</span></a></span><span> </span><span class="annot"><span class="annottext">Text -&gt; FileFlag -&gt; Flag
+</span><a href="LaunchDarkly.Server.Integrations.FileData.html#fromFileFlag"><span class="hs-identifier hs-var">fromFileFlag</span></a></span><span class="hs-special">)</span><span> </span><span class="hs-special">(</span><span class="annot"><span class="annottext">Maybe (KeyMap FileFlag)
+</span><a href="#local-6989586621679668137"><span class="hs-identifier hs-var">mFlags</span></a></span><span> </span><span class="annot"><span class="annottext">Maybe (KeyMap FileFlag)
+-&gt; Maybe (KeyMap FileFlag) -&gt; Maybe (KeyMap FileFlag)
+forall a. Semigroup a =&gt; a -&gt; a -&gt; a
+</span><span class="hs-operator hs-var">&lt;&gt;</span></span><span> </span><span class="annot"><span class="annottext">Maybe (KeyMap FileFlag)
+</span><a href="#local-6989586621679668131"><span class="hs-identifier hs-var">mSimpleFlags</span></a></span><span class="hs-special">)</span><span>
+</span><span id="line-239"></span><span>                </span><span id="local-6989586621679668128"><span class="annot"><span class="annottext">segments' :: HashMap Text Segment
+</span><a href="#local-6989586621679668128"><span class="hs-identifier hs-var hs-var">segments'</span></a></span></span><span> </span><span class="hs-glyph">=</span><span> </span><span class="annot"><span class="annottext">HashMap Text Segment
+-&gt; (KeyMap FileSegment -&gt; HashMap Text Segment)
+-&gt; Maybe (KeyMap FileSegment)
+-&gt; HashMap Text Segment
+forall b a. b -&gt; (a -&gt; b) -&gt; Maybe a -&gt; b
+</span><span class="hs-identifier hs-var">maybe</span></span><span> </span><span class="annot"><span class="annottext">HashMap Text Segment
+forall a. Monoid a =&gt; a
+</span><span class="hs-identifier hs-var">mempty</span></span><span> </span><span class="hs-special">(</span><span class="annot"><span class="annottext">(Text -&gt; FileSegment -&gt; Segment)
+-&gt; KeyMap FileSegment -&gt; HashMap Text Segment
+forall v1 v2.
+(Text -&gt; v1 -&gt; v2) -&gt; HashMap Text v1 -&gt; HashMap Text v2
+</span><a href="LaunchDarkly.AesonCompat.html#mapWithKey"><span class="hs-identifier hs-var">mapWithKey</span></a></span><span> </span><span class="annot"><span class="annottext">Text -&gt; FileSegment -&gt; Segment
+</span><a href="LaunchDarkly.Server.Integrations.FileData.html#fromFileSegment"><span class="hs-identifier hs-var">fromFileSegment</span></a></span><span class="hs-special">)</span><span> </span><span class="annot"><span class="annottext">Maybe (KeyMap FileSegment)
+</span><a href="#local-6989586621679668135"><span class="hs-identifier hs-var">mSegments</span></a></span><span>
+</span><span id="line-240"></span><span>            </span><span class="annot"><span class="annottext">Either Text ()
+</span><span class="hs-identifier">_</span></span><span> </span><span class="hs-glyph">&lt;-</span><span> </span><span class="annot"><span class="annottext">DataSourceUpdates
+-&gt; HashMap Text Flag -&gt; HashMap Text Segment -&gt; IO (Either Text ())
+</span><a href="LaunchDarkly.Server.DataSource.Internal.html#%24sel%3AdataSourceUpdatesInit%3ADataSourceUpdates"><span class="hs-identifier hs-var hs-var">dataSourceUpdatesInit</span></a></span><span> </span><span class="annot"><span class="annottext">DataSourceUpdates
+</span><a href="#local-6989586621679668141"><span class="hs-identifier hs-var">dataSourceUpdates</span></a></span><span> </span><span class="annot"><span class="annottext">HashMap Text Flag
+</span><a href="#local-6989586621679668130"><span class="hs-identifier hs-var">flags'</span></a></span><span> </span><span class="annot"><span class="annottext">HashMap Text Segment
+</span><a href="#local-6989586621679668128"><span class="hs-identifier hs-var">segments'</span></a></span><span>
+</span><span id="line-241"></span><span>            </span><span class="annot"><span class="annottext">DataSourceUpdates -&gt; Status -&gt; IO ()
+</span><a href="LaunchDarkly.Server.DataSource.Internal.html#%24sel%3AdataSourceUpdatesSetStatus%3ADataSourceUpdates"><span class="hs-identifier hs-var hs-var">dataSourceUpdatesSetStatus</span></a></span><span> </span><span class="annot"><span class="annottext">DataSourceUpdates
+</span><a href="#local-6989586621679668141"><span class="hs-identifier hs-var">dataSourceUpdates</span></a></span><span> </span><span class="annot"><span class="annottext">Status
+</span><a href="LaunchDarkly.Server.Client.Status.html#Initialized"><span class="hs-identifier hs-var">Initialized</span></a></span><span>
+</span><span id="line-242"></span><span>            </span><span class="annot"><span class="annottext">IORef Bool -&gt; Bool -&gt; IO ()
+forall a. IORef a -&gt; a -&gt; IO ()
+</span><span class="hs-identifier hs-var">writeIORef</span></span><span> </span><span class="annot"><span class="annottext">IORef Bool
+</span><a href="#local-6989586621679668140"><span class="hs-identifier hs-var">inited</span></a></span><span> </span><span class="annot"><span class="annottext">Bool
+</span><span class="hs-identifier hs-var">True</span></span><span>
+</span><span id="line-243"></span><span>        </span><span id="local-6989586621679668124"><span class="annot"><span class="annottext">dataSourceStop :: f ()
+</span><a href="#local-6989586621679668124"><span class="hs-identifier hs-var hs-var">dataSourceStop</span></a></span></span><span> </span><span class="hs-glyph">=</span><span> </span><span class="annot"><span class="annottext">() -&gt; f ()
+forall (f :: * -&gt; *) a. Applicative f =&gt; a -&gt; f a
+</span><span class="hs-identifier hs-var">pure</span></span><span> </span><span class="hs-special">(</span><span class="hs-special">)</span><span>
+</span><span id="line-244"></span><span>    </span><span class="annot"><span class="annottext">DataSource -&gt; IO DataSource
+forall (f :: * -&gt; *) a. Applicative f =&gt; a -&gt; f a
+</span><span class="hs-identifier hs-var">pure</span></span><span> </span><span class="annot"><span class="annottext">(DataSource -&gt; IO DataSource) -&gt; DataSource -&gt; IO DataSource
+forall a b. (a -&gt; b) -&gt; a -&gt; b
+</span><span class="hs-operator hs-var">$</span></span><span> </span><span class="annot"><span class="annottext">DataSource :: IO Bool -&gt; IO () -&gt; IO () -&gt; DataSource
+</span><a href="LaunchDarkly.Server.DataSource.Internal.html#DataSource"><span class="hs-identifier hs-type hs-type">DataSource</span></a></span><span> </span><span class="hs-special">{</span><span class="hs-glyph">..</span><span class="hs-special">}</span><span>
+</span><span id="line-245"></span><span>
+</span><span id="line-246"></span><span class="annot"><a href="LaunchDarkly.Server.Integrations.FileData.html#loadFile"><span class="hs-identifier hs-type">loadFile</span></a></span><span> </span><span class="hs-glyph">::</span><span> </span><span class="annot"><span class="hs-identifier hs-type">FilePath</span></span><span> </span><span class="hs-glyph">-&gt;</span><span> </span><span class="annot"><span class="hs-identifier hs-type">IO</span></span><span> </span><span class="annot"><a href="LaunchDarkly.Server.Integrations.FileData.html#FileBody"><span class="hs-identifier hs-type">FileBody</span></a></span><span>
+</span><span id="line-247"></span><span id="loadFile"><span class="annot"><span class="annottext">loadFile :: String -&gt; IO FileBody
+</span><a href="LaunchDarkly.Server.Integrations.FileData.html#loadFile"><span class="hs-identifier hs-var hs-var">loadFile</span></a></span></span><span> </span><span id="local-6989586621679668118"><span class="annot"><span class="annottext">filePath :: String
+</span><a href="#local-6989586621679668118"><span class="hs-identifier hs-var">filePath</span></a></span></span><span> </span><span class="hs-glyph">=</span><span> </span><span class="hs-keyword">do</span><span>
+</span><span id="line-248"></span><span>    </span><span id="local-6989586621679668117"><span class="annot"><span class="annottext">ByteString
+</span><a href="#local-6989586621679668117"><span class="hs-identifier hs-var">file</span></a></span></span><span> </span><span class="hs-glyph">&lt;-</span><span> </span><span class="annot"><span class="annottext">String -&gt; IO ByteString
+</span><span class="hs-identifier hs-var">BSL.readFile</span></span><span> </span><span class="annot"><span class="annottext">String
+</span><a href="#local-6989586621679668118"><span class="hs-identifier hs-var">filePath</span></a></span><span>
+</span><span id="line-249"></span><span>    </span><span class="hs-keyword">let</span><span> </span><span id="local-6989586621679668115"><span class="annot"><span class="annottext">mDecodedFile :: Maybe FileBody
+</span><a href="#local-6989586621679668115"><span class="hs-identifier hs-var hs-var">mDecodedFile</span></a></span></span><span> </span><span class="hs-glyph">=</span><span> </span><span class="annot"><span class="annottext">ByteString -&gt; Maybe FileBody
+forall a. FromJSON a =&gt; ByteString -&gt; Maybe a
+</span><span class="hs-identifier hs-var">decode</span></span><span> </span><span class="annot"><span class="annottext">ByteString
+</span><a href="#local-6989586621679668117"><span class="hs-identifier hs-var">file</span></a></span><span> </span><span class="annot"><span class="annottext">Maybe FileBody -&gt; Maybe FileBody -&gt; Maybe FileBody
+forall (f :: * -&gt; *) a. Alternative f =&gt; f a -&gt; f a -&gt; f a
+</span><span class="hs-operator hs-var">&lt;|&gt;</span></span><span> </span><span class="annot"><span class="annottext">ByteString -&gt; Maybe FileBody
+forall (m :: * -&gt; *) a.
+(MonadThrow m, FromJSON a) =&gt;
+ByteString -&gt; m a
+</span><span class="hs-identifier hs-var">Yaml.decodeThrow</span></span><span> </span><span class="hs-special">(</span><span class="annot"><span class="annottext">ByteString -&gt; ByteString
+</span><span class="hs-identifier hs-var">BSL.toStrict</span></span><span> </span><span class="annot"><span class="annottext">ByteString
+</span><a href="#local-6989586621679668117"><span class="hs-identifier hs-var">file</span></a></span><span class="hs-special">)</span><span>
+</span><span id="line-250"></span><span>    </span><span class="hs-keyword">case</span><span> </span><span class="annot"><span class="annottext">Maybe FileBody
+</span><a href="#local-6989586621679668115"><span class="hs-identifier hs-var">mDecodedFile</span></a></span><span> </span><span class="hs-keyword">of</span><span>
+</span><span id="line-251"></span><span>        </span><span class="annot"><span class="hs-identifier hs-type">Just</span></span><span> </span><span class="hs-glyph">!</span><span id="local-6989586621679668112"><span class="annot"><span class="annottext">FileBody
+</span><a href="#local-6989586621679668112"><span class="hs-identifier hs-var">fileBody</span></a></span></span><span> </span><span class="hs-glyph">-&gt;</span><span>
+</span><span id="line-252"></span><span>            </span><span class="annot"><span class="annottext">FileBody -&gt; IO FileBody
+forall (f :: * -&gt; *) a. Applicative f =&gt; a -&gt; f a
+</span><span class="hs-identifier hs-var">pure</span></span><span> </span><span class="annot"><span class="annottext">FileBody
+</span><a href="#local-6989586621679668112"><span class="hs-identifier hs-var">fileBody</span></a></span><span>
+</span><span id="line-253"></span><span>        </span><span class="annot"><span class="hs-identifier hs-type">Nothing</span></span><span> </span><span class="hs-glyph">-&gt;</span><span>
+</span><span id="line-254"></span><span>            </span><span class="annot"><span class="annottext">FileBody -&gt; IO FileBody
+forall (f :: * -&gt; *) a. Applicative f =&gt; a -&gt; f a
+</span><span class="hs-identifier hs-var">pure</span></span><span> </span><span class="annot"><span class="annottext">FileBody
+forall a. Monoid a =&gt; a
+</span><span class="hs-identifier hs-var">mempty</span></span><span>
+</span><span id="line-255"></span></pre></body></html>

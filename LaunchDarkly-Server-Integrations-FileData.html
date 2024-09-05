@@ -1,0 +1,61 @@
+<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Transitional//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-transitional.dtd"><html xmlns="http://www.w3.org/1999/xhtml"><head><meta http-equiv="Content-Type" content="text/html; charset=UTF-8" /><meta name="viewport" content="width=device-width, initial-scale=1" /><title>LaunchDarkly.Server.Integrations.FileData</title><link href="linuwial.css" rel="stylesheet" type="text/css" title="Linuwial" /><link rel="stylesheet" type="text/css" href="quick-jump.css" /><link rel="stylesheet" type="text/css" href="https://fonts.googleapis.com/css?family=PT+Sans:400,400i,700" /><script src="haddock-bundle.min.js" async="async" type="text/javascript"></script><script type="text/x-mathjax-config">MathJax.Hub.Config({ tex2jax: { processClass: "mathjax", ignoreClass: ".*" } });</script><script src="https://cdnjs.cloudflare.com/ajax/libs/mathjax/2.7.5/MathJax.js?config=TeX-AMS-MML_HTMLorMML" type="text/javascript"></script></head><body><div id="package-header"><span class="caption">launchdarkly-server-sdk-4.2.0: Server-side SDK for integrating with LaunchDarkly</span><ul class="links" id="page-menu"><li><a href="src/LaunchDarkly.Server.Integrations.FileData.html">Source</a></li><li><a href="index.html">Contents</a></li><li><a href="doc-index.html">Index</a></li></ul></div><div id="content"><div id="module-header"><table class="info"><tr><th>Safe Haskell</th><td>None</td></tr><tr><th>Language</th><td>Haskell2010</td></tr></table><p class="caption">LaunchDarkly.Server.Integrations.FileData</p></div><div id="description"><p class="caption">Description</p><div class="doc"><p>Integration between the LaunchDarkly SDK and file data.</p><p>The file data source allows you to use local files as a source of feature
+  flag state. This would typically be used in a test environment, to operate
+  using a predetermined feature flag state without an actual LaunchDarkly
+  connection. See <code><a href="LaunchDarkly-Server-Integrations-FileData.html#v:dataSourceFactory" title="LaunchDarkly.Server.Integrations.FileData">dataSourceFactory</a></code> for details.</p><p><em>Since: 2.2.1</em></p></div></div><div id="synopsis"><details id="syn"><summary>Synopsis</summary><ul class="details-toggle" data-details-id="syn"><li class="src short"><a href="#v:dataSourceFactory">dataSourceFactory</a> :: [<a href="../base-4.13.0.0/System-IO.html#t:FilePath" title="System.IO">FilePath</a>] -&gt; DataSourceFactory</li></ul></details></div><div id="interface"><h1>Documentation</h1><div class="top"><p class="src"><a id="v:dataSourceFactory" class="def">dataSourceFactory</a> :: [<a href="../base-4.13.0.0/System-IO.html#t:FilePath" title="System.IO">FilePath</a>] -&gt; DataSourceFactory <a href="src/LaunchDarkly.Server.Integrations.FileData.html#dataSourceFactory" class="link">Source</a> <a href="#v:dataSourceFactory" class="selflink">#</a></p><div class="doc"><p>Creates a <code>DataSourceFactory</code> which uses the configured file data sources.</p><p>This allows you to use local files as a source of feature flag state,
+ instead of using an actual LaunchDarkly connection.</p><p>To use the file dataSource you can add it to the
+ <code><a href="LaunchDarkly-Server.html#v:Config" title="LaunchDarkly.Server">Config</a></code> using
+ <code><a href="LaunchDarkly-Server-Config.html#v:configSetDataSourceFactory" title="LaunchDarkly.Server.Config">configSetDataSourceFactory</a></code></p><pre>let config = configSetDataSourceFactory (FileData.dataSourceFactory [&quot;.<em>testData</em>flags.json&quot;]) $
+             makeConfig &quot;sdk-key&quot;
+client &lt;- makeClient config
+</pre><p>This will cause the client <em>not</em> to connect to LaunchDarkly to get feature
+ flags. The client may still make network connections to send analytics
+ events, unless you have disabled this with
+ <code><a href="LaunchDarkly-Server-Config.html#v:configSetSendEvents" title="LaunchDarkly.Server.Config">configSetSendEvents</a></code> to <code>False</code>. IMPORTANT: Do
+ <em>not</em> set <code><a href="LaunchDarkly-Server-Config.html#v:configSetOffline" title="LaunchDarkly.Server.Config">configSetOffline</a></code> to <code>True</code>; doing so
+ would not just put the SDK &quot;offline&quot; with regard to LaunchDarkly, but will
+ completely turn off all flag data sources to the SDK /including the file
+ data source/.</p><p>Flag data files can be either JSON or YAML. They contain an object with
+ three possible properties:</p><dl><dt><code>flags</code></dt><dd>Feature flag definitions.</dd><dt><code>flagValues</code></dt><dd>Simplified feature flags that contain only a value.</dd><dt><code>segments</code></dt><dd>Context segment definitions.</dd></dl><p>The format of the data in <code>flags</code> and <code>segments</code> is defined by the
+ LaunchDarkly application and is subject to change. Rather than trying to
+ construct these objects yourself, it is simpler to request existing flags
+ directly from the LaunchDarkly server in JSON format, and use this output as
+ the starting point for your file. In Linux you would do this:</p><pre>curl -H &quot;Authorization: {your sdk key}&quot; <a href="https://sdk.launchdarkly.com/sdk/latest-all">https://sdk.launchdarkly.com/sdk/latest-all</a>
+</pre><p>The output will look something like this (but with many more properties):</p><pre>{
+    &quot;flags&quot;: {
+        &quot;flag-key-1&quot;: {
+            &quot;key&quot;: &quot;flag-key-1&quot;,
+            &quot;on&quot;: true,
+            &quot;variations&quot;: [ &quot;a&quot;, &quot;b&quot; ]
+        },
+        &quot;flag-key-2&quot;: {
+            &quot;key&quot;: &quot;flag-key-2&quot;,
+            &quot;on&quot;: true,
+            &quot;variations&quot;: [ &quot;c&quot;, &quot;d&quot; ]
+        }
+    },
+    &quot;segments&quot;: {
+        &quot;segment-key-1&quot;: {
+            &quot;key&quot;: &quot;segment-key-1&quot;,
+            &quot;includes&quot;: [ &quot;user-key-1&quot; ]
+        }
+    }
+}
+</pre><p>Data in this format allows the SDK to exactly duplicate all the kinds of
+ flag behavior supported by LaunchDarkly. However, in many cases you will not
+ need this complexity, but will just want to set specific flag keys to
+ specific values. For that, you can use a much simpler format:</p><pre>{
+    &quot;flagValues&quot;: {
+        &quot;my-string-flag-key&quot;: &quot;value-1&quot;,
+        &quot;my-boolean-flag-key&quot;: true,
+        &quot;my-integer-flag-key&quot;: 3
+    }
+}
+</pre><p>Or, in YAML:</p><pre>flagValues:
+  my-string-flag-key: &quot;value-1&quot;
+  my-boolean-flag-key: true
+</pre><p>It is also possible to specify both <code>flags</code> and <code>flagValues</code>, if you want
+ some flags to have simple values and others to have complex behavior.
+ However, it is an error to use the same flag key or segment key more than
+ once, either in a single file or across multiple files.</p><p>If the data source encounters any error in any file(malformed content, a
+ missing file) it will not load flags from that file. If the data source
+ encounters a duplicate key it will ignore that duplicate entry.</p><p><em>Since: 2.2.1</em></p></div></div></div></div><div id="footer"><p>Produced by <a href="http://www.haskell.org/haddock/">Haddock</a> version 2.23.0</p></div></body></html>

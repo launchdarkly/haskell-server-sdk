@@ -1,0 +1,340 @@
+<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Transitional//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-transitional.dtd"><html xmlns="http://www.w3.org/1999/xhtml"><head><link rel="stylesheet" type="text/css" href="style.css" /><script type="text/javascript" src="highlight.js"></script></head><body><pre><span class="hs-pragma">{-# LANGUAGE OverloadedLists #-}</span><span>
+</span><span id="line-2"></span><span>
+</span><span id="line-3"></span><span class="hs-keyword">module</span><span> </span><span class="hs-identifier">LaunchDarkly.Server.Details</span><span> </span><span class="hs-keyword">where</span><span>
+</span><span id="line-4"></span><span>
+</span><span id="line-5"></span><span class="hs-keyword">import</span><span> </span><span class="annot"><span class="hs-identifier">Data.Aeson.Types</span></span><span> </span><span class="hs-special">(</span><span class="annot"><span class="hs-identifier">ToJSON</span></span><span class="hs-special">,</span><span> </span><span class="annot"><span class="hs-identifier">Value</span></span><span> </span><span class="hs-special">(</span><span class="hs-glyph">..</span><span class="hs-special">)</span><span class="hs-special">,</span><span> </span><span class="annot"><span class="hs-identifier">toJSON</span></span><span class="hs-special">)</span><span>
+</span><span id="line-6"></span><span class="hs-keyword">import</span><span> </span><span class="annot"><span class="hs-identifier">Data.Text</span></span><span> </span><span class="hs-special">(</span><span class="annot"><span class="hs-identifier">Text</span></span><span class="hs-special">)</span><span>
+</span><span id="line-7"></span><span class="hs-keyword">import</span><span> </span><span class="annot"><span class="hs-identifier">GHC.Exts</span></span><span> </span><span class="hs-special">(</span><span class="annot"><span class="hs-identifier">fromList</span></span><span class="hs-special">)</span><span>
+</span><span id="line-8"></span><span class="hs-keyword">import</span><span> </span><span class="annot"><span class="hs-identifier">GHC.Generics</span></span><span> </span><span class="hs-special">(</span><span class="annot"><span class="hs-identifier">Generic</span></span><span class="hs-special">)</span><span>
+</span><span id="line-9"></span><span class="hs-keyword">import</span><span> </span><span class="annot"><span class="hs-identifier">GHC.Natural</span></span><span> </span><span class="hs-special">(</span><span class="annot"><span class="hs-identifier">Natural</span></span><span class="hs-special">)</span><span>
+</span><span id="line-10"></span><span>
+</span><span id="line-11"></span><span class="hs-comment">-- |</span><span>
+</span><span id="line-12"></span><span class="hs-comment">-- Combines the result of a flag evaluation with an explanation of how it was</span><span>
+</span><span id="line-13"></span><span class="hs-comment">-- calculated.</span><span>
+</span><span id="line-14"></span><span id="local-6989586621679666103"><span id="local-6989586621679666104"></span></span><span class="hs-keyword">data</span><span> </span><span id="EvaluationDetail"><span class="annot"><a href="LaunchDarkly.Server.Details.html#EvaluationDetail"><span class="hs-identifier hs-var">EvaluationDetail</span></a></span></span><span> </span><span id="local-6989586621679666102"><span class="annot"><a href="#local-6989586621679666102"><span class="hs-identifier hs-type">value</span></a></span></span><span> </span><span class="hs-glyph">=</span><span> </span><span id="EvaluationDetail"><span class="annot"><a href="LaunchDarkly.Server.Details.html#EvaluationDetail"><span class="hs-identifier hs-var">EvaluationDetail</span></a></span></span><span>
+</span><span id="line-15"></span><span>    </span><span class="hs-special">{</span><span> </span><span id="%24sel%3Avalue%3AEvaluationDetail"><span class="annot"><span class="annottext">EvaluationDetail value -&gt; value
+</span><a href="LaunchDarkly.Server.Details.html#%24sel%3Avalue%3AEvaluationDetail"><span class="hs-identifier hs-var hs-var">value</span></a></span></span><span> </span><span class="hs-glyph">::</span><span> </span><span class="hs-glyph">!</span><span class="annot"><a href="#local-6989586621679666102"><span class="hs-identifier hs-type">value</span></a></span><span>
+</span><span id="line-16"></span><span>    </span><span class="hs-comment">-- ^ The result of the flag evaluation. This will be either one of the</span><span>
+</span><span id="line-17"></span><span>    </span><span class="hs-comment">-- flag's variations or the default value passed by the application.</span><span>
+</span><span id="line-18"></span><span>    </span><span class="hs-special">,</span><span> </span><span id="%24sel%3AvariationIndex%3AEvaluationDetail"><span class="annot"><span class="annottext">EvaluationDetail value -&gt; Maybe Integer
+</span><a href="LaunchDarkly.Server.Details.html#%24sel%3AvariationIndex%3AEvaluationDetail"><span class="hs-identifier hs-var hs-var">variationIndex</span></a></span></span><span> </span><span class="hs-glyph">::</span><span> </span><span class="hs-glyph">!</span><span class="hs-special">(</span><span class="annot"><span class="hs-identifier hs-type">Maybe</span></span><span> </span><span class="annot"><span class="hs-identifier hs-type">Integer</span></span><span class="hs-special">)</span><span>
+</span><span id="line-19"></span><span>    </span><span class="hs-comment">-- ^ The index of the returned value within the flag's list of variations,</span><span>
+</span><span id="line-20"></span><span>    </span><span class="hs-comment">-- e.g. 0 for the first variation - or Nothing if the default value was</span><span>
+</span><span id="line-21"></span><span>    </span><span class="hs-comment">-- returned.</span><span>
+</span><span id="line-22"></span><span>    </span><span class="hs-special">,</span><span> </span><span id="%24sel%3Areason%3AEvaluationDetail"><span class="annot"><span class="annottext">EvaluationDetail value -&gt; EvaluationReason
+</span><a href="LaunchDarkly.Server.Details.html#%24sel%3Areason%3AEvaluationDetail"><span class="hs-identifier hs-var hs-var">reason</span></a></span></span><span> </span><span class="hs-glyph">::</span><span> </span><span class="hs-glyph">!</span><span class="annot"><a href="LaunchDarkly.Server.Details.html#EvaluationReason"><span class="hs-identifier hs-type">EvaluationReason</span></a></span><span>
+</span><span id="line-23"></span><span>    </span><span class="hs-comment">-- ^ Describes the main factor that influenced the flag evaluation value.</span><span>
+</span><span id="line-24"></span><span>    </span><span class="hs-special">}</span><span>
+</span><span id="line-25"></span><span>    </span><span class="hs-keyword">deriving</span><span> </span><span class="hs-special">(</span><span class="annot"><span class="annottext">(forall x.
+ EvaluationDetail value -&gt; Rep (EvaluationDetail value) x)
+-&gt; (forall x.
+    Rep (EvaluationDetail value) x -&gt; EvaluationDetail value)
+-&gt; Generic (EvaluationDetail value)
+forall x. Rep (EvaluationDetail value) x -&gt; EvaluationDetail value
+forall x. EvaluationDetail value -&gt; Rep (EvaluationDetail value) x
+forall a.
+(forall x. a -&gt; Rep a x) -&gt; (forall x. Rep a x -&gt; a) -&gt; Generic a
+forall value x.
+Rep (EvaluationDetail value) x -&gt; EvaluationDetail value
+forall value x.
+EvaluationDetail value -&gt; Rep (EvaluationDetail value) x
+$cto :: forall value x.
+Rep (EvaluationDetail value) x -&gt; EvaluationDetail value
+$cfrom :: forall value x.
+EvaluationDetail value -&gt; Rep (EvaluationDetail value) x
+</span><span class="hs-identifier hs-var hs-var hs-var hs-var">Generic</span></span><span class="hs-special">,</span><span> </span><span id="local-6989586621679666091"><span id="local-6989586621679666093"><span class="annot"><span class="annottext">EvaluationDetail value -&gt; EvaluationDetail value -&gt; Bool
+(EvaluationDetail value -&gt; EvaluationDetail value -&gt; Bool)
+-&gt; (EvaluationDetail value -&gt; EvaluationDetail value -&gt; Bool)
+-&gt; Eq (EvaluationDetail value)
+forall value.
+Eq value =&gt;
+EvaluationDetail value -&gt; EvaluationDetail value -&gt; Bool
+forall a. (a -&gt; a -&gt; Bool) -&gt; (a -&gt; a -&gt; Bool) -&gt; Eq a
+/= :: EvaluationDetail value -&gt; EvaluationDetail value -&gt; Bool
+$c/= :: forall value.
+Eq value =&gt;
+EvaluationDetail value -&gt; EvaluationDetail value -&gt; Bool
+== :: EvaluationDetail value -&gt; EvaluationDetail value -&gt; Bool
+$c== :: forall value.
+Eq value =&gt;
+EvaluationDetail value -&gt; EvaluationDetail value -&gt; Bool
+</span><span class="hs-identifier hs-var hs-var hs-var hs-var hs-var hs-var">Eq</span></span></span></span><span class="hs-special">,</span><span> </span><span id="local-6989586621679666084"><span id="local-6989586621679666086"><span id="local-6989586621679666088"><span class="annot"><span class="annottext">Int -&gt; EvaluationDetail value -&gt; ShowS
+[EvaluationDetail value] -&gt; ShowS
+EvaluationDetail value -&gt; String
+(Int -&gt; EvaluationDetail value -&gt; ShowS)
+-&gt; (EvaluationDetail value -&gt; String)
+-&gt; ([EvaluationDetail value] -&gt; ShowS)
+-&gt; Show (EvaluationDetail value)
+forall value. Show value =&gt; Int -&gt; EvaluationDetail value -&gt; ShowS
+forall value. Show value =&gt; [EvaluationDetail value] -&gt; ShowS
+forall value. Show value =&gt; EvaluationDetail value -&gt; String
+forall a.
+(Int -&gt; a -&gt; ShowS) -&gt; (a -&gt; String) -&gt; ([a] -&gt; ShowS) -&gt; Show a
+showList :: [EvaluationDetail value] -&gt; ShowS
+$cshowList :: forall value. Show value =&gt; [EvaluationDetail value] -&gt; ShowS
+show :: EvaluationDetail value -&gt; String
+$cshow :: forall value. Show value =&gt; EvaluationDetail value -&gt; String
+showsPrec :: Int -&gt; EvaluationDetail value -&gt; ShowS
+$cshowsPrec :: forall value. Show value =&gt; Int -&gt; EvaluationDetail value -&gt; ShowS
+</span><span class="hs-identifier hs-var hs-var hs-var hs-var hs-var hs-var hs-var hs-var">Show</span></span></span></span></span><span class="hs-special">)</span><span>
+</span><span id="line-26"></span><span>
+</span><span id="line-27"></span><span id="local-6989586621679666082"><span class="hs-keyword">instance</span><span> </span><span id="local-6989586621679666075"><span id="local-6989586621679666077"><span id="local-6989586621679666079"><span class="annot"><span class="hs-identifier hs-type">ToJSON</span></span><span> </span><span class="annot"><a href="#local-6989586621679666082"><span class="hs-identifier hs-type">a</span></a></span><span> </span><span class="hs-glyph">=&gt;</span><span> </span><span class="annot"><span class="hs-identifier hs-type">ToJSON</span></span><span> </span><span class="hs-special">(</span><span class="annot"><a href="LaunchDarkly.Server.Details.html#EvaluationDetail"><span class="hs-identifier hs-type">EvaluationDetail</span></a></span><span> </span><span class="annot"><a href="#local-6989586621679666082"><span class="hs-identifier hs-type">a</span></a></span><span class="hs-special">)</span></span></span></span><span> </span><span class="hs-keyword">where</span><span>
+</span><span id="line-28"></span><span>    </span><span id="local-6989586621679666073"><span class="annot"><span class="annottext">toJSON :: EvaluationDetail a -&gt; Value
+</span><a href="#local-6989586621679666073"><span class="hs-identifier hs-var hs-var hs-var hs-var">toJSON</span></a></span></span><span> </span><span class="hs-glyph">=</span><span> </span><span class="annot"><span class="annottext">EvaluationDetail a -&gt; Value
+forall a. ToJSON a =&gt; a -&gt; Value
+</span><span class="hs-identifier hs-var">toJSON</span></span></span><span>
+</span><span id="line-29"></span><span>
+</span><span id="line-30"></span><span class="hs-comment">-- | Defines the possible values of the Kind property of EvaluationReason.</span><span>
+</span><span id="line-31"></span><span id="local-6989586621679666071"><span id="local-6989586621679666072"></span></span><span class="hs-keyword">data</span><span> </span><span id="EvaluationReason"><span class="annot"><a href="LaunchDarkly.Server.Details.html#EvaluationReason"><span class="hs-identifier hs-var">EvaluationReason</span></a></span></span><span>
+</span><span id="line-32"></span><span>    </span><span class="hs-glyph">=</span><span> </span><span class="hs-comment">-- | Indicates that the flag was off and therefore returned its configured</span><span>
+</span><span id="line-33"></span><span>      </span><span class="hs-comment">-- off value.</span><span>
+</span><span id="line-34"></span><span>      </span><span id="EvaluationReasonOff"><span class="annot"><a href="LaunchDarkly.Server.Details.html#EvaluationReasonOff"><span class="hs-identifier hs-var">EvaluationReasonOff</span></a></span></span><span>
+</span><span id="line-35"></span><span>    </span><span class="hs-glyph">|</span><span> </span><span class="hs-comment">-- | indicates that the context key was specifically targeted for this flag.</span><span>
+</span><span id="line-36"></span><span>      </span><span id="EvaluationReasonTargetMatch"><span class="annot"><a href="LaunchDarkly.Server.Details.html#EvaluationReasonTargetMatch"><span class="hs-identifier hs-var">EvaluationReasonTargetMatch</span></a></span></span><span>
+</span><span id="line-37"></span><span>    </span><span class="hs-glyph">|</span><span> </span><span id="EvaluationReasonRuleMatch"><span class="annot"><a href="LaunchDarkly.Server.Details.html#EvaluationReasonRuleMatch"><span class="hs-identifier hs-var">EvaluationReasonRuleMatch</span></a></span></span><span>
+</span><span id="line-38"></span><span>        </span><span class="hs-special">{</span><span> </span><span id="%24sel%3AruleIndex%3AEvaluationReasonOff"><span class="annot"><span class="annottext">EvaluationReason -&gt; Natural
+</span><a href="LaunchDarkly.Server.Details.html#%24sel%3AruleIndex%3AEvaluationReasonOff"><span class="hs-identifier hs-var hs-var">ruleIndex</span></a></span></span><span> </span><span class="hs-glyph">::</span><span> </span><span class="hs-glyph">!</span><span class="annot"><span class="hs-identifier hs-type">Natural</span></span><span>
+</span><span id="line-39"></span><span>        </span><span class="hs-comment">-- ^ The index of the rule that was matched (0 being the first).</span><span>
+</span><span id="line-40"></span><span>        </span><span class="hs-special">,</span><span> </span><span id="%24sel%3AruleId%3AEvaluationReasonOff"><span class="annot"><span class="annottext">EvaluationReason -&gt; Text
+</span><a href="LaunchDarkly.Server.Details.html#%24sel%3AruleId%3AEvaluationReasonOff"><span class="hs-identifier hs-var hs-var">ruleId</span></a></span></span><span> </span><span class="hs-glyph">::</span><span> </span><span class="hs-glyph">!</span><span class="annot"><span class="hs-identifier hs-type">Text</span></span><span>
+</span><span id="line-41"></span><span>        </span><span class="hs-comment">-- ^ The unique identifier of the rule that was matched.</span><span>
+</span><span id="line-42"></span><span>        </span><span class="hs-special">,</span><span> </span><span id="%24sel%3AinExperiment%3AEvaluationReasonOff"><span class="annot"><span class="annottext">EvaluationReason -&gt; Bool
+</span><a href="LaunchDarkly.Server.Details.html#%24sel%3AinExperiment%3AEvaluationReasonOff"><span class="hs-identifier hs-var hs-var">inExperiment</span></a></span></span><span> </span><span class="hs-glyph">::</span><span> </span><span class="hs-glyph">!</span><span class="annot"><span class="hs-identifier hs-type">Bool</span></span><span>
+</span><span id="line-43"></span><span>        </span><span class="hs-comment">-- ^ Whether the evaluation was part of an experiment. Is true if</span><span>
+</span><span id="line-44"></span><span>        </span><span class="hs-comment">-- the evaluation resulted in an experiment rollout *and* served</span><span>
+</span><span id="line-45"></span><span>        </span><span class="hs-comment">-- one of the variations in the experiment. Otherwise false.</span><span>
+</span><span id="line-46"></span><span>        </span><span class="hs-special">}</span><span>
+</span><span id="line-47"></span><span>    </span><span class="hs-glyph">|</span><span> </span><span class="hs-comment">-- \^ Indicates that the context matched one of the flag's rules.</span><span>
+</span><span id="line-48"></span><span>      </span><span id="EvaluationReasonPrerequisiteFailed"><span class="annot"><a href="LaunchDarkly.Server.Details.html#EvaluationReasonPrerequisiteFailed"><span class="hs-identifier hs-var">EvaluationReasonPrerequisiteFailed</span></a></span></span><span>
+</span><span id="line-49"></span><span>        </span><span class="hs-special">{</span><span> </span><span id="%24sel%3AprerequisiteKey%3AEvaluationReasonOff"><span class="annot"><span class="annottext">EvaluationReason -&gt; Text
+</span><a href="LaunchDarkly.Server.Details.html#%24sel%3AprerequisiteKey%3AEvaluationReasonOff"><span class="hs-identifier hs-var hs-var">prerequisiteKey</span></a></span></span><span> </span><span class="hs-glyph">::</span><span> </span><span class="hs-glyph">!</span><span class="annot"><span class="hs-identifier hs-type">Text</span></span><span>
+</span><span id="line-50"></span><span>        </span><span class="hs-comment">-- ^ The flag key of the prerequisite that failed.</span><span>
+</span><span id="line-51"></span><span>        </span><span class="hs-special">}</span><span>
+</span><span id="line-52"></span><span>    </span><span class="hs-glyph">|</span><span> </span><span class="hs-comment">-- \^ Indicates that the flag was considered off because it had at least</span><span>
+</span><span id="line-53"></span><span>      </span><span class="hs-comment">-- one prerequisite flag that either was off or did not return the desired</span><span>
+</span><span id="line-54"></span><span>      </span><span class="hs-comment">-- variation.</span><span>
+</span><span id="line-55"></span><span>      </span><span id="EvaluationReasonFallthrough"><span class="annot"><a href="LaunchDarkly.Server.Details.html#EvaluationReasonFallthrough"><span class="hs-identifier hs-var">EvaluationReasonFallthrough</span></a></span></span><span>
+</span><span id="line-56"></span><span>        </span><span class="hs-special">{</span><span> </span><span id="%24sel%3AinExperiment%3AEvaluationReasonOff"><span class="annot"><a href="LaunchDarkly.Server.Details.html#%24sel%3AinExperiment%3AEvaluationReasonOff"><span class="hs-identifier hs-var">inExperiment</span></a></span></span><span> </span><span class="hs-glyph">::</span><span> </span><span class="hs-glyph">!</span><span class="annot"><span class="hs-identifier hs-type">Bool</span></span><span>
+</span><span id="line-57"></span><span>        </span><span class="hs-comment">-- ^ Whether the evaluation was part of an experiment. Is</span><span>
+</span><span id="line-58"></span><span>        </span><span class="hs-comment">-- true if the evaluation resulted in an experiment rollout *and*</span><span>
+</span><span id="line-59"></span><span>        </span><span class="hs-comment">-- served one of the variations in the experiment. Otherwise false.</span><span>
+</span><span id="line-60"></span><span>        </span><span class="hs-special">}</span><span>
+</span><span id="line-61"></span><span>    </span><span class="hs-glyph">|</span><span> </span><span class="hs-comment">-- \^ Indicates that the flag was on but the context did not match any targets</span><span>
+</span><span id="line-62"></span><span>      </span><span class="hs-comment">-- or rules.</span><span>
+</span><span id="line-63"></span><span>      </span><span id="EvaluationReasonError"><span class="annot"><a href="LaunchDarkly.Server.Details.html#EvaluationReasonError"><span class="hs-identifier hs-var">EvaluationReasonError</span></a></span></span><span>
+</span><span id="line-64"></span><span>        </span><span class="hs-special">{</span><span> </span><span id="%24sel%3AerrorKind%3AEvaluationReasonOff"><span class="annot"><span class="annottext">EvaluationReason -&gt; EvalErrorKind
+</span><a href="LaunchDarkly.Server.Details.html#%24sel%3AerrorKind%3AEvaluationReasonOff"><span class="hs-identifier hs-var hs-var">errorKind</span></a></span></span><span> </span><span class="hs-glyph">::</span><span> </span><span class="hs-glyph">!</span><span class="annot"><a href="LaunchDarkly.Server.Details.html#EvalErrorKind"><span class="hs-identifier hs-type">EvalErrorKind</span></a></span><span>
+</span><span id="line-65"></span><span>        </span><span class="hs-comment">-- ^ Describes the type of error.</span><span>
+</span><span id="line-66"></span><span>        </span><span class="hs-special">}</span><span>
+</span><span id="line-67"></span><span>    </span><span class="hs-comment">-- \^ Indicates that the flag could not be evaluated, e.g. because it does</span><span>
+</span><span id="line-68"></span><span>    </span><span class="hs-comment">-- not exist or due to an unexpected error. In this case the result value</span><span>
+</span><span id="line-69"></span><span>    </span><span class="hs-comment">-- will be the default value that the caller passed to the client.</span><span>
+</span><span id="line-70"></span><span>    </span><span class="hs-keyword">deriving</span><span> </span><span class="hs-special">(</span><span class="annot"><span class="annottext">(forall x. EvaluationReason -&gt; Rep EvaluationReason x)
+-&gt; (forall x. Rep EvaluationReason x -&gt; EvaluationReason)
+-&gt; Generic EvaluationReason
+forall x. Rep EvaluationReason x -&gt; EvaluationReason
+forall x. EvaluationReason -&gt; Rep EvaluationReason x
+forall a.
+(forall x. a -&gt; Rep a x) -&gt; (forall x. Rep a x -&gt; a) -&gt; Generic a
+$cto :: forall x. Rep EvaluationReason x -&gt; EvaluationReason
+$cfrom :: forall x. EvaluationReason -&gt; Rep EvaluationReason x
+</span><span class="hs-identifier hs-var hs-var hs-var hs-var">Generic</span></span><span class="hs-special">,</span><span> </span><span id="local-6989586621679666054"><span id="local-6989586621679666056"><span class="annot"><span class="annottext">EvaluationReason -&gt; EvaluationReason -&gt; Bool
+(EvaluationReason -&gt; EvaluationReason -&gt; Bool)
+-&gt; (EvaluationReason -&gt; EvaluationReason -&gt; Bool)
+-&gt; Eq EvaluationReason
+forall a. (a -&gt; a -&gt; Bool) -&gt; (a -&gt; a -&gt; Bool) -&gt; Eq a
+/= :: EvaluationReason -&gt; EvaluationReason -&gt; Bool
+$c/= :: EvaluationReason -&gt; EvaluationReason -&gt; Bool
+== :: EvaluationReason -&gt; EvaluationReason -&gt; Bool
+$c== :: EvaluationReason -&gt; EvaluationReason -&gt; Bool
+</span><span class="hs-identifier hs-var hs-var hs-var hs-var hs-var hs-var">Eq</span></span></span></span><span class="hs-special">,</span><span> </span><span id="local-6989586621679666048"><span id="local-6989586621679666050"><span id="local-6989586621679666052"><span class="annot"><span class="annottext">Int -&gt; EvaluationReason -&gt; ShowS
+[EvaluationReason] -&gt; ShowS
+EvaluationReason -&gt; String
+(Int -&gt; EvaluationReason -&gt; ShowS)
+-&gt; (EvaluationReason -&gt; String)
+-&gt; ([EvaluationReason] -&gt; ShowS)
+-&gt; Show EvaluationReason
+forall a.
+(Int -&gt; a -&gt; ShowS) -&gt; (a -&gt; String) -&gt; ([a] -&gt; ShowS) -&gt; Show a
+showList :: [EvaluationReason] -&gt; ShowS
+$cshowList :: [EvaluationReason] -&gt; ShowS
+show :: EvaluationReason -&gt; String
+$cshow :: EvaluationReason -&gt; String
+showsPrec :: Int -&gt; EvaluationReason -&gt; ShowS
+$cshowsPrec :: Int -&gt; EvaluationReason -&gt; ShowS
+</span><span class="hs-identifier hs-var hs-var hs-var hs-var hs-var hs-var hs-var hs-var">Show</span></span></span></span></span><span class="hs-special">)</span><span>
+</span><span id="line-71"></span><span>
+</span><span id="line-72"></span><span class="hs-keyword">instance</span><span> </span><span id="local-6989586621679666041"><span id="local-6989586621679666043"><span id="local-6989586621679666045"><span class="annot"><span class="hs-identifier hs-type">ToJSON</span></span><span> </span><span class="annot"><a href="LaunchDarkly.Server.Details.html#EvaluationReason"><span class="hs-identifier hs-type">EvaluationReason</span></a></span></span></span></span><span> </span><span class="hs-keyword">where</span><span>
+</span><span id="line-73"></span><span>    </span><span id="local-6989586621679666040"><span class="annot"><span class="annottext">toJSON :: EvaluationReason -&gt; Value
+</span><a href="#local-6989586621679666040"><span class="hs-identifier hs-var hs-var hs-var hs-var">toJSON</span></a></span></span><span> </span><span id="local-6989586621679666039"><span class="annot"><span class="annottext">x :: EvaluationReason
+</span><a href="#local-6989586621679666039"><span class="hs-identifier hs-var">x</span></a></span></span><span> </span><span class="hs-glyph">=</span><span> </span><span class="hs-keyword">case</span><span> </span><span class="annot"><span class="annottext">EvaluationReason
+</span><a href="#local-6989586621679666039"><span class="hs-identifier hs-var">x</span></a></span><span> </span><span class="hs-keyword">of</span><span>
+</span><span id="line-74"></span><span>        </span><span class="annot"><a href="LaunchDarkly.Server.Details.html#EvaluationReasonOff"><span class="hs-identifier hs-type">EvaluationReasonOff</span></a></span><span> </span><span class="hs-glyph">-&gt;</span><span>
+</span><span id="line-75"></span><span>            </span><span class="annot"><span class="annottext">Object -&gt; Value
+</span><span class="hs-identifier hs-var">Object</span></span><span> </span><span class="annot"><span class="annottext">(Object -&gt; Value) -&gt; Object -&gt; Value
+forall a b. (a -&gt; b) -&gt; a -&gt; b
+</span><span class="hs-operator hs-var">$</span></span><span> </span><span class="annot"><span class="annottext">[Item Object] -&gt; Object
+forall l. IsList l =&gt; [Item l] -&gt; l
+</span><span class="hs-identifier hs-var">fromList</span></span><span> </span><span class="hs-special">[</span><span class="hs-special">(</span><span class="annot"><span class="hs-string">&quot;kind&quot;</span></span><span class="hs-special">,</span><span> </span><span class="annot"><span class="hs-string">&quot;OFF&quot;</span></span><span class="hs-special">)</span><span class="hs-special">]</span><span>
+</span><span id="line-76"></span><span>        </span><span class="annot"><a href="LaunchDarkly.Server.Details.html#EvaluationReasonTargetMatch"><span class="hs-identifier hs-type">EvaluationReasonTargetMatch</span></a></span><span> </span><span class="hs-glyph">-&gt;</span><span>
+</span><span id="line-77"></span><span>            </span><span class="annot"><span class="annottext">Object -&gt; Value
+</span><span class="hs-identifier hs-var">Object</span></span><span> </span><span class="annot"><span class="annottext">(Object -&gt; Value) -&gt; Object -&gt; Value
+forall a b. (a -&gt; b) -&gt; a -&gt; b
+</span><span class="hs-operator hs-var">$</span></span><span> </span><span class="annot"><span class="annottext">[Item Object] -&gt; Object
+forall l. IsList l =&gt; [Item l] -&gt; l
+</span><span class="hs-identifier hs-var">fromList</span></span><span> </span><span class="hs-special">[</span><span class="hs-special">(</span><span class="annot"><span class="hs-string">&quot;kind&quot;</span></span><span class="hs-special">,</span><span> </span><span class="annot"><span class="hs-string">&quot;TARGET_MATCH&quot;</span></span><span class="hs-special">)</span><span class="hs-special">]</span><span>
+</span><span id="line-78"></span><span>        </span><span class="hs-special">(</span><span class="annot"><a href="LaunchDarkly.Server.Details.html#EvaluationReasonRuleMatch"><span class="hs-identifier hs-type">EvaluationReasonRuleMatch</span></a></span><span> </span><span id="local-6989586621679666037"><span class="annot"><span class="annottext">ruleIndex :: Natural
+</span><a href="#local-6989586621679666037"><span class="hs-identifier hs-var">ruleIndex</span></a></span></span><span> </span><span id="local-6989586621679666036"><span class="annot"><span class="annottext">ruleId :: Text
+</span><a href="#local-6989586621679666036"><span class="hs-identifier hs-var">ruleId</span></a></span></span><span> </span><span class="annot"><span class="hs-identifier hs-type">True</span></span><span class="hs-special">)</span><span> </span><span class="hs-glyph">-&gt;</span><span>
+</span><span id="line-79"></span><span>            </span><span class="annot"><span class="annottext">Object -&gt; Value
+</span><span class="hs-identifier hs-var">Object</span></span><span> </span><span class="annot"><span class="annottext">(Object -&gt; Value) -&gt; Object -&gt; Value
+forall a b. (a -&gt; b) -&gt; a -&gt; b
+</span><span class="hs-operator hs-var">$</span></span><span> </span><span class="annot"><span class="annottext">[Item Object] -&gt; Object
+forall l. IsList l =&gt; [Item l] -&gt; l
+</span><span class="hs-identifier hs-var">fromList</span></span><span> </span><span class="hs-special">[</span><span class="hs-special">(</span><span class="annot"><span class="hs-string">&quot;kind&quot;</span></span><span class="hs-special">,</span><span> </span><span class="annot"><span class="hs-string">&quot;RULE_MATCH&quot;</span></span><span class="hs-special">)</span><span class="hs-special">,</span><span> </span><span class="hs-special">(</span><span class="annot"><span class="hs-string">&quot;ruleIndex&quot;</span></span><span class="hs-special">,</span><span> </span><span class="annot"><span class="annottext">Natural -&gt; Value
+forall a. ToJSON a =&gt; a -&gt; Value
+</span><span class="hs-identifier hs-var">toJSON</span></span><span> </span><span class="annot"><span class="annottext">Natural
+</span><a href="#local-6989586621679666037"><span class="hs-identifier hs-var">ruleIndex</span></a></span><span class="hs-special">)</span><span class="hs-special">,</span><span> </span><span class="hs-special">(</span><span class="annot"><span class="hs-string">&quot;ruleId&quot;</span></span><span class="hs-special">,</span><span> </span><span class="annot"><span class="annottext">Text -&gt; Value
+forall a. ToJSON a =&gt; a -&gt; Value
+</span><span class="hs-identifier hs-var">toJSON</span></span><span> </span><span class="annot"><span class="annottext">Text
+</span><a href="#local-6989586621679666036"><span class="hs-identifier hs-var">ruleId</span></a></span><span class="hs-special">)</span><span class="hs-special">,</span><span> </span><span class="hs-special">(</span><span class="annot"><span class="hs-string">&quot;inExperiment&quot;</span></span><span class="hs-special">,</span><span> </span><span class="annot"><span class="annottext">Bool -&gt; Value
+forall a. ToJSON a =&gt; a -&gt; Value
+</span><span class="hs-identifier hs-var">toJSON</span></span><span> </span><span class="annot"><span class="annottext">Bool
+</span><span class="hs-identifier hs-var">True</span></span><span class="hs-special">)</span><span class="hs-special">]</span><span>
+</span><span id="line-80"></span><span>        </span><span class="hs-special">(</span><span class="annot"><a href="LaunchDarkly.Server.Details.html#EvaluationReasonRuleMatch"><span class="hs-identifier hs-type">EvaluationReasonRuleMatch</span></a></span><span> </span><span id="local-6989586621679666035"><span class="annot"><span class="annottext">ruleIndex :: Natural
+</span><a href="#local-6989586621679666035"><span class="hs-identifier hs-var">ruleIndex</span></a></span></span><span> </span><span id="local-6989586621679666034"><span class="annot"><span class="annottext">ruleId :: Text
+</span><a href="#local-6989586621679666034"><span class="hs-identifier hs-var">ruleId</span></a></span></span><span> </span><span class="annot"><span class="hs-identifier hs-type">False</span></span><span class="hs-special">)</span><span> </span><span class="hs-glyph">-&gt;</span><span>
+</span><span id="line-81"></span><span>            </span><span class="annot"><span class="annottext">Object -&gt; Value
+</span><span class="hs-identifier hs-var">Object</span></span><span> </span><span class="annot"><span class="annottext">(Object -&gt; Value) -&gt; Object -&gt; Value
+forall a b. (a -&gt; b) -&gt; a -&gt; b
+</span><span class="hs-operator hs-var">$</span></span><span> </span><span class="annot"><span class="annottext">[Item Object] -&gt; Object
+forall l. IsList l =&gt; [Item l] -&gt; l
+</span><span class="hs-identifier hs-var">fromList</span></span><span> </span><span class="hs-special">[</span><span class="hs-special">(</span><span class="annot"><span class="hs-string">&quot;kind&quot;</span></span><span class="hs-special">,</span><span> </span><span class="annot"><span class="hs-string">&quot;RULE_MATCH&quot;</span></span><span class="hs-special">)</span><span class="hs-special">,</span><span> </span><span class="hs-special">(</span><span class="annot"><span class="hs-string">&quot;ruleIndex&quot;</span></span><span class="hs-special">,</span><span> </span><span class="annot"><span class="annottext">Natural -&gt; Value
+forall a. ToJSON a =&gt; a -&gt; Value
+</span><span class="hs-identifier hs-var">toJSON</span></span><span> </span><span class="annot"><span class="annottext">Natural
+</span><a href="#local-6989586621679666035"><span class="hs-identifier hs-var">ruleIndex</span></a></span><span class="hs-special">)</span><span class="hs-special">,</span><span> </span><span class="hs-special">(</span><span class="annot"><span class="hs-string">&quot;ruleId&quot;</span></span><span class="hs-special">,</span><span> </span><span class="annot"><span class="annottext">Text -&gt; Value
+forall a. ToJSON a =&gt; a -&gt; Value
+</span><span class="hs-identifier hs-var">toJSON</span></span><span> </span><span class="annot"><span class="annottext">Text
+</span><a href="#local-6989586621679666034"><span class="hs-identifier hs-var">ruleId</span></a></span><span class="hs-special">)</span><span class="hs-special">]</span><span>
+</span><span id="line-82"></span><span>        </span><span class="hs-special">(</span><span class="annot"><a href="LaunchDarkly.Server.Details.html#EvaluationReasonPrerequisiteFailed"><span class="hs-identifier hs-type">EvaluationReasonPrerequisiteFailed</span></a></span><span> </span><span id="local-6989586621679666033"><span class="annot"><span class="annottext">prerequisiteKey :: Text
+</span><a href="#local-6989586621679666033"><span class="hs-identifier hs-var">prerequisiteKey</span></a></span></span><span class="hs-special">)</span><span> </span><span class="hs-glyph">-&gt;</span><span>
+</span><span id="line-83"></span><span>            </span><span class="annot"><span class="annottext">Object -&gt; Value
+</span><span class="hs-identifier hs-var">Object</span></span><span> </span><span class="annot"><span class="annottext">(Object -&gt; Value) -&gt; Object -&gt; Value
+forall a b. (a -&gt; b) -&gt; a -&gt; b
+</span><span class="hs-operator hs-var">$</span></span><span> </span><span class="annot"><span class="annottext">[Item Object] -&gt; Object
+forall l. IsList l =&gt; [Item l] -&gt; l
+</span><span class="hs-identifier hs-var">fromList</span></span><span> </span><span class="hs-special">[</span><span class="hs-special">(</span><span class="annot"><span class="hs-string">&quot;kind&quot;</span></span><span class="hs-special">,</span><span> </span><span class="annot"><span class="hs-string">&quot;PREREQUISITE_FAILED&quot;</span></span><span class="hs-special">)</span><span class="hs-special">,</span><span> </span><span class="hs-special">(</span><span class="annot"><span class="hs-string">&quot;prerequisiteKey&quot;</span></span><span class="hs-special">,</span><span> </span><span class="annot"><span class="annottext">Text -&gt; Value
+forall a. ToJSON a =&gt; a -&gt; Value
+</span><span class="hs-identifier hs-var">toJSON</span></span><span> </span><span class="annot"><span class="annottext">Text
+</span><a href="#local-6989586621679666033"><span class="hs-identifier hs-var">prerequisiteKey</span></a></span><span class="hs-special">)</span><span class="hs-special">]</span><span>
+</span><span id="line-84"></span><span>        </span><span class="annot"><a href="LaunchDarkly.Server.Details.html#EvaluationReasonFallthrough"><span class="hs-identifier hs-type">EvaluationReasonFallthrough</span></a></span><span> </span><span class="annot"><span class="hs-identifier hs-type">True</span></span><span> </span><span class="hs-glyph">-&gt;</span><span>
+</span><span id="line-85"></span><span>            </span><span class="annot"><span class="annottext">Object -&gt; Value
+</span><span class="hs-identifier hs-var">Object</span></span><span> </span><span class="annot"><span class="annottext">(Object -&gt; Value) -&gt; Object -&gt; Value
+forall a b. (a -&gt; b) -&gt; a -&gt; b
+</span><span class="hs-operator hs-var">$</span></span><span> </span><span class="annot"><span class="annottext">[Item Object] -&gt; Object
+forall l. IsList l =&gt; [Item l] -&gt; l
+</span><span class="hs-identifier hs-var">fromList</span></span><span> </span><span class="hs-special">[</span><span class="hs-special">(</span><span class="annot"><span class="hs-string">&quot;kind&quot;</span></span><span class="hs-special">,</span><span> </span><span class="annot"><span class="hs-string">&quot;FALLTHROUGH&quot;</span></span><span class="hs-special">)</span><span class="hs-special">,</span><span> </span><span class="hs-special">(</span><span class="annot"><span class="hs-string">&quot;inExperiment&quot;</span></span><span class="hs-special">,</span><span> </span><span class="annot"><span class="annottext">Bool -&gt; Value
+forall a. ToJSON a =&gt; a -&gt; Value
+</span><span class="hs-identifier hs-var">toJSON</span></span><span> </span><span class="annot"><span class="annottext">Bool
+</span><span class="hs-identifier hs-var">True</span></span><span class="hs-special">)</span><span class="hs-special">]</span><span>
+</span><span id="line-86"></span><span>        </span><span class="annot"><a href="LaunchDarkly.Server.Details.html#EvaluationReasonFallthrough"><span class="hs-identifier hs-type">EvaluationReasonFallthrough</span></a></span><span> </span><span class="annot"><span class="hs-identifier hs-type">False</span></span><span> </span><span class="hs-glyph">-&gt;</span><span>
+</span><span id="line-87"></span><span>            </span><span class="annot"><span class="annottext">Object -&gt; Value
+</span><span class="hs-identifier hs-var">Object</span></span><span> </span><span class="annot"><span class="annottext">(Object -&gt; Value) -&gt; Object -&gt; Value
+forall a b. (a -&gt; b) -&gt; a -&gt; b
+</span><span class="hs-operator hs-var">$</span></span><span> </span><span class="annot"><span class="annottext">[Item Object] -&gt; Object
+forall l. IsList l =&gt; [Item l] -&gt; l
+</span><span class="hs-identifier hs-var">fromList</span></span><span> </span><span class="hs-special">[</span><span class="hs-special">(</span><span class="annot"><span class="hs-string">&quot;kind&quot;</span></span><span class="hs-special">,</span><span> </span><span class="annot"><span class="hs-string">&quot;FALLTHROUGH&quot;</span></span><span class="hs-special">)</span><span class="hs-special">]</span><span>
+</span><span id="line-88"></span><span>        </span><span class="hs-special">(</span><span class="annot"><a href="LaunchDarkly.Server.Details.html#EvaluationReasonError"><span class="hs-identifier hs-type">EvaluationReasonError</span></a></span><span> </span><span id="local-6989586621679666032"><span class="annot"><span class="annottext">errorKind :: EvalErrorKind
+</span><a href="#local-6989586621679666032"><span class="hs-identifier hs-var">errorKind</span></a></span></span><span class="hs-special">)</span><span> </span><span class="hs-glyph">-&gt;</span><span>
+</span><span id="line-89"></span><span>            </span><span class="annot"><span class="annottext">Object -&gt; Value
+</span><span class="hs-identifier hs-var">Object</span></span><span> </span><span class="annot"><span class="annottext">(Object -&gt; Value) -&gt; Object -&gt; Value
+forall a b. (a -&gt; b) -&gt; a -&gt; b
+</span><span class="hs-operator hs-var">$</span></span><span> </span><span class="annot"><span class="annottext">[Item Object] -&gt; Object
+forall l. IsList l =&gt; [Item l] -&gt; l
+</span><span class="hs-identifier hs-var">fromList</span></span><span> </span><span class="hs-special">[</span><span class="hs-special">(</span><span class="annot"><span class="hs-string">&quot;kind&quot;</span></span><span class="hs-special">,</span><span> </span><span class="annot"><span class="hs-string">&quot;ERROR&quot;</span></span><span class="hs-special">)</span><span class="hs-special">,</span><span> </span><span class="hs-special">(</span><span class="annot"><span class="hs-string">&quot;errorKind&quot;</span></span><span class="hs-special">,</span><span> </span><span class="annot"><span class="annottext">EvalErrorKind -&gt; Value
+forall a. ToJSON a =&gt; a -&gt; Value
+</span><span class="hs-identifier hs-var">toJSON</span></span><span> </span><span class="annot"><span class="annottext">EvalErrorKind
+</span><a href="#local-6989586621679666032"><span class="hs-identifier hs-var">errorKind</span></a></span><span class="hs-special">)</span><span class="hs-special">]</span><span>
+</span><span id="line-90"></span><span>
+</span><span id="line-91"></span><span class="annot"><a href="LaunchDarkly.Server.Details.html#isInExperiment"><span class="hs-identifier hs-type">isInExperiment</span></a></span><span> </span><span class="hs-glyph">::</span><span> </span><span class="annot"><a href="LaunchDarkly.Server.Details.html#EvaluationReason"><span class="hs-identifier hs-type">EvaluationReason</span></a></span><span> </span><span class="hs-glyph">-&gt;</span><span> </span><span class="annot"><span class="hs-identifier hs-type">Bool</span></span><span>
+</span><span id="line-92"></span><span id="isInExperiment"><span class="annot"><span class="annottext">isInExperiment :: EvaluationReason -&gt; Bool
+</span><a href="LaunchDarkly.Server.Details.html#isInExperiment"><span class="hs-identifier hs-var hs-var">isInExperiment</span></a></span></span><span> </span><span id="local-6989586621679666030"><span class="annot"><span class="annottext">reason :: EvaluationReason
+</span><a href="#local-6989586621679666030"><span class="hs-identifier hs-var">reason</span></a></span></span><span> </span><span class="hs-glyph">=</span><span> </span><span class="hs-keyword">case</span><span> </span><span class="annot"><span class="annottext">EvaluationReason
+</span><a href="#local-6989586621679666030"><span class="hs-identifier hs-var">reason</span></a></span><span> </span><span class="hs-keyword">of</span><span>
+</span><span id="line-93"></span><span>    </span><span class="annot"><a href="LaunchDarkly.Server.Details.html#EvaluationReasonRuleMatch"><span class="hs-identifier hs-type">EvaluationReasonRuleMatch</span></a></span><span> </span><span class="hs-identifier">_</span><span> </span><span class="hs-identifier">_</span><span> </span><span id="local-6989586621679666029"><span class="annot"><span class="annottext">inExperiment :: Bool
+</span><a href="#local-6989586621679666029"><span class="hs-identifier hs-var">inExperiment</span></a></span></span><span> </span><span class="hs-glyph">-&gt;</span><span> </span><span class="annot"><span class="annottext">Bool
+</span><a href="#local-6989586621679666029"><span class="hs-identifier hs-var">inExperiment</span></a></span><span>
+</span><span id="line-94"></span><span>    </span><span class="annot"><a href="LaunchDarkly.Server.Details.html#EvaluationReasonFallthrough"><span class="hs-identifier hs-type">EvaluationReasonFallthrough</span></a></span><span> </span><span id="local-6989586621679666028"><span class="annot"><span class="annottext">inExperiment :: Bool
+</span><a href="#local-6989586621679666028"><span class="hs-identifier hs-var">inExperiment</span></a></span></span><span> </span><span class="hs-glyph">-&gt;</span><span> </span><span class="annot"><span class="annottext">Bool
+</span><a href="#local-6989586621679666028"><span class="hs-identifier hs-var">inExperiment</span></a></span><span>
+</span><span id="line-95"></span><span>    </span><span class="hs-identifier">_</span><span> </span><span class="hs-glyph">-&gt;</span><span> </span><span class="annot"><span class="annottext">Bool
+</span><span class="hs-identifier hs-var">False</span></span><span>
+</span><span id="line-96"></span><span>
+</span><span id="line-97"></span><span class="hs-comment">-- | Defines the possible values of the errorKind property of EvaluationReason.</span><span>
+</span><span id="line-98"></span><span id="local-6989586621679666026"><span id="local-6989586621679666027"></span></span><span class="hs-keyword">data</span><span> </span><span id="EvalErrorKind"><span class="annot"><a href="LaunchDarkly.Server.Details.html#EvalErrorKind"><span class="hs-identifier hs-var">EvalErrorKind</span></a></span></span><span>
+</span><span id="line-99"></span><span>    </span><span class="hs-glyph">=</span><span> </span><span class="hs-comment">-- | Indicates that there was an internal inconsistency in the flag data,</span><span>
+</span><span id="line-100"></span><span>      </span><span class="hs-comment">-- e.g. a rule specified a nonexistent variation.</span><span>
+</span><span id="line-101"></span><span>      </span><span id="EvalErrorKindMalformedFlag"><span class="annot"><a href="LaunchDarkly.Server.Details.html#EvalErrorKindMalformedFlag"><span class="hs-identifier hs-var">EvalErrorKindMalformedFlag</span></a></span></span><span>
+</span><span id="line-102"></span><span>    </span><span class="hs-glyph">|</span><span> </span><span class="hs-comment">-- | Indicates that the caller provided a flag key that did not match any</span><span>
+</span><span id="line-103"></span><span>      </span><span class="hs-comment">-- known flag.</span><span>
+</span><span id="line-104"></span><span>      </span><span id="EvalErrorFlagNotFound"><span class="annot"><a href="LaunchDarkly.Server.Details.html#EvalErrorFlagNotFound"><span class="hs-identifier hs-var">EvalErrorFlagNotFound</span></a></span></span><span>
+</span><span id="line-105"></span><span>    </span><span class="hs-glyph">|</span><span> </span><span class="hs-comment">-- | Indicates that the result value was not of the requested type, e.g.</span><span>
+</span><span id="line-106"></span><span>      </span><span class="hs-comment">-- you called boolVariationDetail but the value was an integer.</span><span>
+</span><span id="line-107"></span><span>      </span><span id="EvalErrorWrongType"><span class="annot"><a href="LaunchDarkly.Server.Details.html#EvalErrorWrongType"><span class="hs-identifier hs-var">EvalErrorWrongType</span></a></span></span><span>
+</span><span id="line-108"></span><span>    </span><span class="hs-glyph">|</span><span> </span><span class="hs-comment">-- | Indicates that the caller tried to evaluate a flag before the client</span><span>
+</span><span id="line-109"></span><span>      </span><span class="hs-comment">-- had successfully initialized.</span><span>
+</span><span id="line-110"></span><span>      </span><span id="EvalErrorClientNotReady"><span class="annot"><a href="LaunchDarkly.Server.Details.html#EvalErrorClientNotReady"><span class="hs-identifier hs-var">EvalErrorClientNotReady</span></a></span></span><span>
+</span><span id="line-111"></span><span>    </span><span class="hs-glyph">|</span><span> </span><span class="hs-comment">-- | Indicates that the caller tried to evaluate a flag with an invalid</span><span>
+</span><span id="line-112"></span><span>      </span><span class="hs-comment">-- context</span><span>
+</span><span id="line-113"></span><span>      </span><span id="EvalErrorInvalidContext"><span class="annot"><a href="LaunchDarkly.Server.Details.html#EvalErrorInvalidContext"><span class="hs-identifier hs-var">EvalErrorInvalidContext</span></a></span></span><span>
+</span><span id="line-114"></span><span>    </span><span class="hs-glyph">|</span><span> </span><span class="hs-comment">-- | Indicates that some error was returned by the external feature store.</span><span>
+</span><span id="line-115"></span><span>      </span><span id="EvalErrorExternalStore"><span class="annot"><a href="LaunchDarkly.Server.Details.html#EvalErrorExternalStore"><span class="hs-identifier hs-var">EvalErrorExternalStore</span></a></span></span><span> </span><span class="hs-glyph">!</span><span class="annot"><span class="hs-identifier hs-type">Text</span></span><span>
+</span><span id="line-116"></span><span>    </span><span class="hs-keyword">deriving</span><span> </span><span class="hs-special">(</span><span class="annot"><span class="annottext">(forall x. EvalErrorKind -&gt; Rep EvalErrorKind x)
+-&gt; (forall x. Rep EvalErrorKind x -&gt; EvalErrorKind)
+-&gt; Generic EvalErrorKind
+forall x. Rep EvalErrorKind x -&gt; EvalErrorKind
+forall x. EvalErrorKind -&gt; Rep EvalErrorKind x
+forall a.
+(forall x. a -&gt; Rep a x) -&gt; (forall x. Rep a x -&gt; a) -&gt; Generic a
+$cto :: forall x. Rep EvalErrorKind x -&gt; EvalErrorKind
+$cfrom :: forall x. EvalErrorKind -&gt; Rep EvalErrorKind x
+</span><span class="hs-identifier hs-var hs-var hs-var hs-var">Generic</span></span><span class="hs-special">,</span><span> </span><span id="local-6989586621679666014"><span id="local-6989586621679666016"><span class="annot"><span class="annottext">EvalErrorKind -&gt; EvalErrorKind -&gt; Bool
+(EvalErrorKind -&gt; EvalErrorKind -&gt; Bool)
+-&gt; (EvalErrorKind -&gt; EvalErrorKind -&gt; Bool) -&gt; Eq EvalErrorKind
+forall a. (a -&gt; a -&gt; Bool) -&gt; (a -&gt; a -&gt; Bool) -&gt; Eq a
+/= :: EvalErrorKind -&gt; EvalErrorKind -&gt; Bool
+$c/= :: EvalErrorKind -&gt; EvalErrorKind -&gt; Bool
+== :: EvalErrorKind -&gt; EvalErrorKind -&gt; Bool
+$c== :: EvalErrorKind -&gt; EvalErrorKind -&gt; Bool
+</span><span class="hs-identifier hs-var hs-var hs-var hs-var hs-var hs-var">Eq</span></span></span></span><span class="hs-special">,</span><span> </span><span id="local-6989586621679666008"><span id="local-6989586621679666010"><span id="local-6989586621679666012"><span class="annot"><span class="annottext">Int -&gt; EvalErrorKind -&gt; ShowS
+[EvalErrorKind] -&gt; ShowS
+EvalErrorKind -&gt; String
+(Int -&gt; EvalErrorKind -&gt; ShowS)
+-&gt; (EvalErrorKind -&gt; String)
+-&gt; ([EvalErrorKind] -&gt; ShowS)
+-&gt; Show EvalErrorKind
+forall a.
+(Int -&gt; a -&gt; ShowS) -&gt; (a -&gt; String) -&gt; ([a] -&gt; ShowS) -&gt; Show a
+showList :: [EvalErrorKind] -&gt; ShowS
+$cshowList :: [EvalErrorKind] -&gt; ShowS
+show :: EvalErrorKind -&gt; String
+$cshow :: EvalErrorKind -&gt; String
+showsPrec :: Int -&gt; EvalErrorKind -&gt; ShowS
+$cshowsPrec :: Int -&gt; EvalErrorKind -&gt; ShowS
+</span><span class="hs-identifier hs-var hs-var hs-var hs-var hs-var hs-var hs-var hs-var">Show</span></span></span></span></span><span class="hs-special">)</span><span>
+</span><span id="line-117"></span><span>
+</span><span id="line-118"></span><span class="hs-keyword">instance</span><span> </span><span id="local-6989586621679666001"><span id="local-6989586621679666003"><span id="local-6989586621679666005"><span class="annot"><span class="hs-identifier hs-type">ToJSON</span></span><span> </span><span class="annot"><a href="LaunchDarkly.Server.Details.html#EvalErrorKind"><span class="hs-identifier hs-type">EvalErrorKind</span></a></span></span></span></span><span> </span><span class="hs-keyword">where</span><span>
+</span><span id="line-119"></span><span>    </span><span id="local-6989586621679666000"><span class="annot"><span class="annottext">toJSON :: EvalErrorKind -&gt; Value
+</span><a href="#local-6989586621679666000"><span class="hs-identifier hs-var hs-var hs-var hs-var">toJSON</span></a></span></span><span> </span><span id="local-6989586621679665999"><span class="annot"><span class="annottext">x :: EvalErrorKind
+</span><a href="#local-6989586621679665999"><span class="hs-identifier hs-var">x</span></a></span></span><span> </span><span class="hs-glyph">=</span><span> </span><span class="annot"><span class="annottext">Text -&gt; Value
+</span><span class="hs-identifier hs-var">String</span></span><span> </span><span class="annot"><span class="annottext">(Text -&gt; Value) -&gt; Text -&gt; Value
+forall a b. (a -&gt; b) -&gt; a -&gt; b
+</span><span class="hs-operator hs-var">$</span></span><span> </span><span class="hs-keyword">case</span><span> </span><span class="annot"><span class="annottext">EvalErrorKind
+</span><a href="#local-6989586621679665999"><span class="hs-identifier hs-var">x</span></a></span><span> </span><span class="hs-keyword">of</span><span>
+</span><span id="line-120"></span><span>        </span><span class="annot"><a href="LaunchDarkly.Server.Details.html#EvalErrorKindMalformedFlag"><span class="hs-identifier hs-type">EvalErrorKindMalformedFlag</span></a></span><span> </span><span class="hs-glyph">-&gt;</span><span> </span><span class="annot"><span class="hs-string">&quot;MALFORMED_FLAG&quot;</span></span><span>
+</span><span id="line-121"></span><span>        </span><span class="annot"><a href="LaunchDarkly.Server.Details.html#EvalErrorFlagNotFound"><span class="hs-identifier hs-type">EvalErrorFlagNotFound</span></a></span><span> </span><span class="hs-glyph">-&gt;</span><span> </span><span class="annot"><span class="hs-string">&quot;FLAG_NOT_FOUND&quot;</span></span><span>
+</span><span id="line-122"></span><span>        </span><span class="annot"><a href="LaunchDarkly.Server.Details.html#EvalErrorWrongType"><span class="hs-identifier hs-type">EvalErrorWrongType</span></a></span><span> </span><span class="hs-glyph">-&gt;</span><span> </span><span class="annot"><span class="hs-string">&quot;WRONG_TYPE&quot;</span></span><span>
+</span><span id="line-123"></span><span>        </span><span class="annot"><a href="LaunchDarkly.Server.Details.html#EvalErrorClientNotReady"><span class="hs-identifier hs-type">EvalErrorClientNotReady</span></a></span><span> </span><span class="hs-glyph">-&gt;</span><span> </span><span class="annot"><span class="hs-string">&quot;CLIENT_NOT_READY&quot;</span></span><span>
+</span><span id="line-124"></span><span>        </span><span class="annot"><a href="LaunchDarkly.Server.Details.html#EvalErrorExternalStore"><span class="hs-identifier hs-type">EvalErrorExternalStore</span></a></span><span> </span><span class="hs-identifier">_</span><span> </span><span class="hs-glyph">-&gt;</span><span> </span><span class="annot"><span class="hs-string">&quot;EXTERNAL_STORE_ERROR&quot;</span></span><span>
+</span><span id="line-125"></span><span>        </span><span class="annot"><a href="LaunchDarkly.Server.Details.html#EvalErrorInvalidContext"><span class="hs-identifier hs-type">EvalErrorInvalidContext</span></a></span><span> </span><span class="hs-glyph">-&gt;</span><span> </span><span class="annot"><span class="hs-string">&quot;ERROR_INVALID_CONTEXT&quot;</span></span><span>
+</span><span id="line-126"></span></pre></body></html>

@@ -1,0 +1,321 @@
+<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Transitional//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-transitional.dtd"><html xmlns="http://www.w3.org/1999/xhtml"><head><link rel="stylesheet" type="text/css" href="style.css" /><script type="text/javascript" src="highlight.js"></script></head><body><pre><span class="hs-keyword">module</span><span> </span><span class="hs-identifier">LaunchDarkly.Server.Network.Common</span><span>
+</span><span id="line-2"></span><span>    </span><span class="hs-special">(</span><span> </span><span class="annot"><a href="LaunchDarkly.Server.Network.Common.html#withResponseGeneric"><span class="hs-identifier">withResponseGeneric</span></a></span><span>
+</span><span id="line-3"></span><span>    </span><span class="hs-special">,</span><span> </span><span class="annot"><a href="LaunchDarkly.Server.Network.Common.html#tryAuthorized"><span class="hs-identifier">tryAuthorized</span></a></span><span>
+</span><span id="line-4"></span><span>    </span><span class="hs-special">,</span><span> </span><span class="annot"><a href="LaunchDarkly.Server.Network.Common.html#checkAuthorization"><span class="hs-identifier">checkAuthorization</span></a></span><span>
+</span><span id="line-5"></span><span>    </span><span class="hs-special">,</span><span> </span><span class="annot"><a href="LaunchDarkly.Server.Network.Common.html#throwIfNot200"><span class="hs-identifier">throwIfNot200</span></a></span><span>
+</span><span id="line-6"></span><span>    </span><span class="hs-special">,</span><span> </span><span class="annot"><a href="LaunchDarkly.Server.Network.Common.html#getServerTime"><span class="hs-identifier">getServerTime</span></a></span><span>
+</span><span id="line-7"></span><span>    </span><span class="hs-special">,</span><span> </span><span class="annot"><a href="LaunchDarkly.Server.Network.Common.html#tryHTTP"><span class="hs-identifier">tryHTTP</span></a></span><span>
+</span><span id="line-8"></span><span>    </span><span class="hs-special">,</span><span> </span><span class="annot"><a href="LaunchDarkly.Server.Network.Common.html#addToAL"><span class="hs-identifier">addToAL</span></a></span><span>
+</span><span id="line-9"></span><span>    </span><span class="hs-special">,</span><span> </span><span class="annot"><a href="LaunchDarkly.Server.Network.Common.html#handleUnauthorized"><span class="hs-identifier">handleUnauthorized</span></a></span><span>
+</span><span id="line-10"></span><span>    </span><span class="hs-special">,</span><span> </span><span class="annot"><a href="LaunchDarkly.Server.Network.Common.html#isHttpUnrecoverable"><span class="hs-identifier">isHttpUnrecoverable</span></a></span><span>
+</span><span id="line-11"></span><span>    </span><span class="hs-special">)</span><span> </span><span class="hs-keyword">where</span><span>
+</span><span id="line-12"></span><span>
+</span><span id="line-13"></span><span class="hs-keyword">import</span><span> </span><span class="annot"><span class="hs-identifier">Control.Monad</span></span><span> </span><span class="hs-special">(</span><span class="annot"><span class="hs-identifier">when</span></span><span class="hs-special">)</span><span>
+</span><span id="line-14"></span><span class="hs-keyword">import</span><span> </span><span class="annot"><span class="hs-identifier">Control.Monad.Catch</span></span><span> </span><span class="hs-special">(</span><span class="annot"><span class="hs-identifier">Exception</span></span><span class="hs-special">,</span><span> </span><span class="annot"><span class="hs-identifier">MonadCatch</span></span><span class="hs-special">,</span><span> </span><span class="annot"><span class="hs-identifier">MonadMask</span></span><span class="hs-special">,</span><span> </span><span class="annot"><span class="hs-identifier">MonadThrow</span></span><span class="hs-special">,</span><span> </span><span class="annot"><span class="hs-identifier">bracket</span></span><span class="hs-special">,</span><span> </span><span class="annot"><span class="hs-identifier">handle</span></span><span class="hs-special">,</span><span> </span><span class="annot"><span class="hs-identifier">throwM</span></span><span class="hs-special">,</span><span> </span><span class="annot"><span class="hs-identifier">try</span></span><span class="hs-special">)</span><span>
+</span><span id="line-15"></span><span class="hs-keyword">import</span><span> </span><span class="annot"><span class="hs-identifier">Control.Monad.IO.Class</span></span><span> </span><span class="hs-special">(</span><span class="annot"><span class="hs-identifier">MonadIO</span></span><span class="hs-special">,</span><span> </span><span class="annot"><span class="hs-identifier">liftIO</span></span><span class="hs-special">)</span><span>
+</span><span id="line-16"></span><span class="hs-keyword">import</span><span> </span><span class="annot"><span class="hs-identifier">Control.Monad.Logger</span></span><span> </span><span class="hs-special">(</span><span class="annot"><span class="hs-identifier">MonadLogger</span></span><span class="hs-special">,</span><span> </span><span class="annot"><span class="hs-identifier">logError</span></span><span class="hs-special">)</span><span>
+</span><span id="line-17"></span><span class="hs-keyword">import</span><span> </span><span class="annot"><span class="hs-identifier">Data.ByteString.Internal</span></span><span> </span><span class="hs-special">(</span><span class="annot"><span class="hs-identifier">unpackChars</span></span><span class="hs-special">)</span><span>
+</span><span id="line-18"></span><span class="hs-keyword">import</span><span> </span><span class="annot"><span class="hs-identifier">Data.Maybe</span></span><span> </span><span class="hs-special">(</span><span class="annot"><span class="hs-identifier">fromMaybe</span></span><span class="hs-special">)</span><span>
+</span><span id="line-19"></span><span class="hs-keyword">import</span><span> </span><span class="annot"><span class="hs-identifier">Data.Time.Clock.POSIX</span></span><span> </span><span class="hs-special">(</span><span class="annot"><span class="hs-identifier">utcTimeToPOSIXSeconds</span></span><span class="hs-special">)</span><span>
+</span><span id="line-20"></span><span class="hs-keyword">import</span><span> </span><span class="annot"><span class="hs-identifier">Data.Time.Format</span></span><span> </span><span class="hs-special">(</span><span class="annot"><span class="hs-identifier">defaultTimeLocale</span></span><span class="hs-special">,</span><span> </span><span class="annot"><span class="hs-identifier">parseTimeM</span></span><span class="hs-special">,</span><span> </span><span class="annot"><span class="hs-identifier">rfc822DateFormat</span></span><span class="hs-special">)</span><span>
+</span><span id="line-21"></span><span class="hs-keyword">import</span><span> </span><span class="annot"><span class="hs-identifier">Network.HTTP.Client</span></span><span> </span><span class="hs-special">(</span><span class="annot"><span class="hs-identifier">BodyReader</span></span><span class="hs-special">,</span><span> </span><span class="annot"><span class="hs-identifier">HttpException</span></span><span class="hs-special">,</span><span> </span><span class="annot"><span class="hs-identifier">Manager</span></span><span class="hs-special">,</span><span> </span><span class="annot"><span class="hs-identifier">Request</span></span><span> </span><span class="hs-special">(</span><span class="hs-glyph">..</span><span class="hs-special">)</span><span class="hs-special">,</span><span> </span><span class="annot"><span class="hs-identifier">Response</span></span><span> </span><span class="hs-special">(</span><span class="hs-glyph">..</span><span class="hs-special">)</span><span class="hs-special">,</span><span> </span><span class="annot"><span class="hs-identifier">responseClose</span></span><span class="hs-special">,</span><span> </span><span class="annot"><span class="hs-identifier">responseOpen</span></span><span class="hs-special">,</span><span> </span><span class="annot"><span class="hs-identifier">throwErrorStatusCodes</span></span><span class="hs-special">)</span><span>
+</span><span id="line-22"></span><span class="hs-keyword">import</span><span> </span><span class="annot"><span class="hs-identifier">Network.HTTP.Types.Header</span></span><span> </span><span class="hs-special">(</span><span class="annot"><span class="hs-identifier">hDate</span></span><span class="hs-special">)</span><span>
+</span><span id="line-23"></span><span class="hs-keyword">import</span><span> </span><span class="annot"><span class="hs-identifier">Network.HTTP.Types.Status</span></span><span> </span><span class="hs-special">(</span><span class="annot"><span class="hs-identifier">forbidden403</span></span><span class="hs-special">,</span><span> </span><span class="annot"><span class="hs-identifier">unauthorized401</span></span><span class="hs-special">)</span><span>
+</span><span id="line-24"></span><span>
+</span><span id="line-25"></span><span class="hs-keyword">import</span><span> </span><span class="annot"><a href="LaunchDarkly.Server.Client.Internal.html"><span class="hs-identifier">LaunchDarkly.Server.Client.Internal</span></a></span><span> </span><span class="hs-special">(</span><span class="annot"><a href="LaunchDarkly.Server.Client.Internal.html#Client"><span class="hs-identifier">Client</span></a></span><span class="hs-special">,</span><span> </span><span class="annot"><a href="LaunchDarkly.Server.Client.Status.html#Status"><span class="hs-identifier">Status</span></a></span><span> </span><span class="hs-special">(</span><span class="annot"><a href="LaunchDarkly.Server.Client.Status.html#Unauthorized"><span class="hs-identifier">Unauthorized</span></a></span><span class="hs-special">)</span><span class="hs-special">,</span><span> </span><span class="annot"><a href="LaunchDarkly.Server.Client.Internal.html#setStatus"><span class="hs-identifier">setStatus</span></a></span><span class="hs-special">)</span><span>
+</span><span id="line-26"></span><span class="hs-keyword">import</span><span> </span><span class="annot"><a href="LaunchDarkly.Server.DataSource.Internal.html"><span class="hs-identifier">LaunchDarkly.Server.DataSource.Internal</span></a></span><span> </span><span class="hs-special">(</span><span class="annot"><a href="LaunchDarkly.Server.DataSource.Internal.html#DataSourceUpdates"><span class="hs-identifier">DataSourceUpdates</span></a></span><span> </span><span class="hs-special">(</span><span class="hs-glyph">..</span><span class="hs-special">)</span><span class="hs-special">)</span><span>
+</span><span id="line-27"></span><span class="hs-keyword">import</span><span> </span><span class="annot"><span class="hs-identifier">Network.HTTP.Types</span></span><span> </span><span class="hs-special">(</span><span class="annot"><span class="hs-identifier">ok200</span></span><span class="hs-special">)</span><span>
+</span><span id="line-28"></span><span>
+</span><span id="line-29"></span><span id="local-6989586621679669855"><span id="local-6989586621679669856"><span class="annot"><a href="LaunchDarkly.Server.Network.Common.html#tryHTTP"><span class="hs-identifier hs-type">tryHTTP</span></a></span><span> </span><span class="hs-glyph">::</span><span> </span><span class="annot"><span class="hs-identifier hs-type">MonadCatch</span></span><span> </span><span class="annot"><a href="#local-6989586621679669856"><span class="hs-identifier hs-type">m</span></a></span><span> </span><span class="hs-glyph">=&gt;</span><span> </span><span class="annot"><a href="#local-6989586621679669856"><span class="hs-identifier hs-type">m</span></a></span><span> </span><span class="annot"><a href="#local-6989586621679669855"><span class="hs-identifier hs-type">a</span></a></span><span> </span><span class="hs-glyph">-&gt;</span><span> </span><span class="annot"><a href="#local-6989586621679669856"><span class="hs-identifier hs-type">m</span></a></span><span> </span><span class="hs-special">(</span><span class="annot"><span class="hs-identifier hs-type">Either</span></span><span> </span><span class="annot"><span class="hs-identifier hs-type">HttpException</span></span><span> </span><span class="annot"><a href="#local-6989586621679669855"><span class="hs-identifier hs-type">a</span></a></span><span class="hs-special">)</span></span></span><span>
+</span><span id="line-30"></span><span id="tryHTTP"><span class="annot"><span class="annottext">tryHTTP :: m a -&gt; m (Either HttpException a)
+</span><a href="LaunchDarkly.Server.Network.Common.html#tryHTTP"><span class="hs-identifier hs-var hs-var">tryHTTP</span></a></span></span><span> </span><span class="hs-glyph">=</span><span> </span><span class="annot"><span class="annottext">m a -&gt; m (Either HttpException a)
+forall (m :: * -&gt; *) e a.
+(MonadCatch m, Exception e) =&gt;
+m a -&gt; m (Either e a)
+</span><span class="hs-identifier hs-var">try</span></span><span>
+</span><span id="line-31"></span><span>
+</span><span id="line-32"></span><span id="local-6989586621679669853"><span id="local-6989586621679669854"><span class="annot"><a href="LaunchDarkly.Server.Network.Common.html#addToAL"><span class="hs-identifier hs-type">addToAL</span></a></span><span> </span><span class="hs-glyph">::</span><span> </span><span class="annot"><span class="hs-identifier hs-type">Eq</span></span><span> </span><span class="annot"><a href="#local-6989586621679669854"><span class="hs-identifier hs-type">k</span></a></span><span> </span><span class="hs-glyph">=&gt;</span><span> </span><span class="hs-special">[</span><span class="hs-special">(</span><span class="annot"><a href="#local-6989586621679669854"><span class="hs-identifier hs-type">k</span></a></span><span class="hs-special">,</span><span> </span><span class="annot"><a href="#local-6989586621679669853"><span class="hs-identifier hs-type">v</span></a></span><span class="hs-special">)</span><span class="hs-special">]</span><span> </span><span class="hs-glyph">-&gt;</span><span> </span><span class="annot"><a href="#local-6989586621679669854"><span class="hs-identifier hs-type">k</span></a></span><span> </span><span class="hs-glyph">-&gt;</span><span> </span><span class="annot"><a href="#local-6989586621679669853"><span class="hs-identifier hs-type">v</span></a></span><span> </span><span class="hs-glyph">-&gt;</span><span> </span><span class="hs-special">[</span><span class="hs-special">(</span><span class="annot"><a href="#local-6989586621679669854"><span class="hs-identifier hs-type">k</span></a></span><span class="hs-special">,</span><span> </span><span class="annot"><a href="#local-6989586621679669853"><span class="hs-identifier hs-type">v</span></a></span><span class="hs-special">)</span><span class="hs-special">]</span></span></span><span>
+</span><span id="line-33"></span><span id="addToAL"><span class="annot"><span class="annottext">addToAL :: [(k, v)] -&gt; k -&gt; v -&gt; [(k, v)]
+</span><a href="LaunchDarkly.Server.Network.Common.html#addToAL"><span class="hs-identifier hs-var hs-var">addToAL</span></a></span></span><span> </span><span id="local-6989586621679669852"><span class="annot"><span class="annottext">l :: [(k, v)]
+</span><a href="#local-6989586621679669852"><span class="hs-identifier hs-var">l</span></a></span></span><span> </span><span id="local-6989586621679669851"><span class="annot"><span class="annottext">k :: k
+</span><a href="#local-6989586621679669851"><span class="hs-identifier hs-var">k</span></a></span></span><span> </span><span id="local-6989586621679669850"><span class="annot"><span class="annottext">v :: v
+</span><a href="#local-6989586621679669850"><span class="hs-identifier hs-var">v</span></a></span></span><span> </span><span class="hs-glyph">=</span><span> </span><span class="hs-special">(</span><span class="annot"><span class="annottext">k
+</span><a href="#local-6989586621679669851"><span class="hs-identifier hs-var">k</span></a></span><span class="hs-special">,</span><span> </span><span class="annot"><span class="annottext">v
+</span><a href="#local-6989586621679669850"><span class="hs-identifier hs-var">v</span></a></span><span class="hs-special">)</span><span> </span><span class="annot"><span class="annottext">(k, v) -&gt; [(k, v)] -&gt; [(k, v)]
+forall a. a -&gt; [a] -&gt; [a]
+</span><span class="hs-glyph hs-var">:</span></span><span> </span><span class="annot"><span class="annottext">((k, v) -&gt; Bool) -&gt; [(k, v)] -&gt; [(k, v)]
+forall a. (a -&gt; Bool) -&gt; [a] -&gt; [a]
+</span><span class="hs-identifier hs-var">filter</span></span><span> </span><span class="hs-special">(</span><span class="annot"><span class="annottext">k -&gt; k -&gt; Bool
+forall a. Eq a =&gt; a -&gt; a -&gt; Bool
+</span><span class="hs-operator hs-var">(/=)</span></span><span> </span><span class="annot"><span class="annottext">k
+</span><a href="#local-6989586621679669851"><span class="hs-identifier hs-var">k</span></a></span><span> </span><span class="annot"><span class="annottext">(k -&gt; Bool) -&gt; ((k, v) -&gt; k) -&gt; (k, v) -&gt; Bool
+forall b c a. (b -&gt; c) -&gt; (a -&gt; b) -&gt; a -&gt; c
+</span><span class="hs-operator hs-var">.</span></span><span> </span><span class="annot"><span class="annottext">(k, v) -&gt; k
+forall a b. (a, b) -&gt; a
+</span><span class="hs-identifier hs-var">fst</span></span><span class="hs-special">)</span><span> </span><span class="annot"><span class="annottext">[(k, v)]
+</span><a href="#local-6989586621679669852"><span class="hs-identifier hs-var">l</span></a></span><span>
+</span><span id="line-34"></span><span>
+</span><span id="line-35"></span><span id="local-6989586621679669846"><span id="local-6989586621679669847"><span class="annot"><a href="LaunchDarkly.Server.Network.Common.html#withResponseGeneric"><span class="hs-identifier hs-type">withResponseGeneric</span></a></span><span> </span><span class="hs-glyph">::</span><span> </span><span class="hs-special">(</span><span class="annot"><span class="hs-identifier hs-type">MonadIO</span></span><span> </span><span class="annot"><a href="#local-6989586621679669847"><span class="hs-identifier hs-type">m</span></a></span><span class="hs-special">,</span><span> </span><span class="annot"><span class="hs-identifier hs-type">MonadMask</span></span><span> </span><span class="annot"><a href="#local-6989586621679669847"><span class="hs-identifier hs-type">m</span></a></span><span class="hs-special">)</span><span> </span><span class="hs-glyph">=&gt;</span><span> </span><span class="annot"><span class="hs-identifier hs-type">Request</span></span><span> </span><span class="hs-glyph">-&gt;</span><span> </span><span class="annot"><span class="hs-identifier hs-type">Manager</span></span><span> </span><span class="hs-glyph">-&gt;</span><span> </span><span class="hs-special">(</span><span class="annot"><span class="hs-identifier hs-type">Response</span></span><span> </span><span class="annot"><span class="hs-identifier hs-type">BodyReader</span></span><span> </span><span class="hs-glyph">-&gt;</span><span> </span><span class="annot"><a href="#local-6989586621679669847"><span class="hs-identifier hs-type">m</span></a></span><span> </span><span class="annot"><a href="#local-6989586621679669846"><span class="hs-identifier hs-type">a</span></a></span><span class="hs-special">)</span><span> </span><span class="hs-glyph">-&gt;</span><span> </span><span class="annot"><a href="#local-6989586621679669847"><span class="hs-identifier hs-type">m</span></a></span><span> </span><span class="annot"><a href="#local-6989586621679669846"><span class="hs-identifier hs-type">a</span></a></span></span></span><span>
+</span><span id="line-36"></span><span id="withResponseGeneric"><span class="annot"><span class="annottext">withResponseGeneric :: Request -&gt; Manager -&gt; (Response BodyReader -&gt; m a) -&gt; m a
+</span><a href="LaunchDarkly.Server.Network.Common.html#withResponseGeneric"><span class="hs-identifier hs-var hs-var">withResponseGeneric</span></a></span></span><span> </span><span id="local-6989586621679669845"><span class="annot"><span class="annottext">req :: Request
+</span><a href="#local-6989586621679669845"><span class="hs-identifier hs-var">req</span></a></span></span><span> </span><span id="local-6989586621679669844"><span class="annot"><span class="annottext">man :: Manager
+</span><a href="#local-6989586621679669844"><span class="hs-identifier hs-var">man</span></a></span></span><span> </span><span id="local-6989586621679669843"><span class="annot"><span class="annottext">f :: Response BodyReader -&gt; m a
+</span><a href="#local-6989586621679669843"><span class="hs-identifier hs-var">f</span></a></span></span><span> </span><span class="hs-glyph">=</span><span> </span><span class="annot"><span class="annottext">m (Response BodyReader)
+-&gt; (Response BodyReader -&gt; m ())
+-&gt; (Response BodyReader -&gt; m a)
+-&gt; m a
+forall (m :: * -&gt; *) a c b.
+MonadMask m =&gt;
+m a -&gt; (a -&gt; m c) -&gt; (a -&gt; m b) -&gt; m b
+</span><span class="hs-identifier hs-var">bracket</span></span><span> </span><span class="hs-special">(</span><span class="annot"><span class="annottext">IO (Response BodyReader) -&gt; m (Response BodyReader)
+forall (m :: * -&gt; *) a. MonadIO m =&gt; IO a -&gt; m a
+</span><span class="hs-identifier hs-var">liftIO</span></span><span> </span><span class="annot"><span class="annottext">(IO (Response BodyReader) -&gt; m (Response BodyReader))
+-&gt; IO (Response BodyReader) -&gt; m (Response BodyReader)
+forall a b. (a -&gt; b) -&gt; a -&gt; b
+</span><span class="hs-operator hs-var">$</span></span><span> </span><span class="annot"><span class="annottext">Request -&gt; Manager -&gt; IO (Response BodyReader)
+</span><span class="hs-identifier hs-var">responseOpen</span></span><span> </span><span class="annot"><span class="annottext">Request
+</span><a href="#local-6989586621679669845"><span class="hs-identifier hs-var">req</span></a></span><span> </span><span class="annot"><span class="annottext">Manager
+</span><a href="#local-6989586621679669844"><span class="hs-identifier hs-var">man</span></a></span><span class="hs-special">)</span><span> </span><span class="hs-special">(</span><span class="annot"><span class="annottext">IO () -&gt; m ()
+forall (m :: * -&gt; *) a. MonadIO m =&gt; IO a -&gt; m a
+</span><span class="hs-identifier hs-var">liftIO</span></span><span> </span><span class="annot"><span class="annottext">(IO () -&gt; m ())
+-&gt; (Response BodyReader -&gt; IO ()) -&gt; Response BodyReader -&gt; m ()
+forall b c a. (b -&gt; c) -&gt; (a -&gt; b) -&gt; a -&gt; c
+</span><span class="hs-operator hs-var">.</span></span><span> </span><span class="annot"><span class="annottext">Response BodyReader -&gt; IO ()
+forall a. Response a -&gt; IO ()
+</span><span class="hs-identifier hs-var">responseClose</span></span><span class="hs-special">)</span><span> </span><span class="annot"><span class="annottext">Response BodyReader -&gt; m a
+</span><a href="#local-6989586621679669843"><span class="hs-identifier hs-var">f</span></a></span><span>
+</span><span id="line-37"></span><span>
+</span><span id="line-38"></span><span class="hs-keyword">data</span><span> </span><span id="UnauthorizedE"><span class="annot"><a href="LaunchDarkly.Server.Network.Common.html#UnauthorizedE"><span class="hs-identifier hs-var">UnauthorizedE</span></a></span></span><span> </span><span class="hs-glyph">=</span><span> </span><span id="UnauthorizedE"><span class="annot"><a href="LaunchDarkly.Server.Network.Common.html#UnauthorizedE"><span class="hs-identifier hs-var">UnauthorizedE</span></a></span></span><span> </span><span class="hs-keyword">deriving</span><span> </span><span class="hs-special">(</span><span id="local-6989586621679669836"><span id="local-6989586621679669838"><span id="local-6989586621679669840"><span class="annot"><span class="annottext">Int -&gt; UnauthorizedE -&gt; ShowS
+[UnauthorizedE] -&gt; ShowS
+UnauthorizedE -&gt; String
+(Int -&gt; UnauthorizedE -&gt; ShowS)
+-&gt; (UnauthorizedE -&gt; String)
+-&gt; ([UnauthorizedE] -&gt; ShowS)
+-&gt; Show UnauthorizedE
+forall a.
+(Int -&gt; a -&gt; ShowS) -&gt; (a -&gt; String) -&gt; ([a] -&gt; ShowS) -&gt; Show a
+showList :: [UnauthorizedE] -&gt; ShowS
+$cshowList :: [UnauthorizedE] -&gt; ShowS
+show :: UnauthorizedE -&gt; String
+$cshow :: UnauthorizedE -&gt; String
+showsPrec :: Int -&gt; UnauthorizedE -&gt; ShowS
+$cshowsPrec :: Int -&gt; UnauthorizedE -&gt; ShowS
+</span><span class="hs-identifier hs-var hs-var hs-var hs-var hs-var hs-var hs-var hs-var">Show</span></span></span></span></span><span class="hs-special">,</span><span> </span><span id="local-6989586621679669827"><span id="local-6989586621679669829"><span id="local-6989586621679669831"><span class="annot"><span class="annottext">Show UnauthorizedE
+Typeable UnauthorizedE
+(Typeable UnauthorizedE, Show UnauthorizedE) =&gt;
+(UnauthorizedE -&gt; SomeException)
+-&gt; (SomeException -&gt; Maybe UnauthorizedE)
+-&gt; (UnauthorizedE -&gt; String)
+-&gt; Exception UnauthorizedE
+SomeException -&gt; Maybe UnauthorizedE
+UnauthorizedE -&gt; String
+UnauthorizedE -&gt; SomeException
+forall e.
+(Typeable e, Show e) =&gt;
+(e -&gt; SomeException)
+-&gt; (SomeException -&gt; Maybe e) -&gt; (e -&gt; String) -&gt; Exception e
+displayException :: UnauthorizedE -&gt; String
+$cdisplayException :: UnauthorizedE -&gt; String
+fromException :: SomeException -&gt; Maybe UnauthorizedE
+$cfromException :: SomeException -&gt; Maybe UnauthorizedE
+toException :: UnauthorizedE -&gt; SomeException
+$ctoException :: UnauthorizedE -&gt; SomeException
+$cp2Exception :: Show UnauthorizedE
+$cp1Exception :: Typeable UnauthorizedE
+</span><span class="hs-identifier hs-var hs-var hs-var hs-var hs-var hs-var hs-var hs-var hs-var hs-var">Exception</span></span></span></span></span><span class="hs-special">)</span><span>
+</span><span id="line-39"></span><span>
+</span><span id="line-40"></span><span id="local-6989586621679669825"><span class="annot"><a href="LaunchDarkly.Server.Network.Common.html#handleUnauthorized"><span class="hs-identifier hs-type">handleUnauthorized</span></a></span><span> </span><span class="hs-glyph">::</span><span> </span><span class="hs-special">(</span><span class="annot"><span class="hs-identifier hs-type">MonadIO</span></span><span> </span><span class="annot"><a href="#local-6989586621679669825"><span class="hs-identifier hs-type">m</span></a></span><span class="hs-special">,</span><span> </span><span class="annot"><span class="hs-identifier hs-type">MonadLogger</span></span><span> </span><span class="annot"><a href="#local-6989586621679669825"><span class="hs-identifier hs-type">m</span></a></span><span class="hs-special">,</span><span> </span><span class="annot"><span class="hs-identifier hs-type">MonadCatch</span></span><span> </span><span class="annot"><a href="#local-6989586621679669825"><span class="hs-identifier hs-type">m</span></a></span><span class="hs-special">)</span><span> </span><span class="hs-glyph">=&gt;</span><span> </span><span class="annot"><a href="LaunchDarkly.Server.DataSource.Internal.html#DataSourceUpdates"><span class="hs-identifier hs-type">DataSourceUpdates</span></a></span><span> </span><span class="hs-glyph">-&gt;</span><span> </span><span class="annot"><a href="#local-6989586621679669825"><span class="hs-identifier hs-type">m</span></a></span><span> </span><span class="hs-special">(</span><span class="hs-special">)</span><span> </span><span class="hs-glyph">-&gt;</span><span> </span><span class="annot"><a href="#local-6989586621679669825"><span class="hs-identifier hs-type">m</span></a></span><span> </span><span class="hs-special">(</span><span class="hs-special">)</span></span><span>
+</span><span id="line-41"></span><span id="handleUnauthorized"><span class="annot"><span class="annottext">handleUnauthorized :: DataSourceUpdates -&gt; m () -&gt; m ()
+</span><a href="LaunchDarkly.Server.Network.Common.html#handleUnauthorized"><span class="hs-identifier hs-var hs-var">handleUnauthorized</span></a></span></span><span> </span><span id="local-6989586621679669824"><span class="annot"><span class="annottext">dataSourceUpdates :: DataSourceUpdates
+</span><a href="#local-6989586621679669824"><span class="hs-identifier hs-var">dataSourceUpdates</span></a></span></span><span> </span><span class="hs-glyph">=</span><span> </span><span class="annot"><span class="annottext">(UnauthorizedE -&gt; m ()) -&gt; m () -&gt; m ()
+forall (m :: * -&gt; *) e a.
+(MonadCatch m, Exception e) =&gt;
+(e -&gt; m a) -&gt; m a -&gt; m a
+</span><span class="hs-identifier hs-var">handle</span></span><span> </span><span class="annot"><span class="annottext">((UnauthorizedE -&gt; m ()) -&gt; m () -&gt; m ())
+-&gt; (UnauthorizedE -&gt; m ()) -&gt; m () -&gt; m ()
+forall a b. (a -&gt; b) -&gt; a -&gt; b
+</span><span class="hs-operator hs-var">$</span></span><span> </span><span class="hs-glyph">\</span><span class="annot"><a href="LaunchDarkly.Server.Network.Common.html#UnauthorizedE"><span class="hs-identifier hs-type">UnauthorizedE</span></a></span><span> </span><span class="hs-glyph">-&gt;</span><span> </span><span class="hs-keyword">do</span><span>
+</span><span id="line-42"></span><span>    </span><span class="hs-special">$(</span><span class="annot"><span class="annottext">LogLevel
+String -&gt; Text
+String -&gt; String -&gt; String -&gt; CharPos -&gt; CharPos -&gt; Loc
+Text -&gt; Text
+Loc -&gt; Text -&gt; LogLevel -&gt; Text -&gt; m ()
+(Text -&gt; m ()) -&gt; (Text -&gt; Text) -&gt; Text -&gt; m ()
+forall a. a -&gt; a
+forall b c a. (b -&gt; c) -&gt; (a -&gt; b) -&gt; a -&gt; c
+forall (m :: * -&gt; *) msg.
+(MonadLogger m, ToLogStr msg) =&gt;
+Loc -&gt; Text -&gt; LogLevel -&gt; msg -&gt; m ()
+monadLoggerLog :: forall (m :: * -&gt; *) msg.
+(MonadLogger m, ToLogStr msg) =&gt;
+Loc -&gt; Text -&gt; LogLevel -&gt; msg -&gt; m ()
+pack :: String -&gt; Text
+id :: forall a. a -&gt; a
+. :: forall b c a. (b -&gt; c) -&gt; (a -&gt; b) -&gt; a -&gt; c
+</span><span class="hs-identifier hs-var hs-var hs-var hs-var hs-var hs-var">logError</span></span><span class="hs-special">)</span><span> </span><span class="annot"><span class="hs-string">&quot;SDK key is unauthorized&quot;</span></span><span>
+</span><span id="line-43"></span><span>    </span><span class="annot"><span class="annottext">IO () -&gt; m ()
+forall (m :: * -&gt; *) a. MonadIO m =&gt; IO a -&gt; m a
+</span><span class="hs-identifier hs-var">liftIO</span></span><span> </span><span class="annot"><span class="annottext">(IO () -&gt; m ()) -&gt; IO () -&gt; m ()
+forall a b. (a -&gt; b) -&gt; a -&gt; b
+</span><span class="hs-operator hs-var">$</span></span><span> </span><span class="annot"><span class="annottext">DataSourceUpdates -&gt; Status -&gt; IO ()
+</span><a href="LaunchDarkly.Server.DataSource.Internal.html#%24sel%3AdataSourceUpdatesSetStatus%3ADataSourceUpdates"><span class="hs-identifier hs-var hs-var">dataSourceUpdatesSetStatus</span></a></span><span> </span><span class="annot"><span class="annottext">DataSourceUpdates
+</span><a href="#local-6989586621679669824"><span class="hs-identifier hs-var">dataSourceUpdates</span></a></span><span> </span><span class="annot"><span class="annottext">Status
+</span><a href="LaunchDarkly.Server.Client.Status.html#Unauthorized"><span class="hs-identifier hs-var">Unauthorized</span></a></span><span>
+</span><span id="line-44"></span><span>
+</span><span id="line-45"></span><span id="local-6989586621679669816"><span id="local-6989586621679669817"><span class="annot"><a href="LaunchDarkly.Server.Network.Common.html#tryAuthorized"><span class="hs-identifier hs-type">tryAuthorized</span></a></span><span> </span><span class="hs-glyph">::</span><span> </span><span class="hs-special">(</span><span class="annot"><span class="hs-identifier hs-type">MonadIO</span></span><span> </span><span class="annot"><a href="#local-6989586621679669817"><span class="hs-identifier hs-type">m</span></a></span><span class="hs-special">,</span><span> </span><span class="annot"><span class="hs-identifier hs-type">MonadLogger</span></span><span> </span><span class="annot"><a href="#local-6989586621679669817"><span class="hs-identifier hs-type">m</span></a></span><span class="hs-special">,</span><span> </span><span class="annot"><span class="hs-identifier hs-type">MonadCatch</span></span><span> </span><span class="annot"><a href="#local-6989586621679669817"><span class="hs-identifier hs-type">m</span></a></span><span class="hs-special">)</span><span> </span><span class="hs-glyph">=&gt;</span><span> </span><span class="annot"><a href="LaunchDarkly.Server.Client.Internal.html#Client"><span class="hs-identifier hs-type">Client</span></a></span><span> </span><span class="hs-glyph">-&gt;</span><span> </span><span class="annot"><a href="#local-6989586621679669817"><span class="hs-identifier hs-type">m</span></a></span><span> </span><span class="annot"><a href="#local-6989586621679669816"><span class="hs-identifier hs-type">a</span></a></span><span> </span><span class="hs-glyph">-&gt;</span><span> </span><span class="annot"><a href="#local-6989586621679669817"><span class="hs-identifier hs-type">m</span></a></span><span> </span><span class="hs-special">(</span><span class="hs-special">)</span></span></span><span>
+</span><span id="line-46"></span><span id="tryAuthorized"><span class="annot"><span class="annottext">tryAuthorized :: Client -&gt; m a -&gt; m ()
+</span><a href="LaunchDarkly.Server.Network.Common.html#tryAuthorized"><span class="hs-identifier hs-var hs-var">tryAuthorized</span></a></span></span><span> </span><span id="local-6989586621679669815"><span class="annot"><span class="annottext">client :: Client
+</span><a href="#local-6989586621679669815"><span class="hs-identifier hs-var">client</span></a></span></span><span> </span><span id="local-6989586621679669814"><span class="annot"><span class="annottext">operation :: m a
+</span><a href="#local-6989586621679669814"><span class="hs-identifier hs-var">operation</span></a></span></span><span> </span><span class="hs-glyph">=</span><span>
+</span><span id="line-47"></span><span>    </span><span class="annot"><span class="annottext">m a -&gt; m (Either UnauthorizedE a)
+forall (m :: * -&gt; *) e a.
+(MonadCatch m, Exception e) =&gt;
+m a -&gt; m (Either e a)
+</span><span class="hs-identifier hs-var">try</span></span><span> </span><span class="annot"><span class="annottext">m a
+</span><a href="#local-6989586621679669814"><span class="hs-identifier hs-var">operation</span></a></span><span> </span><span class="annot"><span class="annottext">m (Either UnauthorizedE a)
+-&gt; (Either UnauthorizedE a -&gt; m ()) -&gt; m ()
+forall (m :: * -&gt; *) a b. Monad m =&gt; m a -&gt; (a -&gt; m b) -&gt; m b
+</span><span class="hs-operator hs-var">&gt;&gt;=</span></span><span> </span><span class="hs-glyph">\</span><span class="hs-glyph">case</span><span>
+</span><span id="line-48"></span><span>        </span><span class="hs-special">(</span><span class="annot"><span class="hs-identifier hs-type">Left</span></span><span> </span><span class="annot"><a href="LaunchDarkly.Server.Network.Common.html#UnauthorizedE"><span class="hs-identifier hs-type">UnauthorizedE</span></a></span><span class="hs-special">)</span><span> </span><span class="hs-glyph">-&gt;</span><span> </span><span class="hs-keyword">do</span><span>
+</span><span id="line-49"></span><span>            </span><span class="hs-special">$(</span><span class="annot"><span class="annottext">LogLevel
+String -&gt; Text
+String -&gt; String -&gt; String -&gt; CharPos -&gt; CharPos -&gt; Loc
+Text -&gt; Text
+Loc -&gt; Text -&gt; LogLevel -&gt; Text -&gt; m ()
+(Text -&gt; m ()) -&gt; (Text -&gt; Text) -&gt; Text -&gt; m ()
+forall a. a -&gt; a
+forall b c a. (b -&gt; c) -&gt; (a -&gt; b) -&gt; a -&gt; c
+forall (m :: * -&gt; *) msg.
+(MonadLogger m, ToLogStr msg) =&gt;
+Loc -&gt; Text -&gt; LogLevel -&gt; msg -&gt; m ()
+monadLoggerLog :: forall (m :: * -&gt; *) msg.
+(MonadLogger m, ToLogStr msg) =&gt;
+Loc -&gt; Text -&gt; LogLevel -&gt; msg -&gt; m ()
+pack :: String -&gt; Text
+id :: forall a. a -&gt; a
+. :: forall b c a. (b -&gt; c) -&gt; (a -&gt; b) -&gt; a -&gt; c
+</span><span class="hs-identifier hs-var hs-var hs-var hs-var hs-var hs-var">logError</span></span><span class="hs-special">)</span><span> </span><span class="annot"><span class="hs-string">&quot;SDK key is unauthorized&quot;</span></span><span>
+</span><span id="line-50"></span><span>            </span><span class="annot"><span class="annottext">IO () -&gt; m ()
+forall (m :: * -&gt; *) a. MonadIO m =&gt; IO a -&gt; m a
+</span><span class="hs-identifier hs-var">liftIO</span></span><span> </span><span class="annot"><span class="annottext">(IO () -&gt; m ()) -&gt; IO () -&gt; m ()
+forall a b. (a -&gt; b) -&gt; a -&gt; b
+</span><span class="hs-operator hs-var">$</span></span><span> </span><span class="annot"><span class="annottext">Client -&gt; Status -&gt; IO ()
+</span><a href="LaunchDarkly.Server.Client.Internal.html#setStatus"><span class="hs-identifier hs-var">setStatus</span></a></span><span> </span><span class="annot"><span class="annottext">Client
+</span><a href="#local-6989586621679669815"><span class="hs-identifier hs-var">client</span></a></span><span> </span><span class="annot"><span class="annottext">Status
+</span><a href="LaunchDarkly.Server.Client.Status.html#Unauthorized"><span class="hs-identifier hs-var">Unauthorized</span></a></span><span>
+</span><span id="line-51"></span><span>        </span><span class="hs-identifier">_</span><span> </span><span class="hs-glyph">-&gt;</span><span> </span><span class="annot"><span class="annottext">() -&gt; m ()
+forall (f :: * -&gt; *) a. Applicative f =&gt; a -&gt; f a
+</span><span class="hs-identifier hs-var">pure</span></span><span> </span><span class="hs-special">(</span><span class="hs-special">)</span><span>
+</span><span id="line-52"></span><span>
+</span><span id="line-53"></span><span id="local-6989586621679669812"><span id="local-6989586621679669813"><span class="annot"><a href="LaunchDarkly.Server.Network.Common.html#checkAuthorization"><span class="hs-identifier hs-type">checkAuthorization</span></a></span><span> </span><span class="hs-glyph">::</span><span> </span><span class="hs-special">(</span><span class="annot"><span class="hs-identifier hs-type">MonadThrow</span></span><span> </span><span class="annot"><a href="#local-6989586621679669813"><span class="hs-identifier hs-type">m</span></a></span><span class="hs-special">)</span><span> </span><span class="hs-glyph">=&gt;</span><span> </span><span class="annot"><span class="hs-identifier hs-type">Response</span></span><span> </span><span class="annot"><a href="#local-6989586621679669812"><span class="hs-identifier hs-type">body</span></a></span><span> </span><span class="hs-glyph">-&gt;</span><span> </span><span class="annot"><a href="#local-6989586621679669813"><span class="hs-identifier hs-type">m</span></a></span><span> </span><span class="hs-special">(</span><span class="hs-special">)</span></span></span><span>
+</span><span id="line-54"></span><span id="checkAuthorization"><span class="annot"><span class="annottext">checkAuthorization :: Response body -&gt; m ()
+</span><a href="LaunchDarkly.Server.Network.Common.html#checkAuthorization"><span class="hs-identifier hs-var hs-var">checkAuthorization</span></a></span></span><span> </span><span id="local-6989586621679669811"><span class="annot"><span class="annottext">response :: Response body
+</span><a href="#local-6989586621679669811"><span class="hs-identifier hs-var">response</span></a></span></span><span> </span><span class="hs-glyph">=</span><span> </span><span class="annot"><span class="annottext">Bool -&gt; m () -&gt; m ()
+forall (f :: * -&gt; *). Applicative f =&gt; Bool -&gt; f () -&gt; f ()
+</span><span class="hs-identifier hs-var">when</span></span><span> </span><span class="hs-special">(</span><span class="annot"><span class="annottext">Status -&gt; [Status] -&gt; Bool
+forall (t :: * -&gt; *) a. (Foldable t, Eq a) =&gt; a -&gt; t a -&gt; Bool
+</span><span class="hs-identifier hs-var">elem</span></span><span> </span><span class="hs-special">(</span><span class="annot"><span class="annottext">Response body -&gt; Status
+forall body. Response body -&gt; Status
+</span><span class="hs-identifier hs-var hs-var">responseStatus</span></span><span> </span><span class="annot"><span class="annottext">Response body
+</span><a href="#local-6989586621679669811"><span class="hs-identifier hs-var">response</span></a></span><span class="hs-special">)</span><span> </span><span class="hs-special">[</span><span class="annot"><span class="annottext">Status
+</span><span class="hs-identifier hs-var">unauthorized401</span></span><span class="hs-special">,</span><span> </span><span class="annot"><span class="annottext">Status
+</span><span class="hs-identifier hs-var">forbidden403</span></span><span class="hs-special">]</span><span class="hs-special">)</span><span> </span><span class="annot"><span class="annottext">(m () -&gt; m ()) -&gt; m () -&gt; m ()
+forall a b. (a -&gt; b) -&gt; a -&gt; b
+</span><span class="hs-operator hs-var">$</span></span><span> </span><span class="annot"><span class="annottext">UnauthorizedE -&gt; m ()
+forall (m :: * -&gt; *) e a. (MonadThrow m, Exception e) =&gt; e -&gt; m a
+</span><span class="hs-identifier hs-var">throwM</span></span><span> </span><span class="annot"><span class="annottext">UnauthorizedE
+</span><a href="LaunchDarkly.Server.Network.Common.html#UnauthorizedE"><span class="hs-identifier hs-var">UnauthorizedE</span></a></span><span>
+</span><span id="line-55"></span><span>
+</span><span id="line-56"></span><span id="local-6989586621679669808"><span class="annot"><a href="LaunchDarkly.Server.Network.Common.html#throwIfNot200"><span class="hs-identifier hs-type">throwIfNot200</span></a></span><span> </span><span class="hs-glyph">::</span><span> </span><span class="hs-special">(</span><span class="annot"><span class="hs-identifier hs-type">MonadIO</span></span><span> </span><span class="annot"><a href="#local-6989586621679669808"><span class="hs-identifier hs-type">m</span></a></span><span class="hs-special">)</span><span> </span><span class="hs-glyph">=&gt;</span><span> </span><span class="annot"><span class="hs-identifier hs-type">Request</span></span><span> </span><span class="hs-glyph">-&gt;</span><span> </span><span class="annot"><span class="hs-identifier hs-type">Response</span></span><span> </span><span class="annot"><span class="hs-identifier hs-type">BodyReader</span></span><span> </span><span class="hs-glyph">-&gt;</span><span> </span><span class="annot"><a href="#local-6989586621679669808"><span class="hs-identifier hs-type">m</span></a></span><span> </span><span class="hs-special">(</span><span class="hs-special">)</span></span><span>
+</span><span id="line-57"></span><span id="throwIfNot200"><span class="annot"><span class="annottext">throwIfNot200 :: Request -&gt; Response BodyReader -&gt; m ()
+</span><a href="LaunchDarkly.Server.Network.Common.html#throwIfNot200"><span class="hs-identifier hs-var hs-var">throwIfNot200</span></a></span></span><span> </span><span id="local-6989586621679669807"><span class="annot"><span class="annottext">request :: Request
+</span><a href="#local-6989586621679669807"><span class="hs-identifier hs-var">request</span></a></span></span><span> </span><span id="local-6989586621679669806"><span class="annot"><span class="annottext">response :: Response BodyReader
+</span><a href="#local-6989586621679669806"><span class="hs-identifier hs-var">response</span></a></span></span><span> </span><span class="hs-glyph">=</span><span> </span><span class="annot"><span class="annottext">Bool -&gt; m () -&gt; m ()
+forall (f :: * -&gt; *). Applicative f =&gt; Bool -&gt; f () -&gt; f ()
+</span><span class="hs-identifier hs-var">when</span></span><span> </span><span class="hs-special">(</span><span class="annot"><span class="annottext">Response BodyReader -&gt; Status
+forall body. Response body -&gt; Status
+</span><span class="hs-identifier hs-var hs-var">responseStatus</span></span><span> </span><span class="annot"><span class="annottext">Response BodyReader
+</span><a href="#local-6989586621679669806"><span class="hs-identifier hs-var">response</span></a></span><span> </span><span class="annot"><span class="annottext">Status -&gt; Status -&gt; Bool
+forall a. Eq a =&gt; a -&gt; a -&gt; Bool
+</span><span class="hs-operator hs-var">/=</span></span><span> </span><span class="annot"><span class="annottext">Status
+</span><span class="hs-identifier hs-var">ok200</span></span><span class="hs-special">)</span><span> </span><span class="annot"><span class="annottext">(m () -&gt; m ()) -&gt; m () -&gt; m ()
+forall a b. (a -&gt; b) -&gt; a -&gt; b
+</span><span class="hs-operator hs-var">$</span></span><span> </span><span class="annot"><span class="annottext">Request -&gt; Response BodyReader -&gt; m ()
+forall (m :: * -&gt; *).
+MonadIO m =&gt;
+Request -&gt; Response BodyReader -&gt; m ()
+</span><span class="hs-identifier hs-var">throwErrorStatusCodes</span></span><span> </span><span class="annot"><span class="annottext">Request
+</span><a href="#local-6989586621679669807"><span class="hs-identifier hs-var">request</span></a></span><span> </span><span class="annot"><span class="annottext">Response BodyReader
+</span><a href="#local-6989586621679669806"><span class="hs-identifier hs-var">response</span></a></span><span>
+</span><span id="line-58"></span><span>
+</span><span id="line-59"></span><span id="local-6989586621679669805"><span class="annot"><a href="LaunchDarkly.Server.Network.Common.html#getServerTime"><span class="hs-identifier hs-type">getServerTime</span></a></span><span> </span><span class="hs-glyph">::</span><span> </span><span class="annot"><span class="hs-identifier hs-type">Response</span></span><span> </span><span class="annot"><a href="#local-6989586621679669805"><span class="hs-identifier hs-type">body</span></a></span><span> </span><span class="hs-glyph">-&gt;</span><span> </span><span class="annot"><span class="hs-identifier hs-type">Integer</span></span></span><span>
+</span><span id="line-60"></span><span id="getServerTime"><span class="annot"><span class="annottext">getServerTime :: Response body -&gt; Integer
+</span><a href="LaunchDarkly.Server.Network.Common.html#getServerTime"><span class="hs-identifier hs-var hs-var">getServerTime</span></a></span></span><span> </span><span id="local-6989586621679669804"><span class="annot"><span class="annottext">response :: Response body
+</span><a href="#local-6989586621679669804"><span class="hs-identifier hs-var">response</span></a></span></span><span>
+</span><span id="line-61"></span><span>    </span><span class="hs-glyph">|</span><span> </span><span class="annot"><span class="annottext">ByteString
+</span><a href="#local-6989586621679669803"><span class="hs-identifier hs-var">date</span></a></span><span> </span><span class="annot"><span class="annottext">ByteString -&gt; ByteString -&gt; Bool
+forall a. Eq a =&gt; a -&gt; a -&gt; Bool
+</span><span class="hs-operator hs-var">==</span></span><span> </span><span class="annot"><span class="hs-string">&quot;&quot;</span></span><span> </span><span class="hs-glyph">=</span><span> </span><span class="annot"><span class="hs-number">0</span></span><span>
+</span><span id="line-62"></span><span>    </span><span class="hs-glyph">|</span><span> </span><span class="annot"><span class="annottext">Bool
+</span><span class="hs-identifier hs-var">otherwise</span></span><span> </span><span class="hs-glyph">=</span><span> </span><span class="annot"><span class="annottext">Integer -&gt; Maybe Integer -&gt; Integer
+forall a. a -&gt; Maybe a -&gt; a
+</span><span class="hs-identifier hs-var">fromMaybe</span></span><span> </span><span class="annot"><span class="hs-number">0</span></span><span> </span><span class="hs-special">(</span><span class="annot"><span class="annottext">POSIXTime -&gt; Integer
+forall a b. (RealFrac a, Integral b) =&gt; a -&gt; b
+</span><span class="hs-identifier hs-var">truncate</span></span><span> </span><span class="annot"><span class="annottext">(POSIXTime -&gt; Integer)
+-&gt; (UTCTime -&gt; POSIXTime) -&gt; UTCTime -&gt; Integer
+forall (f :: * -&gt; *) a b. Functor f =&gt; (a -&gt; b) -&gt; f a -&gt; f b
+</span><span class="hs-operator hs-var">&lt;$&gt;</span></span><span> </span><span class="annot"><span class="annottext">UTCTime -&gt; POSIXTime
+</span><span class="hs-identifier hs-var">utcTimeToPOSIXSeconds</span></span><span> </span><span class="annot"><span class="annottext">(UTCTime -&gt; Integer) -&gt; Maybe UTCTime -&gt; Maybe Integer
+forall (f :: * -&gt; *) a b. Functor f =&gt; (a -&gt; b) -&gt; f a -&gt; f b
+</span><span class="hs-operator hs-var">&lt;$&gt;</span></span><span> </span><span class="annot"><span class="annottext">Maybe UTCTime
+</span><a href="#local-6989586621679669800"><span class="hs-identifier hs-var">parsedTime</span></a></span><span class="hs-special">)</span><span>
+</span><span id="line-63"></span><span>  </span><span class="hs-keyword">where</span><span>
+</span><span id="line-64"></span><span>    </span><span id="local-6989586621679669799"><span class="annot"><span class="annottext">headers :: ResponseHeaders
+</span><a href="#local-6989586621679669799"><span class="hs-identifier hs-var hs-var">headers</span></a></span></span><span> </span><span class="hs-glyph">=</span><span> </span><span class="annot"><span class="annottext">Response body -&gt; ResponseHeaders
+forall body. Response body -&gt; ResponseHeaders
+</span><span class="hs-identifier hs-var hs-var">responseHeaders</span></span><span> </span><span class="annot"><span class="annottext">Response body
+</span><a href="#local-6989586621679669804"><span class="hs-identifier hs-var">response</span></a></span><span>
+</span><span id="line-65"></span><span>    </span><span id="local-6989586621679669803"><span class="annot"><span class="annottext">date :: ByteString
+</span><a href="#local-6989586621679669803"><span class="hs-identifier hs-var hs-var">date</span></a></span></span><span> </span><span class="hs-glyph">=</span><span> </span><span class="annot"><span class="annottext">ByteString -&gt; Maybe ByteString -&gt; ByteString
+forall a. a -&gt; Maybe a -&gt; a
+</span><span class="hs-identifier hs-var">fromMaybe</span></span><span> </span><span class="annot"><span class="hs-string">&quot;&quot;</span></span><span> </span><span class="annot"><span class="annottext">(Maybe ByteString -&gt; ByteString) -&gt; Maybe ByteString -&gt; ByteString
+forall a b. (a -&gt; b) -&gt; a -&gt; b
+</span><span class="hs-operator hs-var">$</span></span><span> </span><span class="annot"><span class="annottext">HeaderName -&gt; ResponseHeaders -&gt; Maybe ByteString
+forall a b. Eq a =&gt; a -&gt; [(a, b)] -&gt; Maybe b
+</span><span class="hs-identifier hs-var">lookup</span></span><span> </span><span class="annot"><span class="annottext">HeaderName
+</span><span class="hs-identifier hs-var">hDate</span></span><span> </span><span class="annot"><span class="annottext">ResponseHeaders
+</span><a href="#local-6989586621679669799"><span class="hs-identifier hs-var">headers</span></a></span><span>
+</span><span id="line-66"></span><span>    </span><span id="local-6989586621679669800"><span class="annot"><span class="annottext">parsedTime :: Maybe UTCTime
+</span><a href="#local-6989586621679669800"><span class="hs-identifier hs-var hs-var">parsedTime</span></a></span></span><span> </span><span class="hs-glyph">=</span><span> </span><span class="annot"><span class="annottext">Bool -&gt; TimeLocale -&gt; String -&gt; String -&gt; Maybe UTCTime
+forall (m :: * -&gt; *) t.
+(MonadFail m, ParseTime t) =&gt;
+Bool -&gt; TimeLocale -&gt; String -&gt; String -&gt; m t
+</span><span class="hs-identifier hs-var">parseTimeM</span></span><span> </span><span class="annot"><span class="annottext">Bool
+</span><span class="hs-identifier hs-var">True</span></span><span> </span><span class="annot"><span class="annottext">TimeLocale
+</span><span class="hs-identifier hs-var">defaultTimeLocale</span></span><span> </span><span class="annot"><span class="annottext">String
+</span><span class="hs-identifier hs-var">rfc822DateFormat</span></span><span> </span><span class="hs-special">(</span><span class="annot"><span class="annottext">ByteString -&gt; String
+</span><span class="hs-identifier hs-var">unpackChars</span></span><span> </span><span class="annot"><span class="annottext">ByteString
+</span><a href="#local-6989586621679669803"><span class="hs-identifier hs-var">date</span></a></span><span class="hs-special">)</span><span>
+</span><span id="line-67"></span><span>
+</span><span id="line-68"></span><span class="annot"><a href="LaunchDarkly.Server.Network.Common.html#isHttpUnrecoverable"><span class="hs-identifier hs-type">isHttpUnrecoverable</span></a></span><span> </span><span class="hs-glyph">::</span><span> </span><span class="annot"><span class="hs-identifier hs-type">Int</span></span><span> </span><span class="hs-glyph">-&gt;</span><span> </span><span class="annot"><span class="hs-identifier hs-type">Bool</span></span><span>
+</span><span id="line-69"></span><span id="isHttpUnrecoverable"><span class="annot"><span class="annottext">isHttpUnrecoverable :: Int -&gt; Bool
+</span><a href="LaunchDarkly.Server.Network.Common.html#isHttpUnrecoverable"><span class="hs-identifier hs-var hs-var">isHttpUnrecoverable</span></a></span></span><span> </span><span id="local-6989586621679669796"><span class="annot"><span class="annottext">status :: Int
+</span><a href="#local-6989586621679669796"><span class="hs-identifier hs-var">status</span></a></span></span><span>
+</span><span id="line-70"></span><span>    </span><span class="hs-glyph">|</span><span> </span><span class="annot"><span class="annottext">Int
+</span><a href="#local-6989586621679669796"><span class="hs-identifier hs-var">status</span></a></span><span> </span><span class="annot"><span class="annottext">Int -&gt; Int -&gt; Bool
+forall a. Ord a =&gt; a -&gt; a -&gt; Bool
+</span><span class="hs-operator hs-var">&lt;</span></span><span> </span><span class="annot"><span class="hs-number">400</span></span><span> </span><span class="annot"><span class="annottext">Bool -&gt; Bool -&gt; Bool
+</span><span class="hs-operator hs-var">||</span></span><span> </span><span class="annot"><span class="annottext">Int
+</span><a href="#local-6989586621679669796"><span class="hs-identifier hs-var">status</span></a></span><span> </span><span class="annot"><span class="annottext">Int -&gt; Int -&gt; Bool
+forall a. Ord a =&gt; a -&gt; a -&gt; Bool
+</span><span class="hs-operator hs-var">&gt;=</span></span><span> </span><span class="annot"><span class="hs-number">500</span></span><span> </span><span class="hs-glyph">=</span><span> </span><span class="annot"><span class="annottext">Bool
+</span><span class="hs-identifier hs-var">False</span></span><span>
+</span><span id="line-71"></span><span>    </span><span class="hs-glyph">|</span><span> </span><span class="annot"><span class="annottext">Int
+</span><a href="#local-6989586621679669796"><span class="hs-identifier hs-var">status</span></a></span><span> </span><span class="annot"><span class="annottext">Int -&gt; [Int] -&gt; Bool
+forall (t :: * -&gt; *) a. (Foldable t, Eq a) =&gt; a -&gt; t a -&gt; Bool
+</span><span class="hs-operator hs-var">`elem`</span></span><span> </span><span class="hs-special">[</span><span class="annot"><span class="hs-number">400</span></span><span class="hs-special">,</span><span> </span><span class="annot"><span class="hs-number">408</span></span><span class="hs-special">,</span><span> </span><span class="annot"><span class="hs-number">429</span></span><span class="hs-special">]</span><span> </span><span class="hs-glyph">=</span><span> </span><span class="annot"><span class="annottext">Bool
+</span><span class="hs-identifier hs-var">False</span></span><span>
+</span><span id="line-72"></span><span>    </span><span class="hs-glyph">|</span><span> </span><span class="annot"><span class="annottext">Bool
+</span><span class="hs-identifier hs-var">otherwise</span></span><span> </span><span class="hs-glyph">=</span><span> </span><span class="annot"><span class="annottext">Bool
+</span><span class="hs-identifier hs-var">True</span></span><span>
+</span><span id="line-73"></span></pre></body></html>

@@ -1,0 +1,408 @@
+<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Transitional//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-transitional.dtd"><html xmlns="http://www.w3.org/1999/xhtml"><head><link rel="stylesheet" type="text/css" href="style.css" /><script type="text/javascript" src="highlight.js"></script></head><body><pre><span class="hs-keyword">module</span><span> </span><span class="hs-identifier">LaunchDarkly.Server.Network.Polling</span><span> </span><span class="hs-special">(</span><span class="annot"><a href="LaunchDarkly.Server.Network.Polling.html#pollingThread"><span class="hs-identifier">pollingThread</span></a></span><span class="hs-special">)</span><span> </span><span class="hs-keyword">where</span><span>
+</span><span id="line-2"></span><span>
+</span><span id="line-3"></span><span class="hs-keyword">import</span><span> </span><span class="annot"><span class="hs-identifier">Control.Concurrent</span></span><span> </span><span class="hs-special">(</span><span class="annot"><span class="hs-identifier">threadDelay</span></span><span class="hs-special">)</span><span>
+</span><span id="line-4"></span><span class="hs-keyword">import</span><span> </span><span class="annot"><span class="hs-identifier">Control.Monad.Catch</span></span><span> </span><span class="hs-special">(</span><span class="annot"><span class="hs-identifier">MonadMask</span></span><span class="hs-special">,</span><span> </span><span class="annot"><span class="hs-identifier">MonadThrow</span></span><span class="hs-special">)</span><span>
+</span><span id="line-5"></span><span class="hs-keyword">import</span><span> </span><span class="annot"><span class="hs-identifier">Control.Monad.IO.Class</span></span><span> </span><span class="hs-special">(</span><span class="annot"><span class="hs-identifier">MonadIO</span></span><span class="hs-special">,</span><span> </span><span class="annot"><span class="hs-identifier">liftIO</span></span><span class="hs-special">)</span><span>
+</span><span id="line-6"></span><span class="hs-keyword">import</span><span> </span><span class="annot"><span class="hs-identifier">Control.Monad.Logger</span></span><span> </span><span class="hs-special">(</span><span class="annot"><span class="hs-identifier">MonadLogger</span></span><span class="hs-special">,</span><span> </span><span class="annot"><span class="hs-identifier">logDebug</span></span><span class="hs-special">,</span><span> </span><span class="annot"><span class="hs-identifier">logError</span></span><span class="hs-special">)</span><span>
+</span><span id="line-7"></span><span class="hs-keyword">import</span><span> </span><span class="annot"><span class="hs-identifier">Data.Aeson</span></span><span> </span><span class="hs-special">(</span><span class="annot"><span class="hs-identifier">FromJSON</span></span><span> </span><span class="hs-special">(</span><span class="hs-glyph">..</span><span class="hs-special">)</span><span class="hs-special">,</span><span> </span><span class="annot"><span class="hs-identifier">eitherDecode</span></span><span class="hs-special">)</span><span>
+</span><span id="line-8"></span><span class="hs-keyword">import</span><span> </span><span class="annot"><span class="hs-identifier">Data.Generics.Product</span></span><span> </span><span class="hs-special">(</span><span class="annot"><span class="hs-identifier">getField</span></span><span class="hs-special">)</span><span>
+</span><span id="line-9"></span><span class="hs-keyword">import</span><span> </span><span class="annot"><span class="hs-identifier">Data.Text</span></span><span> </span><span class="hs-special">(</span><span class="annot"><span class="hs-identifier">Text</span></span><span class="hs-special">)</span><span>
+</span><span id="line-10"></span><span class="hs-keyword">import</span><span> </span><span class="hs-keyword">qualified</span><span> </span><span class="annot"><span class="hs-identifier">Data.Text</span></span><span> </span><span class="hs-keyword">as</span><span> </span><span class="annot"><span class="hs-identifier">T</span></span><span>
+</span><span id="line-11"></span><span class="hs-keyword">import</span><span> </span><span class="annot"><span class="hs-identifier">GHC.Generics</span></span><span> </span><span class="hs-special">(</span><span class="annot"><span class="hs-identifier">Generic</span></span><span class="hs-special">)</span><span>
+</span><span id="line-12"></span><span class="hs-keyword">import</span><span> </span><span class="annot"><span class="hs-identifier">Network.HTTP.Client</span></span><span> </span><span class="hs-special">(</span><span class="annot"><span class="hs-identifier">Manager</span></span><span class="hs-special">,</span><span> </span><span class="annot"><span class="hs-identifier">Request</span></span><span> </span><span class="hs-special">(</span><span class="hs-glyph">..</span><span class="hs-special">)</span><span class="hs-special">,</span><span> </span><span class="annot"><span class="hs-identifier">Response</span></span><span> </span><span class="hs-special">(</span><span class="hs-glyph">..</span><span class="hs-special">)</span><span class="hs-special">,</span><span> </span><span class="annot"><span class="hs-identifier">httpLbs</span></span><span class="hs-special">)</span><span>
+</span><span id="line-13"></span><span class="hs-keyword">import</span><span> </span><span class="annot"><span class="hs-identifier">Network.HTTP.Types.Status</span></span><span> </span><span class="hs-special">(</span><span class="annot"><span class="hs-identifier">Status</span></span><span> </span><span class="hs-special">(</span><span class="annot"><span class="hs-identifier">statusCode</span></span><span class="hs-special">)</span><span class="hs-special">,</span><span> </span><span class="annot"><span class="hs-identifier">ok200</span></span><span class="hs-special">)</span><span>
+</span><span id="line-14"></span><span>
+</span><span id="line-15"></span><span class="hs-keyword">import</span><span> </span><span class="annot"><a href="LaunchDarkly.AesonCompat.html"><span class="hs-identifier">LaunchDarkly.AesonCompat</span></a></span><span> </span><span class="hs-special">(</span><span class="annot"><a href="LaunchDarkly.AesonCompat.html#KeyMap"><span class="hs-identifier">KeyMap</span></a></span><span class="hs-special">)</span><span>
+</span><span id="line-16"></span><span class="hs-keyword">import</span><span> </span><span class="annot"><a href="LaunchDarkly.Server.Features.html"><span class="hs-identifier">LaunchDarkly.Server.Features</span></a></span><span> </span><span class="hs-special">(</span><span class="annot"><a href="LaunchDarkly.Server.Features.html#Flag"><span class="hs-identifier">Flag</span></a></span><span class="hs-special">,</span><span> </span><span class="annot"><a href="LaunchDarkly.Server.Features.html#Segment"><span class="hs-identifier">Segment</span></a></span><span class="hs-special">)</span><span>
+</span><span id="line-17"></span><span class="hs-keyword">import</span><span> </span><span class="annot"><a href="LaunchDarkly.Server.Network.Common.html"><span class="hs-identifier">LaunchDarkly.Server.Network.Common</span></a></span><span> </span><span class="hs-special">(</span><span class="annot"><a href="LaunchDarkly.Server.Network.Common.html#checkAuthorization"><span class="hs-identifier">checkAuthorization</span></a></span><span class="hs-special">,</span><span> </span><span class="annot"><a href="LaunchDarkly.Server.Network.Common.html#handleUnauthorized"><span class="hs-identifier">handleUnauthorized</span></a></span><span class="hs-special">,</span><span> </span><span class="annot"><a href="LaunchDarkly.Server.Network.Common.html#isHttpUnrecoverable"><span class="hs-identifier">isHttpUnrecoverable</span></a></span><span class="hs-special">,</span><span> </span><span class="annot"><a href="LaunchDarkly.Server.Network.Common.html#tryHTTP"><span class="hs-identifier">tryHTTP</span></a></span><span class="hs-special">)</span><span>
+</span><span id="line-18"></span><span>
+</span><span id="line-19"></span><span class="hs-keyword">import</span><span> </span><span class="annot"><span class="hs-identifier">Data.ByteString.Lazy</span></span><span> </span><span class="hs-special">(</span><span class="annot"><span class="hs-identifier">ByteString</span></span><span class="hs-special">)</span><span>
+</span><span id="line-20"></span><span class="hs-keyword">import</span><span> </span><span class="annot"><span class="hs-identifier">GHC.Natural</span></span><span> </span><span class="hs-special">(</span><span class="annot"><span class="hs-identifier">Natural</span></span><span class="hs-special">)</span><span>
+</span><span id="line-21"></span><span class="hs-keyword">import</span><span> </span><span class="annot"><a href="LaunchDarkly.Server.Client.Internal.html"><span class="hs-identifier">LaunchDarkly.Server.Client.Internal</span></a></span><span> </span><span class="hs-special">(</span><span class="annot"><a href="LaunchDarkly.Server.Client.Status.html#Status"><span class="hs-identifier">Status</span></a></span><span> </span><span class="hs-special">(</span><span class="hs-glyph">..</span><span class="hs-special">)</span><span class="hs-special">)</span><span>
+</span><span id="line-22"></span><span class="hs-keyword">import</span><span> </span><span class="annot"><a href="LaunchDarkly.Server.Config.ClientContext.html"><span class="hs-identifier">LaunchDarkly.Server.Config.ClientContext</span></a></span><span>
+</span><span id="line-23"></span><span class="hs-keyword">import</span><span> </span><span class="annot"><a href="LaunchDarkly.Server.Config.HttpConfiguration.html"><span class="hs-identifier">LaunchDarkly.Server.Config.HttpConfiguration</span></a></span><span> </span><span class="hs-special">(</span><span class="annot"><a href="LaunchDarkly.Server.Config.HttpConfiguration.html#HttpConfiguration"><span class="hs-identifier">HttpConfiguration</span></a></span><span> </span><span class="hs-special">(</span><span class="hs-glyph">..</span><span class="hs-special">)</span><span class="hs-special">,</span><span> </span><span class="annot"><a href="LaunchDarkly.Server.Config.HttpConfiguration.html#prepareRequest"><span class="hs-identifier">prepareRequest</span></a></span><span class="hs-special">)</span><span>
+</span><span id="line-24"></span><span class="hs-keyword">import</span><span> </span><span class="annot"><a href="LaunchDarkly.Server.DataSource.Internal.html"><span class="hs-identifier">LaunchDarkly.Server.DataSource.Internal</span></a></span><span> </span><span class="hs-special">(</span><span class="annot"><a href="LaunchDarkly.Server.DataSource.Internal.html#DataSourceUpdates"><span class="hs-identifier">DataSourceUpdates</span></a></span><span> </span><span class="hs-special">(</span><span class="hs-glyph">..</span><span class="hs-special">)</span><span class="hs-special">)</span><span>
+</span><span id="line-25"></span><span>
+</span><span id="line-26"></span><span id="local-6989586621679670535"><span id="local-6989586621679670536"></span></span><span class="hs-keyword">data</span><span> </span><span id="PollingResponse"><span class="annot"><a href="LaunchDarkly.Server.Network.Polling.html#PollingResponse"><span class="hs-identifier hs-var">PollingResponse</span></a></span></span><span> </span><span class="hs-glyph">=</span><span> </span><span id="PollingResponse"><span class="annot"><a href="LaunchDarkly.Server.Network.Polling.html#PollingResponse"><span class="hs-identifier hs-var">PollingResponse</span></a></span></span><span>
+</span><span id="line-27"></span><span>    </span><span class="hs-special">{</span><span> </span><span id="%24sel%3Aflags%3APollingResponse"><span class="annot"><span class="annottext">PollingResponse -&gt; KeyMap Flag
+</span><a href="LaunchDarkly.Server.Network.Polling.html#%24sel%3Aflags%3APollingResponse"><span class="hs-identifier hs-var hs-var">flags</span></a></span></span><span> </span><span class="hs-glyph">::</span><span> </span><span class="hs-glyph">!</span><span class="hs-special">(</span><span class="annot"><a href="LaunchDarkly.AesonCompat.html#KeyMap"><span class="hs-identifier hs-type">KeyMap</span></a></span><span> </span><span class="annot"><a href="LaunchDarkly.Server.Features.html#Flag"><span class="hs-identifier hs-type">Flag</span></a></span><span class="hs-special">)</span><span>
+</span><span id="line-28"></span><span>    </span><span class="hs-special">,</span><span> </span><span id="%24sel%3Asegments%3APollingResponse"><span class="annot"><span class="annottext">PollingResponse -&gt; KeyMap Segment
+</span><a href="LaunchDarkly.Server.Network.Polling.html#%24sel%3Asegments%3APollingResponse"><span class="hs-identifier hs-var hs-var">segments</span></a></span></span><span> </span><span class="hs-glyph">::</span><span> </span><span class="hs-glyph">!</span><span class="hs-special">(</span><span class="annot"><a href="LaunchDarkly.AesonCompat.html#KeyMap"><span class="hs-identifier hs-type">KeyMap</span></a></span><span> </span><span class="annot"><a href="LaunchDarkly.Server.Features.html#Segment"><span class="hs-identifier hs-type">Segment</span></a></span><span class="hs-special">)</span><span>
+</span><span id="line-29"></span><span>    </span><span class="hs-special">}</span><span>
+</span><span id="line-30"></span><span>    </span><span class="hs-keyword">deriving</span><span> </span><span class="hs-special">(</span><span class="annot"><span class="annottext">(forall x. PollingResponse -&gt; Rep PollingResponse x)
+-&gt; (forall x. Rep PollingResponse x -&gt; PollingResponse)
+-&gt; Generic PollingResponse
+forall x. Rep PollingResponse x -&gt; PollingResponse
+forall x. PollingResponse -&gt; Rep PollingResponse x
+forall a.
+(forall x. a -&gt; Rep a x) -&gt; (forall x. Rep a x -&gt; a) -&gt; Generic a
+$cto :: forall x. Rep PollingResponse x -&gt; PollingResponse
+$cfrom :: forall x. PollingResponse -&gt; Rep PollingResponse x
+</span><span class="hs-identifier hs-var hs-var hs-var hs-var">Generic</span></span><span class="hs-special">,</span><span> </span><span id="local-6989586621679670525"><span id="local-6989586621679670527"><span class="annot"><span class="annottext">Value -&gt; Parser [PollingResponse]
+Value -&gt; Parser PollingResponse
+(Value -&gt; Parser PollingResponse)
+-&gt; (Value -&gt; Parser [PollingResponse]) -&gt; FromJSON PollingResponse
+forall a.
+(Value -&gt; Parser a) -&gt; (Value -&gt; Parser [a]) -&gt; FromJSON a
+parseJSONList :: Value -&gt; Parser [PollingResponse]
+$cparseJSONList :: Value -&gt; Parser [PollingResponse]
+parseJSON :: Value -&gt; Parser PollingResponse
+$cparseJSON :: Value -&gt; Parser PollingResponse
+</span><span class="hs-identifier hs-var hs-var hs-var hs-var hs-var hs-var">FromJSON</span></span></span></span><span class="hs-special">,</span><span> </span><span id="local-6989586621679670518"><span id="local-6989586621679670520"><span id="local-6989586621679670522"><span class="annot"><span class="annottext">Int -&gt; PollingResponse -&gt; ShowS
+[PollingResponse] -&gt; ShowS
+PollingResponse -&gt; String
+(Int -&gt; PollingResponse -&gt; ShowS)
+-&gt; (PollingResponse -&gt; String)
+-&gt; ([PollingResponse] -&gt; ShowS)
+-&gt; Show PollingResponse
+forall a.
+(Int -&gt; a -&gt; ShowS) -&gt; (a -&gt; String) -&gt; ([a] -&gt; ShowS) -&gt; Show a
+showList :: [PollingResponse] -&gt; ShowS
+$cshowList :: [PollingResponse] -&gt; ShowS
+show :: PollingResponse -&gt; String
+$cshow :: PollingResponse -&gt; String
+showsPrec :: Int -&gt; PollingResponse -&gt; ShowS
+$cshowsPrec :: Int -&gt; PollingResponse -&gt; ShowS
+</span><span class="hs-identifier hs-var hs-var hs-var hs-var hs-var hs-var hs-var hs-var">Show</span></span></span></span></span><span class="hs-special">)</span><span>
+</span><span id="line-31"></span><span>
+</span><span id="line-32"></span><span id="local-6989586621679670552"><span class="annot"><a href="LaunchDarkly.Server.Network.Polling.html#processPoll"><span class="hs-identifier hs-type">processPoll</span></a></span><span> </span><span class="hs-glyph">::</span><span> </span><span class="hs-special">(</span><span class="annot"><span class="hs-identifier hs-type">MonadIO</span></span><span> </span><span class="annot"><a href="#local-6989586621679670552"><span class="hs-identifier hs-type">m</span></a></span><span class="hs-special">,</span><span> </span><span class="annot"><span class="hs-identifier hs-type">MonadLogger</span></span><span> </span><span class="annot"><a href="#local-6989586621679670552"><span class="hs-identifier hs-type">m</span></a></span><span class="hs-special">,</span><span> </span><span class="annot"><span class="hs-identifier hs-type">MonadMask</span></span><span> </span><span class="annot"><a href="#local-6989586621679670552"><span class="hs-identifier hs-type">m</span></a></span><span class="hs-special">,</span><span> </span><span class="annot"><span class="hs-identifier hs-type">MonadThrow</span></span><span> </span><span class="annot"><a href="#local-6989586621679670552"><span class="hs-identifier hs-type">m</span></a></span><span class="hs-special">)</span><span> </span><span class="hs-glyph">=&gt;</span><span> </span><span class="annot"><span class="hs-identifier hs-type">Manager</span></span><span> </span><span class="hs-glyph">-&gt;</span><span> </span><span class="annot"><a href="LaunchDarkly.Server.DataSource.Internal.html#DataSourceUpdates"><span class="hs-identifier hs-type">DataSourceUpdates</span></a></span><span> </span><span class="hs-glyph">-&gt;</span><span> </span><span class="annot"><span class="hs-identifier hs-type">Request</span></span><span> </span><span class="hs-glyph">-&gt;</span><span> </span><span class="annot"><a href="#local-6989586621679670552"><span class="hs-identifier hs-type">m</span></a></span><span> </span><span class="annot"><span class="hs-identifier hs-type">Bool</span></span></span><span>
+</span><span id="line-33"></span><span id="processPoll"><span class="annot"><span class="annottext">processPoll :: Manager -&gt; DataSourceUpdates -&gt; Request -&gt; m Bool
+</span><a href="LaunchDarkly.Server.Network.Polling.html#processPoll"><span class="hs-identifier hs-var hs-var">processPoll</span></a></span></span><span> </span><span id="local-6989586621679670515"><span class="annot"><span class="annottext">manager :: Manager
+</span><a href="#local-6989586621679670515"><span class="hs-identifier hs-var">manager</span></a></span></span><span> </span><span id="local-6989586621679670514"><span class="annot"><span class="annottext">dataSourceUpdates :: DataSourceUpdates
+</span><a href="#local-6989586621679670514"><span class="hs-identifier hs-var">dataSourceUpdates</span></a></span></span><span> </span><span id="local-6989586621679670513"><span class="annot"><span class="annottext">request :: Request
+</span><a href="#local-6989586621679670513"><span class="hs-identifier hs-var">request</span></a></span></span><span> </span><span class="hs-glyph">=</span><span>
+</span><span id="line-34"></span><span>    </span><span class="annot"><span class="annottext">IO (Either HttpException (Response ByteString))
+-&gt; m (Either HttpException (Response ByteString))
+forall (m :: * -&gt; *) a. MonadIO m =&gt; IO a -&gt; m a
+</span><span class="hs-identifier hs-var">liftIO</span></span><span> </span><span class="hs-special">(</span><span class="annot"><span class="annottext">IO (Response ByteString)
+-&gt; IO (Either HttpException (Response ByteString))
+forall (m :: * -&gt; *) a.
+MonadCatch m =&gt;
+m a -&gt; m (Either HttpException a)
+</span><a href="LaunchDarkly.Server.Network.Common.html#tryHTTP"><span class="hs-identifier hs-var">tryHTTP</span></a></span><span> </span><span class="annot"><span class="annottext">(IO (Response ByteString)
+ -&gt; IO (Either HttpException (Response ByteString)))
+-&gt; IO (Response ByteString)
+-&gt; IO (Either HttpException (Response ByteString))
+forall a b. (a -&gt; b) -&gt; a -&gt; b
+</span><span class="hs-operator hs-var">$</span></span><span> </span><span class="annot"><span class="annottext">Request -&gt; Manager -&gt; IO (Response ByteString)
+</span><span class="hs-identifier hs-var">httpLbs</span></span><span> </span><span class="annot"><span class="annottext">Request
+</span><a href="#local-6989586621679670513"><span class="hs-identifier hs-var">request</span></a></span><span> </span><span class="annot"><span class="annottext">Manager
+</span><a href="#local-6989586621679670515"><span class="hs-identifier hs-var">manager</span></a></span><span class="hs-special">)</span><span> </span><span class="annot"><span class="annottext">m (Either HttpException (Response ByteString))
+-&gt; (Either HttpException (Response ByteString) -&gt; m Bool) -&gt; m Bool
+forall (m :: * -&gt; *) a b. Monad m =&gt; m a -&gt; (a -&gt; m b) -&gt; m b
+</span><span class="hs-operator hs-var">&gt;&gt;=</span></span><span> </span><span class="hs-glyph">\</span><span class="hs-glyph">case</span><span>
+</span><span id="line-35"></span><span>        </span><span class="hs-special">(</span><span class="annot"><span class="hs-identifier hs-type">Left</span></span><span> </span><span id="local-6989586621679670512"><span class="annot"><span class="annottext">err :: HttpException
+</span><a href="#local-6989586621679670512"><span class="hs-identifier hs-var">err</span></a></span></span><span class="hs-special">)</span><span> </span><span class="hs-glyph">-&gt;</span><span> </span><span class="hs-keyword">do</span><span>
+</span><span id="line-36"></span><span>            </span><span class="hs-special">$(</span><span class="annot"><span class="annottext">LogLevel
+String -&gt; Text
+String -&gt; String -&gt; String -&gt; CharPos -&gt; CharPos -&gt; Loc
+Text -&gt; Text
+Loc -&gt; Text -&gt; LogLevel -&gt; Text -&gt; m ()
+(Text -&gt; m ()) -&gt; (Text -&gt; Text) -&gt; Text -&gt; m ()
+forall a. a -&gt; a
+forall b c a. (b -&gt; c) -&gt; (a -&gt; b) -&gt; a -&gt; c
+forall (m :: * -&gt; *) msg.
+(MonadLogger m, ToLogStr msg) =&gt;
+Loc -&gt; Text -&gt; LogLevel -&gt; msg -&gt; m ()
+monadLoggerLog :: forall (m :: * -&gt; *) msg.
+(MonadLogger m, ToLogStr msg) =&gt;
+Loc -&gt; Text -&gt; LogLevel -&gt; msg -&gt; m ()
+pack :: String -&gt; Text
+. :: forall b c a. (b -&gt; c) -&gt; (a -&gt; b) -&gt; a -&gt; c
+id :: forall a. a -&gt; a
+</span><span class="hs-identifier hs-var hs-var hs-var hs-var hs-var hs-var">logError</span></span><span class="hs-special">)</span><span> </span><span class="hs-special">(</span><span class="annot"><span class="annottext">String -&gt; Text
+</span><span class="hs-identifier hs-var">T.pack</span></span><span> </span><span class="annot"><span class="annottext">(String -&gt; Text) -&gt; String -&gt; Text
+forall a b. (a -&gt; b) -&gt; a -&gt; b
+</span><span class="hs-operator hs-var">$</span></span><span> </span><span class="annot"><span class="annottext">HttpException -&gt; String
+forall a. Show a =&gt; a -&gt; String
+</span><span class="hs-identifier hs-var">show</span></span><span> </span><span class="annot"><span class="annottext">HttpException
+</span><a href="#local-6989586621679670512"><span class="hs-identifier hs-var">err</span></a></span><span class="hs-special">)</span><span>
+</span><span id="line-37"></span><span>            </span><span class="annot"><span class="annottext">Bool -&gt; m Bool
+forall (f :: * -&gt; *) a. Applicative f =&gt; a -&gt; f a
+</span><span class="hs-identifier hs-var">pure</span></span><span> </span><span class="annot"><span class="annottext">Bool
+</span><span class="hs-identifier hs-var">True</span></span><span>
+</span><span id="line-38"></span><span>        </span><span class="hs-special">(</span><span class="annot"><span class="hs-identifier hs-type">Right</span></span><span> </span><span id="local-6989586621679670504"><span class="annot"><span class="annottext">response :: Response ByteString
+</span><a href="#local-6989586621679670504"><span class="hs-identifier hs-var">response</span></a></span></span><span class="hs-special">)</span><span> </span><span class="hs-glyph">-&gt;</span><span>
+</span><span id="line-39"></span><span>            </span><span class="annot"><span class="annottext">Response ByteString -&gt; m ()
+forall (m :: * -&gt; *) body. MonadThrow m =&gt; Response body -&gt; m ()
+</span><a href="LaunchDarkly.Server.Network.Common.html#checkAuthorization"><span class="hs-identifier hs-var">checkAuthorization</span></a></span><span> </span><span class="annot"><span class="annottext">Response ByteString
+</span><a href="#local-6989586621679670504"><span class="hs-identifier hs-var">response</span></a></span><span> </span><span class="annot"><span class="annottext">m () -&gt; m Bool -&gt; m Bool
+forall (m :: * -&gt; *) a b. Monad m =&gt; m a -&gt; m b -&gt; m b
+</span><span class="hs-operator hs-var">&gt;&gt;</span></span><span> </span><span class="annot"><span class="annottext">Response ByteString -&gt; m Bool
+forall (m :: * -&gt; *).
+(MonadIO m, MonadLogger m, MonadMask m, MonadThrow m) =&gt;
+Response ByteString -&gt; m Bool
+</span><a href="#local-6989586621679670503"><span class="hs-identifier hs-var">processResponse</span></a></span><span> </span><span class="annot"><span class="annottext">Response ByteString
+</span><a href="#local-6989586621679670504"><span class="hs-identifier hs-var">response</span></a></span><span>
+</span><span id="line-40"></span><span>  </span><span class="hs-keyword">where</span><span>
+</span><span id="line-41"></span><span>    </span><span id="local-6989586621679670576"><span class="annot"><a href="#local-6989586621679670503"><span class="hs-identifier hs-type">processResponse</span></a></span><span> </span><span class="hs-glyph">::</span><span> </span><span class="hs-special">(</span><span class="annot"><span class="hs-identifier hs-type">MonadIO</span></span><span> </span><span class="annot"><a href="#local-6989586621679670576"><span class="hs-identifier hs-type">m</span></a></span><span class="hs-special">,</span><span> </span><span class="annot"><span class="hs-identifier hs-type">MonadLogger</span></span><span> </span><span class="annot"><a href="#local-6989586621679670576"><span class="hs-identifier hs-type">m</span></a></span><span class="hs-special">,</span><span> </span><span class="annot"><span class="hs-identifier hs-type">MonadMask</span></span><span> </span><span class="annot"><a href="#local-6989586621679670576"><span class="hs-identifier hs-type">m</span></a></span><span class="hs-special">,</span><span> </span><span class="annot"><span class="hs-identifier hs-type">MonadThrow</span></span><span> </span><span class="annot"><a href="#local-6989586621679670576"><span class="hs-identifier hs-type">m</span></a></span><span class="hs-special">)</span><span> </span><span class="hs-glyph">=&gt;</span><span> </span><span class="annot"><span class="hs-identifier hs-type">Response</span></span><span> </span><span class="annot"><span class="hs-identifier hs-type">ByteString</span></span><span> </span><span class="hs-glyph">-&gt;</span><span> </span><span class="annot"><a href="#local-6989586621679670576"><span class="hs-identifier hs-type">m</span></a></span><span> </span><span class="annot"><span class="hs-identifier hs-type">Bool</span></span></span><span>
+</span><span id="line-42"></span><span>    </span><span id="local-6989586621679670503"><span class="annot"><span class="annottext">processResponse :: Response ByteString -&gt; m Bool
+</span><a href="#local-6989586621679670503"><span class="hs-identifier hs-var hs-var">processResponse</span></a></span></span><span> </span><span id="local-6989586621679670502"><span class="annot"><span class="annottext">response :: Response ByteString
+</span><a href="#local-6989586621679670502"><span class="hs-identifier hs-var">response</span></a></span></span><span>
+</span><span id="line-43"></span><span>        </span><span class="hs-glyph">|</span><span> </span><span class="annot"><span class="annottext">Int -&gt; Bool
+</span><a href="LaunchDarkly.Server.Network.Common.html#isHttpUnrecoverable"><span class="hs-identifier hs-var">isHttpUnrecoverable</span></a></span><span> </span><span class="annot"><span class="annottext">(Int -&gt; Bool) -&gt; Int -&gt; Bool
+forall a b. (a -&gt; b) -&gt; a -&gt; b
+</span><span class="hs-operator hs-var">$</span></span><span> </span><span class="annot"><span class="annottext">Status -&gt; Int
+</span><span class="hs-identifier hs-var hs-var">statusCode</span></span><span> </span><span class="annot"><span class="annottext">(Status -&gt; Int) -&gt; Status -&gt; Int
+forall a b. (a -&gt; b) -&gt; a -&gt; b
+</span><span class="hs-operator hs-var">$</span></span><span> </span><span class="annot"><span class="annottext">Response ByteString -&gt; Status
+forall body. Response body -&gt; Status
+</span><span class="hs-identifier hs-var hs-var">responseStatus</span></span><span> </span><span class="annot"><span class="annottext">Response ByteString
+</span><a href="#local-6989586621679670502"><span class="hs-identifier hs-var">response</span></a></span><span> </span><span class="hs-glyph">=</span><span> </span><span class="hs-keyword">do</span><span>
+</span><span id="line-44"></span><span>            </span><span class="hs-special">$(</span><span class="annot"><span class="annottext">LogLevel
+String -&gt; Text
+String -&gt; String -&gt; String -&gt; CharPos -&gt; CharPos -&gt; Loc
+Text -&gt; Text
+Loc -&gt; Text -&gt; LogLevel -&gt; Text -&gt; m ()
+(Text -&gt; m ()) -&gt; (Text -&gt; Text) -&gt; Text -&gt; m ()
+forall a. a -&gt; a
+forall b c a. (b -&gt; c) -&gt; (a -&gt; b) -&gt; a -&gt; c
+forall (m :: * -&gt; *) msg.
+(MonadLogger m, ToLogStr msg) =&gt;
+Loc -&gt; Text -&gt; LogLevel -&gt; msg -&gt; m ()
+monadLoggerLog :: forall (m :: * -&gt; *) msg.
+(MonadLogger m, ToLogStr msg) =&gt;
+Loc -&gt; Text -&gt; LogLevel -&gt; msg -&gt; m ()
+pack :: String -&gt; Text
+. :: forall b c a. (b -&gt; c) -&gt; (a -&gt; b) -&gt; a -&gt; c
+id :: forall a. a -&gt; a
+</span><span class="hs-identifier hs-var hs-var hs-var hs-var hs-var hs-var">logError</span></span><span class="hs-special">)</span><span> </span><span class="annot"><span class="hs-string">&quot;polling stopping after receiving unrecoverable error&quot;</span></span><span>
+</span><span id="line-45"></span><span>            </span><span class="annot"><span class="annottext">Bool -&gt; m Bool
+forall (f :: * -&gt; *) a. Applicative f =&gt; a -&gt; f a
+</span><span class="hs-identifier hs-var">pure</span></span><span> </span><span class="annot"><span class="annottext">Bool
+</span><span class="hs-identifier hs-var">False</span></span><span>
+</span><span id="line-46"></span><span>        </span><span class="hs-glyph">|</span><span> </span><span class="annot"><span class="annottext">Response ByteString -&gt; Status
+forall body. Response body -&gt; Status
+</span><span class="hs-identifier hs-var hs-var">responseStatus</span></span><span> </span><span class="annot"><span class="annottext">Response ByteString
+</span><a href="#local-6989586621679670502"><span class="hs-identifier hs-var">response</span></a></span><span> </span><span class="annot"><span class="annottext">Status -&gt; Status -&gt; Bool
+forall a. Eq a =&gt; a -&gt; a -&gt; Bool
+</span><span class="hs-operator hs-var">/=</span></span><span> </span><span class="annot"><span class="annottext">Status
+</span><span class="hs-identifier hs-var">ok200</span></span><span> </span><span class="hs-glyph">=</span><span> </span><span class="hs-keyword">do</span><span>
+</span><span id="line-47"></span><span>            </span><span class="hs-special">$(</span><span class="annot"><span class="annottext">LogLevel
+String -&gt; Text
+String -&gt; String -&gt; String -&gt; CharPos -&gt; CharPos -&gt; Loc
+Text -&gt; Text
+Loc -&gt; Text -&gt; LogLevel -&gt; Text -&gt; m ()
+(Text -&gt; m ()) -&gt; (Text -&gt; Text) -&gt; Text -&gt; m ()
+forall a. a -&gt; a
+forall b c a. (b -&gt; c) -&gt; (a -&gt; b) -&gt; a -&gt; c
+forall (m :: * -&gt; *) msg.
+(MonadLogger m, ToLogStr msg) =&gt;
+Loc -&gt; Text -&gt; LogLevel -&gt; msg -&gt; m ()
+monadLoggerLog :: forall (m :: * -&gt; *) msg.
+(MonadLogger m, ToLogStr msg) =&gt;
+Loc -&gt; Text -&gt; LogLevel -&gt; msg -&gt; m ()
+pack :: String -&gt; Text
+. :: forall b c a. (b -&gt; c) -&gt; (a -&gt; b) -&gt; a -&gt; c
+id :: forall a. a -&gt; a
+</span><span class="hs-identifier hs-var hs-var hs-var hs-var hs-var hs-var">logError</span></span><span class="hs-special">)</span><span> </span><span class="annot"><span class="hs-string">&quot;unexpected polling status code&quot;</span></span><span>
+</span><span id="line-48"></span><span>            </span><span class="annot"><span class="annottext">Bool -&gt; m Bool
+forall (f :: * -&gt; *) a. Applicative f =&gt; a -&gt; f a
+</span><span class="hs-identifier hs-var">pure</span></span><span> </span><span class="annot"><span class="annottext">Bool
+</span><span class="hs-identifier hs-var">True</span></span><span>
+</span><span id="line-49"></span><span>        </span><span class="hs-glyph">|</span><span> </span><span class="annot"><span class="annottext">Bool
+</span><span class="hs-identifier hs-var">otherwise</span></span><span> </span><span class="hs-glyph">=</span><span> </span><span class="hs-keyword">case</span><span> </span><span class="hs-special">(</span><span class="annot"><span class="annottext">ByteString -&gt; Either String PollingResponse
+forall a. FromJSON a =&gt; ByteString -&gt; Either String a
+</span><span class="hs-identifier hs-var">eitherDecode</span></span><span> </span><span class="hs-special">(</span><span class="annot"><span class="annottext">Response ByteString -&gt; ByteString
+forall body. Response body -&gt; body
+</span><span class="hs-identifier hs-var hs-var">responseBody</span></span><span> </span><span class="annot"><span class="annottext">Response ByteString
+</span><a href="#local-6989586621679670502"><span class="hs-identifier hs-var">response</span></a></span><span class="hs-special">)</span><span> </span><span class="hs-glyph">::</span><span> </span><span class="annot"><span class="hs-identifier hs-type">Either</span></span><span> </span><span class="annot"><span class="hs-identifier hs-type">String</span></span><span> </span><span class="annot"><a href="LaunchDarkly.Server.Network.Polling.html#PollingResponse"><span class="hs-identifier hs-type">PollingResponse</span></a></span><span class="hs-special">)</span><span> </span><span class="hs-keyword">of</span><span>
+</span><span id="line-50"></span><span>            </span><span class="hs-special">(</span><span class="annot"><span class="hs-identifier hs-type">Left</span></span><span> </span><span id="local-6989586621679670498"><span class="annot"><span class="annottext">err :: String
+</span><a href="#local-6989586621679670498"><span class="hs-identifier hs-var">err</span></a></span></span><span class="hs-special">)</span><span> </span><span class="hs-glyph">-&gt;</span><span> </span><span class="hs-keyword">do</span><span>
+</span><span id="line-51"></span><span>                </span><span class="hs-special">$(</span><span class="annot"><span class="annottext">LogLevel
+String -&gt; Text
+String -&gt; String -&gt; String -&gt; CharPos -&gt; CharPos -&gt; Loc
+Text -&gt; Text
+Loc -&gt; Text -&gt; LogLevel -&gt; Text -&gt; m ()
+(Text -&gt; m ()) -&gt; (Text -&gt; Text) -&gt; Text -&gt; m ()
+forall a. a -&gt; a
+forall b c a. (b -&gt; c) -&gt; (a -&gt; b) -&gt; a -&gt; c
+forall (m :: * -&gt; *) msg.
+(MonadLogger m, ToLogStr msg) =&gt;
+Loc -&gt; Text -&gt; LogLevel -&gt; msg -&gt; m ()
+monadLoggerLog :: forall (m :: * -&gt; *) msg.
+(MonadLogger m, ToLogStr msg) =&gt;
+Loc -&gt; Text -&gt; LogLevel -&gt; msg -&gt; m ()
+pack :: String -&gt; Text
+. :: forall b c a. (b -&gt; c) -&gt; (a -&gt; b) -&gt; a -&gt; c
+id :: forall a. a -&gt; a
+</span><span class="hs-identifier hs-var hs-var hs-var hs-var hs-var hs-var">logError</span></span><span class="hs-special">)</span><span> </span><span class="hs-special">(</span><span class="annot"><span class="annottext">String -&gt; Text
+</span><span class="hs-identifier hs-var">T.pack</span></span><span> </span><span class="annot"><span class="annottext">(String -&gt; Text) -&gt; String -&gt; Text
+forall a b. (a -&gt; b) -&gt; a -&gt; b
+</span><span class="hs-operator hs-var">$</span></span><span> </span><span class="annot"><span class="annottext">ShowS
+forall a. Show a =&gt; a -&gt; String
+</span><span class="hs-identifier hs-var">show</span></span><span> </span><span class="annot"><span class="annottext">String
+</span><a href="#local-6989586621679670498"><span class="hs-identifier hs-var">err</span></a></span><span class="hs-special">)</span><span>
+</span><span id="line-52"></span><span>                </span><span class="annot"><span class="annottext">Bool -&gt; m Bool
+forall (f :: * -&gt; *) a. Applicative f =&gt; a -&gt; f a
+</span><span class="hs-identifier hs-var">pure</span></span><span> </span><span class="annot"><span class="annottext">(Bool -&gt; m Bool) -&gt; Bool -&gt; m Bool
+forall a b. (a -&gt; b) -&gt; a -&gt; b
+</span><span class="hs-operator hs-var">$</span></span><span> </span><span class="annot"><span class="annottext">Bool
+</span><span class="hs-identifier hs-var">True</span></span><span>
+</span><span id="line-53"></span><span>            </span><span class="hs-special">(</span><span class="annot"><span class="hs-identifier hs-type">Right</span></span><span> </span><span id="local-6989586621679670497"><span class="annot"><span class="annottext">body :: PollingResponse
+</span><a href="#local-6989586621679670497"><span class="hs-identifier hs-var">body</span></a></span></span><span class="hs-special">)</span><span> </span><span class="hs-glyph">-&gt;</span><span> </span><span class="hs-keyword">do</span><span>
+</span><span id="line-54"></span><span>                </span><span id="local-6989586621679670496"><span class="annot"><span class="annottext">Either Text ()
+</span><a href="#local-6989586621679670496"><span class="hs-identifier hs-var">status</span></a></span></span><span> </span><span class="hs-glyph">&lt;-</span><span> </span><span class="annot"><span class="annottext">IO (Either Text ()) -&gt; m (Either Text ())
+forall (m :: * -&gt; *) a. MonadIO m =&gt; IO a -&gt; m a
+</span><span class="hs-identifier hs-var">liftIO</span></span><span> </span><span class="annot"><span class="annottext">(IO (Either Text ()) -&gt; m (Either Text ()))
+-&gt; IO (Either Text ()) -&gt; m (Either Text ())
+forall a b. (a -&gt; b) -&gt; a -&gt; b
+</span><span class="hs-operator hs-var">$</span></span><span> </span><span class="annot"><span class="annottext">DataSourceUpdates
+-&gt; KeyMap Flag -&gt; KeyMap Segment -&gt; IO (Either Text ())
+</span><a href="LaunchDarkly.Server.DataSource.Internal.html#%24sel%3AdataSourceUpdatesInit%3ADataSourceUpdates"><span class="hs-identifier hs-var hs-var">dataSourceUpdatesInit</span></a></span><span> </span><span class="annot"><span class="annottext">DataSourceUpdates
+</span><a href="#local-6989586621679670514"><span class="hs-identifier hs-var">dataSourceUpdates</span></a></span><span> </span><span class="hs-special">(</span><span class="annot"><span class="annottext">PollingResponse -&gt; KeyMap Flag
+forall (f :: Symbol) a s. HasField' f s a =&gt; s -&gt; a
+</span><span class="hs-identifier hs-var">getField</span></span><span> </span><span class="hs-glyph">@</span><span class="annot"><span class="hs-string">&quot;flags&quot;</span></span><span> </span><span class="annot"><span class="annottext">PollingResponse
+</span><a href="#local-6989586621679670497"><span class="hs-identifier hs-var">body</span></a></span><span class="hs-special">)</span><span> </span><span class="hs-special">(</span><span class="annot"><span class="annottext">PollingResponse -&gt; KeyMap Segment
+forall (f :: Symbol) a s. HasField' f s a =&gt; s -&gt; a
+</span><span class="hs-identifier hs-var">getField</span></span><span> </span><span class="hs-glyph">@</span><span class="annot"><span class="hs-string">&quot;segments&quot;</span></span><span> </span><span class="annot"><span class="annottext">PollingResponse
+</span><a href="#local-6989586621679670497"><span class="hs-identifier hs-var">body</span></a></span><span class="hs-special">)</span><span>
+</span><span id="line-55"></span><span>                </span><span class="hs-keyword">case</span><span> </span><span class="annot"><span class="annottext">Either Text ()
+</span><a href="#local-6989586621679670496"><span class="hs-identifier hs-var">status</span></a></span><span> </span><span class="hs-keyword">of</span><span>
+</span><span id="line-56"></span><span>                    </span><span class="annot"><span class="hs-identifier hs-type">Right</span></span><span> </span><span class="hs-special">(</span><span class="hs-special">)</span><span> </span><span class="hs-glyph">-&gt;</span><span> </span><span class="hs-keyword">do</span><span>
+</span><span id="line-57"></span><span>                        </span><span class="annot"><span class="annottext">IO () -&gt; m ()
+forall (m :: * -&gt; *) a. MonadIO m =&gt; IO a -&gt; m a
+</span><span class="hs-identifier hs-var">liftIO</span></span><span> </span><span class="annot"><span class="annottext">(IO () -&gt; m ()) -&gt; IO () -&gt; m ()
+forall a b. (a -&gt; b) -&gt; a -&gt; b
+</span><span class="hs-operator hs-var">$</span></span><span> </span><span class="annot"><span class="annottext">DataSourceUpdates -&gt; Status -&gt; IO ()
+</span><a href="LaunchDarkly.Server.DataSource.Internal.html#%24sel%3AdataSourceUpdatesSetStatus%3ADataSourceUpdates"><span class="hs-identifier hs-var hs-var">dataSourceUpdatesSetStatus</span></a></span><span> </span><span class="annot"><span class="annottext">DataSourceUpdates
+</span><a href="#local-6989586621679670514"><span class="hs-identifier hs-var">dataSourceUpdates</span></a></span><span> </span><span class="annot"><span class="annottext">Status
+</span><a href="LaunchDarkly.Server.Client.Status.html#Initialized"><span class="hs-identifier hs-var">Initialized</span></a></span><span>
+</span><span id="line-58"></span><span>                        </span><span class="annot"><span class="annottext">Bool -&gt; m Bool
+forall (f :: * -&gt; *) a. Applicative f =&gt; a -&gt; f a
+</span><span class="hs-identifier hs-var">pure</span></span><span> </span><span class="annot"><span class="annottext">(Bool -&gt; m Bool) -&gt; Bool -&gt; m Bool
+forall a b. (a -&gt; b) -&gt; a -&gt; b
+</span><span class="hs-operator hs-var">$</span></span><span> </span><span class="annot"><span class="annottext">Bool
+</span><span class="hs-identifier hs-var">True</span></span><span>
+</span><span id="line-59"></span><span>                    </span><span class="annot"><span class="hs-identifier hs-type">Left</span></span><span> </span><span id="local-6989586621679670492"><span class="annot"><span class="annottext">err :: Text
+</span><a href="#local-6989586621679670492"><span class="hs-identifier hs-var">err</span></a></span></span><span> </span><span class="hs-glyph">-&gt;</span><span> </span><span class="hs-keyword">do</span><span>
+</span><span id="line-60"></span><span>                        </span><span class="hs-special">$(</span><span class="annot"><span class="annottext">LogLevel
+String -&gt; Text
+String -&gt; String -&gt; String -&gt; CharPos -&gt; CharPos -&gt; Loc
+Text -&gt; Text
+Loc -&gt; Text -&gt; LogLevel -&gt; Text -&gt; m ()
+(Text -&gt; m ()) -&gt; (Text -&gt; Text) -&gt; Text -&gt; m ()
+forall a. a -&gt; a
+forall b c a. (b -&gt; c) -&gt; (a -&gt; b) -&gt; a -&gt; c
+forall (m :: * -&gt; *) msg.
+(MonadLogger m, ToLogStr msg) =&gt;
+Loc -&gt; Text -&gt; LogLevel -&gt; msg -&gt; m ()
+monadLoggerLog :: forall (m :: * -&gt; *) msg.
+(MonadLogger m, ToLogStr msg) =&gt;
+Loc -&gt; Text -&gt; LogLevel -&gt; msg -&gt; m ()
+pack :: String -&gt; Text
+. :: forall b c a. (b -&gt; c) -&gt; (a -&gt; b) -&gt; a -&gt; c
+id :: forall a. a -&gt; a
+</span><span class="hs-identifier hs-var hs-var hs-var hs-var hs-var hs-var">logError</span></span><span class="hs-special">)</span><span> </span><span class="annot"><span class="annottext">(Text -&gt; m ()) -&gt; Text -&gt; m ()
+forall a b. (a -&gt; b) -&gt; a -&gt; b
+</span><span class="hs-operator hs-var">$</span></span><span> </span><span class="annot"><span class="annottext">Text -&gt; Text -&gt; Text
+</span><span class="hs-identifier hs-var">T.append</span></span><span> </span><span class="annot"><span class="hs-string">&quot;store failed put: &quot;</span></span><span> </span><span class="annot"><span class="annottext">Text
+</span><a href="#local-6989586621679670492"><span class="hs-identifier hs-var">err</span></a></span><span>
+</span><span id="line-61"></span><span>                        </span><span class="annot"><span class="annottext">Bool -&gt; m Bool
+forall (f :: * -&gt; *) a. Applicative f =&gt; a -&gt; f a
+</span><span class="hs-identifier hs-var">pure</span></span><span> </span><span class="annot"><span class="annottext">(Bool -&gt; m Bool) -&gt; Bool -&gt; m Bool
+forall a b. (a -&gt; b) -&gt; a -&gt; b
+</span><span class="hs-operator hs-var">$</span></span><span> </span><span class="annot"><span class="annottext">Bool
+</span><span class="hs-identifier hs-var">True</span></span><span>
+</span><span id="line-62"></span><span>
+</span><span id="line-63"></span><span id="local-6989586621679670490"><span class="annot"><a href="LaunchDarkly.Server.Network.Polling.html#pollingThread"><span class="hs-identifier hs-type">pollingThread</span></a></span><span> </span><span class="hs-glyph">::</span><span> </span><span class="hs-special">(</span><span class="annot"><span class="hs-identifier hs-type">MonadIO</span></span><span> </span><span class="annot"><a href="#local-6989586621679670490"><span class="hs-identifier hs-type">m</span></a></span><span class="hs-special">,</span><span> </span><span class="annot"><span class="hs-identifier hs-type">MonadLogger</span></span><span> </span><span class="annot"><a href="#local-6989586621679670490"><span class="hs-identifier hs-type">m</span></a></span><span class="hs-special">,</span><span> </span><span class="annot"><span class="hs-identifier hs-type">MonadMask</span></span><span> </span><span class="annot"><a href="#local-6989586621679670490"><span class="hs-identifier hs-type">m</span></a></span><span class="hs-special">)</span><span> </span><span class="hs-glyph">=&gt;</span><span> </span><span class="annot"><span class="hs-identifier hs-type">Text</span></span><span> </span><span class="hs-glyph">-&gt;</span><span> </span><span class="annot"><span class="hs-identifier hs-type">Natural</span></span><span> </span><span class="hs-glyph">-&gt;</span><span> </span><span class="annot"><a href="LaunchDarkly.Server.Config.ClientContext.html#ClientContext"><span class="hs-identifier hs-type">ClientContext</span></a></span><span> </span><span class="hs-glyph">-&gt;</span><span> </span><span class="annot"><a href="LaunchDarkly.Server.DataSource.Internal.html#DataSourceUpdates"><span class="hs-identifier hs-type">DataSourceUpdates</span></a></span><span> </span><span class="hs-glyph">-&gt;</span><span> </span><span class="annot"><a href="#local-6989586621679670490"><span class="hs-identifier hs-type">m</span></a></span><span> </span><span class="hs-special">(</span><span class="hs-special">)</span></span><span>
+</span><span id="line-64"></span><span id="pollingThread"><span class="annot"><span class="annottext">pollingThread :: Text -&gt; Natural -&gt; ClientContext -&gt; DataSourceUpdates -&gt; m ()
+</span><a href="LaunchDarkly.Server.Network.Polling.html#pollingThread"><span class="hs-identifier hs-var hs-var">pollingThread</span></a></span></span><span> </span><span id="local-6989586621679670489"><span class="annot"><span class="annottext">baseURI :: Text
+</span><a href="#local-6989586621679670489"><span class="hs-identifier hs-var">baseURI</span></a></span></span><span> </span><span id="local-6989586621679670488"><span class="annot"><span class="annottext">pollingIntervalSeconds :: Natural
+</span><a href="#local-6989586621679670488"><span class="hs-identifier hs-var">pollingIntervalSeconds</span></a></span></span><span> </span><span id="local-6989586621679670487"><span class="annot"><span class="annottext">clientContext :: ClientContext
+</span><a href="#local-6989586621679670487"><span class="hs-identifier hs-var">clientContext</span></a></span></span><span> </span><span id="local-6989586621679670486"><span class="annot"><span class="annottext">dataSourceUpdates :: DataSourceUpdates
+</span><a href="#local-6989586621679670486"><span class="hs-identifier hs-var">dataSourceUpdates</span></a></span></span><span> </span><span class="hs-glyph">=</span><span> </span><span class="hs-keyword">do</span><span>
+</span><span id="line-65"></span><span>    </span><span class="hs-keyword">let</span><span> </span><span id="local-6989586621679670485"><span class="annot"><span class="annottext">pollingMicroseconds :: Int
+</span><a href="#local-6989586621679670485"><span class="hs-identifier hs-var hs-var">pollingMicroseconds</span></a></span></span><span> </span><span class="hs-glyph">=</span><span> </span><span class="annot"><span class="annottext">Natural -&gt; Int
+forall a b. (Integral a, Num b) =&gt; a -&gt; b
+</span><span class="hs-identifier hs-var">fromIntegral</span></span><span> </span><span class="annot"><span class="annottext">Natural
+</span><a href="#local-6989586621679670488"><span class="hs-identifier hs-var">pollingIntervalSeconds</span></a></span><span> </span><span class="annot"><span class="annottext">Int -&gt; Int -&gt; Int
+forall a. Num a =&gt; a -&gt; a -&gt; a
+</span><span class="hs-operator hs-var">*</span></span><span> </span><span class="annot"><span class="hs-number">1000000</span></span><span>
+</span><span id="line-66"></span><span>    </span><span id="local-6989586621679670483"><span class="annot"><span class="annottext">Request
+</span><a href="#local-6989586621679670483"><span class="hs-identifier hs-var">req</span></a></span></span><span> </span><span class="hs-glyph">&lt;-</span><span> </span><span class="annot"><span class="annottext">IO Request -&gt; m Request
+forall (m :: * -&gt; *) a. MonadIO m =&gt; IO a -&gt; m a
+</span><span class="hs-identifier hs-var">liftIO</span></span><span> </span><span class="annot"><span class="annottext">(IO Request -&gt; m Request) -&gt; IO Request -&gt; m Request
+forall a b. (a -&gt; b) -&gt; a -&gt; b
+</span><span class="hs-operator hs-var">$</span></span><span> </span><span class="annot"><span class="annottext">HttpConfiguration -&gt; String -&gt; IO Request
+forall (m :: * -&gt; *).
+MonadThrow m =&gt;
+HttpConfiguration -&gt; String -&gt; m Request
+</span><a href="LaunchDarkly.Server.Config.HttpConfiguration.html#prepareRequest"><span class="hs-identifier hs-var">prepareRequest</span></a></span><span> </span><span class="hs-special">(</span><span class="annot"><span class="annottext">ClientContext -&gt; HttpConfiguration
+</span><a href="LaunchDarkly.Server.Config.ClientContext.html#%24sel%3AhttpConfiguration%3AClientContext"><span class="hs-identifier hs-var hs-var">httpConfiguration</span></a></span><span> </span><span class="annot"><span class="annottext">ClientContext
+</span><a href="#local-6989586621679670487"><span class="hs-identifier hs-var">clientContext</span></a></span><span class="hs-special">)</span><span> </span><span class="hs-special">(</span><span class="annot"><span class="annottext">Text -&gt; String
+</span><span class="hs-identifier hs-var">T.unpack</span></span><span> </span><span class="annot"><span class="annottext">Text
+</span><a href="#local-6989586621679670489"><span class="hs-identifier hs-var">baseURI</span></a></span><span> </span><span class="annot"><span class="annottext">String -&gt; ShowS
+forall a. [a] -&gt; [a] -&gt; [a]
+</span><span class="hs-operator hs-var">++</span></span><span> </span><span class="annot"><span class="hs-string">&quot;/sdk/latest-all&quot;</span></span><span class="hs-special">)</span><span>
+</span><span id="line-67"></span><span>    </span><span class="annot"><span class="annottext">DataSourceUpdates -&gt; m () -&gt; m ()
+forall (m :: * -&gt; *).
+(MonadIO m, MonadLogger m, MonadCatch m) =&gt;
+DataSourceUpdates -&gt; m () -&gt; m ()
+</span><a href="LaunchDarkly.Server.Network.Common.html#handleUnauthorized"><span class="hs-identifier hs-var">handleUnauthorized</span></a></span><span> </span><span class="annot"><span class="annottext">DataSourceUpdates
+</span><a href="#local-6989586621679670486"><span class="hs-identifier hs-var">dataSourceUpdates</span></a></span><span> </span><span class="annot"><span class="annottext">(m () -&gt; m ()) -&gt; m () -&gt; m ()
+forall a b. (a -&gt; b) -&gt; a -&gt; b
+</span><span class="hs-operator hs-var">$</span></span><span> </span><span class="hs-special">(</span><span class="annot"><span class="annottext">Request -&gt; Int -&gt; m ()
+forall (m :: * -&gt; *).
+(MonadIO m, MonadLogger m, MonadMask m) =&gt;
+Request -&gt; Int -&gt; m ()
+</span><a href="#local-6989586621679670480"><span class="hs-identifier hs-var">poll</span></a></span><span> </span><span class="annot"><span class="annottext">Request
+</span><a href="#local-6989586621679670483"><span class="hs-identifier hs-var">req</span></a></span><span> </span><span class="annot"><span class="annottext">Int
+</span><a href="#local-6989586621679670485"><span class="hs-identifier hs-var">pollingMicroseconds</span></a></span><span class="hs-special">)</span><span>
+</span><span id="line-68"></span><span>  </span><span class="hs-keyword">where</span><span>
+</span><span id="line-69"></span><span>    </span><span id="local-6989586621679670554"><span class="annot"><a href="#local-6989586621679670480"><span class="hs-identifier hs-type">poll</span></a></span><span> </span><span class="hs-glyph">::</span><span> </span><span class="hs-special">(</span><span class="annot"><span class="hs-identifier hs-type">MonadIO</span></span><span> </span><span class="annot"><a href="#local-6989586621679670554"><span class="hs-identifier hs-type">m</span></a></span><span class="hs-special">,</span><span> </span><span class="annot"><span class="hs-identifier hs-type">MonadLogger</span></span><span> </span><span class="annot"><a href="#local-6989586621679670554"><span class="hs-identifier hs-type">m</span></a></span><span class="hs-special">,</span><span> </span><span class="annot"><span class="hs-identifier hs-type">MonadMask</span></span><span> </span><span class="annot"><a href="#local-6989586621679670554"><span class="hs-identifier hs-type">m</span></a></span><span class="hs-special">)</span><span> </span><span class="hs-glyph">=&gt;</span><span> </span><span class="annot"><span class="hs-identifier hs-type">Request</span></span><span> </span><span class="hs-glyph">-&gt;</span><span> </span><span class="annot"><span class="hs-identifier hs-type">Int</span></span><span> </span><span class="hs-glyph">-&gt;</span><span> </span><span class="annot"><a href="#local-6989586621679670554"><span class="hs-identifier hs-type">m</span></a></span><span> </span><span class="hs-special">(</span><span class="hs-special">)</span></span><span>
+</span><span id="line-70"></span><span>    </span><span id="local-6989586621679670480"><span class="annot"><span class="annottext">poll :: Request -&gt; Int -&gt; m ()
+</span><a href="#local-6989586621679670480"><span class="hs-identifier hs-var hs-var">poll</span></a></span></span><span> </span><span id="local-6989586621679670479"><span class="annot"><span class="annottext">req :: Request
+</span><a href="#local-6989586621679670479"><span class="hs-identifier hs-var">req</span></a></span></span><span> </span><span id="local-6989586621679670478"><span class="annot"><span class="annottext">pollingMicroseconds :: Int
+</span><a href="#local-6989586621679670478"><span class="hs-identifier hs-var">pollingMicroseconds</span></a></span></span><span> </span><span class="hs-glyph">=</span><span> </span><span class="hs-keyword">do</span><span>
+</span><span id="line-71"></span><span>        </span><span class="hs-special">$(</span><span class="annot"><span class="annottext">LogLevel
+String -&gt; Text
+String -&gt; String -&gt; String -&gt; CharPos -&gt; CharPos -&gt; Loc
+Text -&gt; Text
+Loc -&gt; Text -&gt; LogLevel -&gt; Text -&gt; m ()
+(Text -&gt; m ()) -&gt; (Text -&gt; Text) -&gt; Text -&gt; m ()
+forall a. a -&gt; a
+forall b c a. (b -&gt; c) -&gt; (a -&gt; b) -&gt; a -&gt; c
+forall (m :: * -&gt; *) msg.
+(MonadLogger m, ToLogStr msg) =&gt;
+Loc -&gt; Text -&gt; LogLevel -&gt; msg -&gt; m ()
+monadLoggerLog :: forall (m :: * -&gt; *) msg.
+(MonadLogger m, ToLogStr msg) =&gt;
+Loc -&gt; Text -&gt; LogLevel -&gt; msg -&gt; m ()
+pack :: String -&gt; Text
+. :: forall b c a. (b -&gt; c) -&gt; (a -&gt; b) -&gt; a -&gt; c
+id :: forall a. a -&gt; a
+</span><span class="hs-identifier hs-var hs-var hs-var hs-var hs-var hs-var">logDebug</span></span><span class="hs-special">)</span><span> </span><span class="annot"><span class="hs-string">&quot;starting poll&quot;</span></span><span>
+</span><span id="line-72"></span><span>        </span><span class="annot"><span class="annottext">Manager -&gt; DataSourceUpdates -&gt; Request -&gt; m Bool
+forall (m :: * -&gt; *).
+(MonadIO m, MonadLogger m, MonadMask m, MonadThrow m) =&gt;
+Manager -&gt; DataSourceUpdates -&gt; Request -&gt; m Bool
+</span><a href="LaunchDarkly.Server.Network.Polling.html#processPoll"><span class="hs-identifier hs-var">processPoll</span></a></span><span> </span><span class="hs-special">(</span><span class="annot"><span class="annottext">HttpConfiguration -&gt; Manager
+</span><a href="LaunchDarkly.Server.Config.HttpConfiguration.html#%24sel%3AtlsManager%3AHttpConfiguration"><span class="hs-identifier hs-var hs-var">tlsManager</span></a></span><span> </span><span class="annot"><span class="annottext">(HttpConfiguration -&gt; Manager) -&gt; HttpConfiguration -&gt; Manager
+forall a b. (a -&gt; b) -&gt; a -&gt; b
+</span><span class="hs-operator hs-var">$</span></span><span> </span><span class="annot"><span class="annottext">ClientContext -&gt; HttpConfiguration
+</span><a href="LaunchDarkly.Server.Config.ClientContext.html#%24sel%3AhttpConfiguration%3AClientContext"><span class="hs-identifier hs-var hs-var">httpConfiguration</span></a></span><span> </span><span class="annot"><span class="annottext">ClientContext
+</span><a href="#local-6989586621679670487"><span class="hs-identifier hs-var">clientContext</span></a></span><span class="hs-special">)</span><span> </span><span class="annot"><span class="annottext">DataSourceUpdates
+</span><a href="#local-6989586621679670486"><span class="hs-identifier hs-var">dataSourceUpdates</span></a></span><span> </span><span class="annot"><span class="annottext">Request
+</span><a href="#local-6989586621679670479"><span class="hs-identifier hs-var">req</span></a></span><span> </span><span class="annot"><span class="annottext">m Bool -&gt; (Bool -&gt; m ()) -&gt; m ()
+forall (m :: * -&gt; *) a b. Monad m =&gt; m a -&gt; (a -&gt; m b) -&gt; m b
+</span><span class="hs-operator hs-var">&gt;&gt;=</span></span><span> </span><span class="hs-glyph">\</span><span class="hs-glyph">case</span><span>
+</span><span id="line-73"></span><span>            </span><span class="annot"><span class="hs-identifier hs-type">True</span></span><span> </span><span class="hs-glyph">-&gt;</span><span> </span><span class="hs-keyword">do</span><span>
+</span><span id="line-74"></span><span>                </span><span class="annot"><span class="annottext">IO () -&gt; m ()
+forall (m :: * -&gt; *) a. MonadIO m =&gt; IO a -&gt; m a
+</span><span class="hs-identifier hs-var">liftIO</span></span><span> </span><span class="annot"><span class="annottext">(IO () -&gt; m ()) -&gt; IO () -&gt; m ()
+forall a b. (a -&gt; b) -&gt; a -&gt; b
+</span><span class="hs-operator hs-var">$</span></span><span> </span><span class="annot"><span class="annottext">Int -&gt; IO ()
+</span><span class="hs-identifier hs-var">threadDelay</span></span><span> </span><span class="annot"><span class="annottext">Int
+</span><a href="#local-6989586621679670478"><span class="hs-identifier hs-var">pollingMicroseconds</span></a></span><span>
+</span><span id="line-75"></span><span>                </span><span class="annot"><span class="annottext">Request -&gt; Int -&gt; m ()
+forall (m :: * -&gt; *).
+(MonadIO m, MonadLogger m, MonadMask m) =&gt;
+Request -&gt; Int -&gt; m ()
+</span><a href="#local-6989586621679670480"><span class="hs-identifier hs-var">poll</span></a></span><span> </span><span class="annot"><span class="annottext">Request
+</span><a href="#local-6989586621679670479"><span class="hs-identifier hs-var">req</span></a></span><span> </span><span class="annot"><span class="annottext">Int
+</span><a href="#local-6989586621679670478"><span class="hs-identifier hs-var">pollingMicroseconds</span></a></span><span>
+</span><span id="line-76"></span><span>            </span><span class="annot"><span class="hs-identifier hs-type">False</span></span><span> </span><span class="hs-glyph">-&gt;</span><span> </span><span class="annot"><span class="annottext">() -&gt; m ()
+forall (f :: * -&gt; *) a. Applicative f =&gt; a -&gt; f a
+</span><span class="hs-identifier hs-var">pure</span></span><span> </span><span class="hs-special">(</span><span class="hs-special">)</span><span>
+</span><span id="line-77"></span></pre></body></html>
