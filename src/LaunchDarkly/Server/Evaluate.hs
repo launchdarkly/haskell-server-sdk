@@ -17,7 +17,7 @@ import Data.Generics.Product (field, getField)
 import Data.HashSet (HashSet)
 import qualified Data.HashSet as HS
 import Data.List (genericIndex)
-import Data.Maybe (fromJust, fromMaybe, isJust)
+import Data.Maybe (fromJust, fromMaybe, isJust, mapMaybe)
 import Data.Scientific (Scientific, floatingOrInteger)
 import Data.Text (Text)
 import qualified Data.Text as T
@@ -37,6 +37,7 @@ import LaunchDarkly.Server.Features (Clause, Flag, Prerequisite, RolloutKind (Ro
 import LaunchDarkly.Server.Operators (Op (OpSegmentMatch), getOperation)
 import LaunchDarkly.Server.Reference (getComponents, getError, isValid, makeLiteral, makeReference)
 import LaunchDarkly.Server.Store.Internal (LaunchDarklyStoreRead, getFlagC, getSegmentC)
+import LaunchDarkly.Server.Util (trd, snd3, fst3)
 
 setFallback :: EvaluationDetail Value -> Value -> EvaluationDetail Value
 setFallback detail fallback = case getField @"variationIndex" detail of
@@ -55,26 +56,26 @@ evaluateTyped client key context fallback wrap includeReason convert =
         if status /= Initialized
             then pure $ EvaluationDetail fallback Nothing $ EvaluationReasonError EvalErrorClientNotReady
             else
-                evaluateInternalClient client key context (wrap fallback) includeReason >>= \detail ->
+                evaluateInternalClient client key context (wrap fallback) includeReason >>= \(detail, _) ->
                     pure $
                         maybe
                             (EvaluationDetail fallback Nothing $ if isError (getField @"reason" detail) then (getField @"reason" detail) else EvaluationReasonError EvalErrorWrongType)
                             (setValue detail)
                             (convert $ getField @"value" detail)
 
-evaluateInternalClient :: Client -> Text -> Context -> Value -> Bool -> IO (EvaluationDetail Value)
-evaluateInternalClient _ _ (Invalid _) fallback _ = pure $ errorDefault EvalErrorInvalidContext fallback
+evaluateInternalClient :: Client -> Text -> Context -> Value -> Bool -> IO (EvaluationDetail Value, [Text])
+evaluateInternalClient _ _ (Invalid _) fallback _ = pure $ (errorDefault EvalErrorInvalidContext fallback, [])
 evaluateInternalClient client key context fallback includeReason = do
-    (detail, unknown, events) <-
+    (detail, unknown, events, prereqs) <-
         getFlagC (getField @"store" client) key >>= \case
             Left err -> do
                 let event = newUnknownFlagEvent key fallback (EvaluationReasonError $ EvalErrorExternalStore err) context
-                pure (errorDetail $ EvalErrorExternalStore err, True, pure event)
+                pure (errorDetail $ EvalErrorExternalStore err, True, pure event, [])
             Right Nothing -> do
                 let event = newUnknownFlagEvent key fallback (EvaluationReasonError EvalErrorFlagNotFound) context
-                pure (errorDefault EvalErrorFlagNotFound fallback, True, pure event)
+                pure (errorDefault EvalErrorFlagNotFound fallback, True, pure event, [])
             Right (Just flag) -> do
-                (detail, events) <- evaluateDetail flag context HS.empty $ getField @"store" client
+                (detail, events, prereqs) <- evaluateDetail flag context HS.empty $ getField @"store" client
                 let detail' = setFallback detail fallback
                 pure
                     ( detail'
@@ -88,9 +89,10 @@ evaluateInternalClient client key context fallback includeReason = do
                             (getField @"reason" detail')
                             Nothing
                             context
+                    , prereqs
                     )
     processEvalEvents (getField @"config" client) (getField @"events" client) context includeReason events unknown
-    pure detail
+    pure (detail, prereqs)
 
 getOffValue :: Flag -> EvaluationReason -> EvaluationDetail Value
 getOffValue flag reason = case getField @"offVariation" flag of
@@ -106,14 +108,14 @@ getVariation flag index reason
     idx = fromIntegral index
     variations = getField @"variations" flag
 
-evaluateDetail :: (Monad m, LaunchDarklyStoreRead store m) => Flag -> Context -> HS.HashSet Text -> store -> m (EvaluationDetail Value, [EvalEvent])
-evaluateDetail flag@(getField @"on" -> False) _ _ _ = pure (getOffValue flag EvaluationReasonOff, [])
+evaluateDetail :: (Monad m, LaunchDarklyStoreRead store m) => Flag -> Context -> HS.HashSet Text -> store -> m (EvaluationDetail Value, [EvalEvent], [Text])
+evaluateDetail flag@(getField @"on" -> False) _ _ _ = pure (getOffValue flag EvaluationReasonOff, [], [])
 evaluateDetail flag context seenFlags store
-    | HS.member (getField @"key" flag) seenFlags = pure (getOffValue flag $ EvaluationReasonError EvalErrorKindMalformedFlag, [])
+    | HS.member (getField @"key" flag) seenFlags = pure (getOffValue flag $ EvaluationReasonError EvalErrorKindMalformedFlag, [], [])
     | otherwise =
         checkPrerequisites flag context (HS.insert (getField @"key" flag) seenFlags) store >>= \case
-            (Nothing, events) -> evaluateInternal flag context store >>= (\x -> pure (x, events))
-            (Just detail, events) -> pure (detail, events)
+            (Nothing, events, prereqs) -> evaluateInternal flag context store >>= (\x -> pure (x, events, prereqs))
+            (Just detail, events, prereqs) -> pure (detail, events, prereqs)
 
 status :: Prerequisite -> EvaluationDetail a -> Flag -> Bool
 status prereq result prereqFlag =
@@ -129,32 +131,34 @@ sequenceUntil p (m : ms) =
             then return [a]
             else sequenceUntil p ms >>= \as -> return (a : as)
 
-checkPrerequisites :: (Monad m, LaunchDarklyStoreRead store m) => Flag -> Context -> HS.HashSet Text -> store -> m (Maybe (EvaluationDetail Value), [EvalEvent])
+checkPrerequisites :: (Monad m, LaunchDarklyStoreRead store m) => Flag -> Context -> HS.HashSet Text -> store -> m (Maybe (EvaluationDetail Value), [EvalEvent], [Text])
 checkPrerequisites flag context seenFlags store =
     let p = getField @"prerequisites" flag
      in if null p
-            then pure (Nothing, [])
+            then pure (Nothing, [], [])
             else do
-                evals <- sequenceUntil (isJust . fst) $ map (checkPrerequisite store context flag seenFlags) p
-                pure (msum $ map fst evals, concatMap snd evals)
+                evals <- sequenceUntil (isJust . (\(a, _, _) -> a)) $ map (checkPrerequisite store context flag seenFlags) p
+                pure (msum $ map fst3 evals, concatMap snd3 evals, mapMaybe trd evals)
 
-checkPrerequisite :: (Monad m, LaunchDarklyStoreRead store m) => store -> Context -> Flag -> HS.HashSet Text -> Prerequisite -> m (Maybe (EvaluationDetail Value), [EvalEvent])
+checkPrerequisite :: (Monad m, LaunchDarklyStoreRead store m) => store -> Context -> Flag -> HS.HashSet Text -> Prerequisite -> m (Maybe (EvaluationDetail Value), [EvalEvent], Maybe Text)
 checkPrerequisite store context flag seenFlags prereq =
-    if HS.member (getField @"key" prereq) seenFlags
-        then pure (Just $ errorDetail EvalErrorKindMalformedFlag, [])
+    if HS.member prereqKey seenFlags
+        then pure (Just $ errorDetail EvalErrorKindMalformedFlag, [], Nothing)
         else
-            getFlagC store (getField @"key" prereq) >>= \case
-                Left err -> pure (pure $ getOffValue flag $ EvaluationReasonError $ EvalErrorExternalStore err, [])
-                Right Nothing -> pure (pure $ getOffValue flag $ EvaluationReasonPrerequisiteFailed (getField @"key" prereq), [])
+            getFlagC store prereqKey >>= \case
+                Left err -> pure (pure $ getOffValue flag $ EvaluationReasonError $ EvalErrorExternalStore err, [], Nothing)
+                Right Nothing -> pure (pure $ getOffValue flag $ EvaluationReasonPrerequisiteFailed prereqKey, [], Just prereqKey)
                 Right (Just prereqFlag) -> evaluateDetail prereqFlag context seenFlags store >>= (process prereqFlag)
   where
-    process prereqFlag (detail, events)
-        | isError (getField @"reason" detail) = pure (Just $ errorDetail EvalErrorKindMalformedFlag, mempty)
+    prereqKey = getField @"key" prereq
+    process prereqFlag (detail, events, _prereqs)
+        | isError (getField @"reason" detail) = pure (Just $ errorDetail EvalErrorKindMalformedFlag, mempty, Just prereqKey)
         | otherwise =
             let event = newSuccessfulEvalEvent prereqFlag (getField @"variationIndex" detail) (getField @"value" detail) Nothing (getField @"reason" detail) (Just $ getField @"key" flag) context
+                prereqKey = getField @"key" prereqFlag
              in if status prereq detail prereqFlag
-                    then pure (Nothing, event : events)
-                    else pure (pure $ getOffValue flag $ EvaluationReasonPrerequisiteFailed (getField @"key" prereq), event : events)
+                    then pure (Nothing, event : events, Just prereqKey)
+                    else pure (pure $ getOffValue flag $ EvaluationReasonPrerequisiteFailed (getField @"key" prereq), event : events, Just prereqKey)
 
 evaluateInternal :: (Monad m, LaunchDarklyStoreRead store m) => Flag -> Context -> store -> m (EvaluationDetail Value)
 evaluateInternal flag context store = result

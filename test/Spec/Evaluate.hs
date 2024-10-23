@@ -36,6 +36,7 @@ testFlagReturnsOffVariationIfFlagIsOff = TestCase $ do
             , reason = EvaluationReasonOff
             }
         , []
+        , []
         )
 
     context = makeContext "x" "user"
@@ -79,6 +80,7 @@ testFlagReturnsFallthroughIfFlagIsOnAndThereAreNoRules = TestCase $ do
                     { inExperiment = False
                     }
             }
+        , []
         , []
         )
 
@@ -546,6 +548,7 @@ testClauseCanMatchOnKind = TestCase $ do
                     }
             }
         , []
+        , []
         )
 
     expectedFailure =
@@ -554,6 +557,7 @@ testClauseCanMatchOnKind = TestCase $ do
             , variationIndex = pure 0
             , reason = EvaluationReasonFallthrough {inExperiment = False}
             }
+        , []
         , []
         )
 
@@ -624,6 +628,7 @@ testClauseCanMatchCustomAttribute = TestCase $ do
                     }
             }
         , []
+        , []
         )
 
     expectedFailure =
@@ -632,6 +637,7 @@ testClauseCanMatchCustomAttribute = TestCase $ do
             , variationIndex = pure 0
             , reason = EvaluationReasonFallthrough {inExperiment = False}
             }
+        , []
         , []
         )
 
@@ -702,6 +708,7 @@ testClauseCanMatchCustomAttributeReference = TestCase $ do
                     }
             }
         , []
+        , []
         )
 
     expectedFailure =
@@ -710,6 +717,7 @@ testClauseCanMatchCustomAttributeReference = TestCase $ do
             , variationIndex = pure 0
             , reason = EvaluationReasonFallthrough {inExperiment = False}
             }
+        , []
         , []
         )
 
