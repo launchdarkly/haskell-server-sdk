@@ -37,7 +37,7 @@ import LaunchDarkly.Server.Features (Clause, Flag, Prerequisite, RolloutKind (Ro
 import LaunchDarkly.Server.Operators (Op (OpSegmentMatch), getOperation)
 import LaunchDarkly.Server.Reference (getComponents, getError, isValid, makeLiteral, makeReference)
 import LaunchDarkly.Server.Store.Internal (LaunchDarklyStoreRead, getFlagC, getSegmentC)
-import LaunchDarkly.Server.Util (trd, snd3, fst3)
+import LaunchDarkly.Server.Util (fst3, snd3, trd)
 
 setFallback :: EvaluationDetail Value -> Value -> EvaluationDetail Value
 setFallback detail fallback = case getField @"variationIndex" detail of
@@ -63,17 +63,17 @@ evaluateTyped client key context fallback wrap includeReason convert =
                             (setValue detail)
                             (convert $ getField @"value" detail)
 
-evaluateInternalClient :: Client -> Text -> Context -> Value -> Bool -> IO (EvaluationDetail Value, [Text])
-evaluateInternalClient _ _ (Invalid _) fallback _ = pure $ (errorDefault EvalErrorInvalidContext fallback, [])
+evaluateInternalClient :: Client -> Text -> Context -> Value -> Bool -> IO (EvaluationDetail Value, Maybe [Text])
+evaluateInternalClient _ _ (Invalid _) fallback _ = pure $ (errorDefault EvalErrorInvalidContext fallback, Nothing)
 evaluateInternalClient client key context fallback includeReason = do
     (detail, unknown, events, prereqs) <-
         getFlagC (getField @"store" client) key >>= \case
             Left err -> do
                 let event = newUnknownFlagEvent key fallback (EvaluationReasonError $ EvalErrorExternalStore err) context
-                pure (errorDetail $ EvalErrorExternalStore err, True, pure event, [])
+                pure (errorDetail $ EvalErrorExternalStore err, True, pure event, Nothing)
             Right Nothing -> do
                 let event = newUnknownFlagEvent key fallback (EvaluationReasonError EvalErrorFlagNotFound) context
-                pure (errorDefault EvalErrorFlagNotFound fallback, True, pure event, [])
+                pure (errorDefault EvalErrorFlagNotFound fallback, True, pure event, Nothing)
             Right (Just flag) -> do
                 (detail, events, prereqs) <- evaluateDetail flag context HS.empty $ getField @"store" client
                 let detail' = setFallback detail fallback
@@ -108,10 +108,10 @@ getVariation flag index reason
     idx = fromIntegral index
     variations = getField @"variations" flag
 
-evaluateDetail :: (Monad m, LaunchDarklyStoreRead store m) => Flag -> Context -> HS.HashSet Text -> store -> m (EvaluationDetail Value, [EvalEvent], [Text])
-evaluateDetail flag@(getField @"on" -> False) _ _ _ = pure (getOffValue flag EvaluationReasonOff, [], [])
+evaluateDetail :: (Monad m, LaunchDarklyStoreRead store m) => Flag -> Context -> HS.HashSet Text -> store -> m (EvaluationDetail Value, [EvalEvent], Maybe [Text])
+evaluateDetail flag@(getField @"on" -> False) _ _ _ = pure (getOffValue flag EvaluationReasonOff, [], Nothing)
 evaluateDetail flag context seenFlags store
-    | HS.member (getField @"key" flag) seenFlags = pure (getOffValue flag $ EvaluationReasonError EvalErrorKindMalformedFlag, [], [])
+    | HS.member (getField @"key" flag) seenFlags = pure (getOffValue flag $ EvaluationReasonError EvalErrorKindMalformedFlag, [], Nothing)
     | otherwise =
         checkPrerequisites flag context (HS.insert (getField @"key" flag) seenFlags) store >>= \case
             (Nothing, events, prereqs) -> evaluateInternal flag context store >>= (\x -> pure (x, events, prereqs))
@@ -131,14 +131,21 @@ sequenceUntil p (m : ms) =
             then return [a]
             else sequenceUntil p ms >>= \as -> return (a : as)
 
-checkPrerequisites :: (Monad m, LaunchDarklyStoreRead store m) => Flag -> Context -> HS.HashSet Text -> store -> m (Maybe (EvaluationDetail Value), [EvalEvent], [Text])
+checkPrerequisites :: (Monad m, LaunchDarklyStoreRead store m) => Flag -> Context -> HS.HashSet Text -> store -> m (Maybe (EvaluationDetail Value), [EvalEvent], Maybe [Text])
 checkPrerequisites flag context seenFlags store =
     let p = getField @"prerequisites" flag
      in if null p
-            then pure (Nothing, [], [])
+            then pure (Nothing, [], Nothing)
             else do
-                evals <- sequenceUntil (isJust . (\(a, _, _) -> a)) $ map (checkPrerequisite store context flag seenFlags) p
-                pure (msum $ map fst3 evals, concatMap snd3 evals, mapMaybe trd evals)
+                evals <- sequenceUntil (isJust . fst3) $ map (checkPrerequisite store context flag seenFlags) p
+                prereqs <- pure $ foldr (collectPrereqs . trd) Nothing evals
+                pure (msum $ map fst3 evals, concatMap snd3 evals, prereqs)
+  where
+    collectPrereqs :: Maybe a -> Maybe [a] -> Maybe [a]
+    collectPrereqs Nothing Nothing = Nothing
+    collectPrereqs Nothing (Just x) = Just x
+    collectPrereqs (Just x) Nothing = Just [x]
+    collectPrereqs (Just x) (Just xs) = Just (x : xs)
 
 checkPrerequisite :: (Monad m, LaunchDarklyStoreRead store m) => store -> Context -> Flag -> HS.HashSet Text -> Prerequisite -> m (Maybe (EvaluationDetail Value), [EvalEvent], Maybe Text)
 checkPrerequisite store context flag seenFlags prereq =

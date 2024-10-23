@@ -258,7 +258,7 @@ allFlagsState client context client_side_only with_reasons details_only_for_trac
                                 , trackEvents = trackEvents' || inExperiment
                                 , trackReason = trackReason'
                                 , debugEventsUntilDate = getField @"debugEventsUntilDate" flag
-                                , prerequisites = if null prereqs then Nothing else Just prereqs
+                                , prerequisites = prereqs
                                 }
                         )
                         details
