@@ -194,6 +194,7 @@ data FlagState = FlagState
     , trackEvents :: !Bool
     , trackReason :: !Bool
     , debugEventsUntilDate :: !(Maybe Natural)
+    , prerequisites :: !(Maybe [Text])
     }
     deriving (Show, Generic)
 
@@ -208,6 +209,7 @@ instance ToJSON FlagState where
                 , "trackReason" .= if getField @"trackReason" state then Just True else Nothing
                 , "reason" .= getField @"reason" state
                 , "debugEventsUntilDate" .= getField @"debugEventsUntilDate" state
+                , "prerequisites" .= getField @"prerequisites" state
                 ]
 
 -- |
@@ -236,13 +238,13 @@ allFlagsState client context client_side_only with_reasons details_only_for_trac
         Left _ -> pure AllFlagsState {evaluations = emptyObject, state = emptyObject, valid = False}
         Right flags -> do
             filtered <- pure $ (filterObject (\flag -> (not client_side_only) || isClientSideOnlyFlag flag) flags)
-            details <- mapM (\flag -> (\detail -> (flag, fst detail)) <$> (evaluateDetail flag context HS.empty $ getField @"store" client)) filtered
-            evaluations <- pure $ mapValues (getField @"value" . snd) details
+            details <- mapM (\flag -> (\(detail, _, prereqs) -> (flag, (detail, prereqs))) <$> (evaluateDetail flag context HS.empty $ getField @"store" client)) filtered
+            evaluations <- pure $ mapValues (getField @"value" . fst . snd) details
             now <- unixMilliseconds
             state <-
                 pure $
                     mapValues
-                        ( \(flag, detail) -> do
+                        ( \(flag, (detail, prereqs)) -> do
                             let reason' = getField @"reason" detail
                                 inExperiment = isInExperiment flag reason'
                                 isDebugging = now < fromMaybe 0 (getField @"debugEventsUntilDate" flag)
@@ -256,6 +258,7 @@ allFlagsState client context client_side_only with_reasons details_only_for_trac
                                 , trackEvents = trackEvents' || inExperiment
                                 , trackReason = trackReason'
                                 , debugEventsUntilDate = getField @"debugEventsUntilDate" flag
+                                , prerequisites = prereqs
                                 }
                         )
                         details

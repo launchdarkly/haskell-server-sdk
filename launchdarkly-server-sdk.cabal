@@ -66,6 +66,7 @@ library
       LaunchDarkly.Server.Network.Streaming
       LaunchDarkly.Server.Operators
       LaunchDarkly.Server.Store.Internal
+      LaunchDarkly.Server.Util
       Paths_launchdarkly_server_sdk
   hs-source-dirs:
       src
@@ -174,6 +175,7 @@ test-suite haskell-server-sdk-test
       LaunchDarkly.Server.Reference
       LaunchDarkly.Server.Store
       LaunchDarkly.Server.Store.Internal
+      LaunchDarkly.Server.Util
       Paths_launchdarkly_server_sdk
   hs-source-dirs:
       test

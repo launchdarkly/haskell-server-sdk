@@ -51,6 +51,7 @@ getAppStatus =
                 , "inline-context"
                 , "anonymous-redaction"
                 , "omit-anonymous-contexts"
+                , "client-prereq-events"
                 ]
             }
 

@@ -36,6 +36,7 @@ testFlagReturnsOffVariationIfFlagIsOff = TestCase $ do
             , reason = EvaluationReasonOff
             }
         , []
+        , Nothing
         )
 
     context = makeContext "x" "user"
@@ -80,6 +81,7 @@ testFlagReturnsFallthroughIfFlagIsOnAndThereAreNoRules = TestCase $ do
                     }
             }
         , []
+        , Nothing
         )
 
     context = makeContext "x" "user"
@@ -546,6 +548,7 @@ testClauseCanMatchOnKind = TestCase $ do
                     }
             }
         , []
+        , Nothing
         )
 
     expectedFailure =
@@ -555,6 +558,7 @@ testClauseCanMatchOnKind = TestCase $ do
             , reason = EvaluationReasonFallthrough {inExperiment = False}
             }
         , []
+        , Nothing
         )
 
     orgContext = makeContext "x" "org"
@@ -624,6 +628,7 @@ testClauseCanMatchCustomAttribute = TestCase $ do
                     }
             }
         , []
+        , Nothing
         )
 
     expectedFailure =
@@ -633,6 +638,7 @@ testClauseCanMatchCustomAttribute = TestCase $ do
             , reason = EvaluationReasonFallthrough {inExperiment = False}
             }
         , []
+        , Nothing
         )
 
     userContext = makeContext "x" "user" & withAttribute "legs" (Number 4)
@@ -702,6 +708,7 @@ testClauseCanMatchCustomAttributeReference = TestCase $ do
                     }
             }
         , []
+        , Nothing
         )
 
     expectedFailure =
@@ -711,6 +718,7 @@ testClauseCanMatchCustomAttributeReference = TestCase $ do
             , reason = EvaluationReasonFallthrough {inExperiment = False}
             }
         , []
+        , Nothing
         )
 
     userContext = makeContext "x" "user" & withAttribute "attr~1a" (String "right")
