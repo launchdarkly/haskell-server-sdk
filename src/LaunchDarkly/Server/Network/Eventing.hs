@@ -74,10 +74,10 @@ eventThread manager client clientContext = do
             payloadId <- liftIO $ atomicModifyIORef' rngRef (swap . random)
             let
                 encoded = encode events'
-                compressed = if compressEvents then GZip.compress encoded else encoded
+                payload = if compressEvents then GZip.compress encoded else encoded
                 thisReq =
                     req
-                        { requestBody = RequestBodyLBS compressed
+                        { requestBody = RequestBodyLBS payload
                         , requestHeaders =
                             (requestHeaders req)
                                 & \l ->
