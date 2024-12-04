@@ -3,7 +3,7 @@
 
 module LaunchDarkly.Server.Network.Streaming (streamingThread) where
 
-import Control.Applicative (many)
+import Control.Applicative (many, (<|>))
 import Control.Concurrent (threadDelay)
 import Control.Exception (throwIO)
 import Control.Monad (mzero, void)
@@ -104,7 +104,7 @@ processField (fieldName, fieldValue) event = case fieldName of
 
 parseEvent :: Parser SSE
 parseEvent = do
-    fields <- many (many comment >> parseField >>= pure)
+    fields <- concat <$> many ((comment >> pure []) <|> fmap (: []) parseField)
     endOfLineSSE
     let event = foldr processField (SSE "" "" mzero mzero) fields
     if T.null (name event) || T.null (buffer event) then parseEvent else pure event
