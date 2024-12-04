@@ -45,6 +45,7 @@ data EventParams = EventParams
     , capacity :: !(Maybe Natural)
     , enableDiagnostics :: !(Maybe Bool)
     , allAttributesPrivate :: !(Maybe Bool)
+    , enableGzip :: !(Maybe Bool)
     , globalPrivateAttributes :: !(Maybe (Set Text))
     , flushIntervalMs :: !(Maybe Natural)
     , omitAnonymousContexts :: !(Maybe Bool)

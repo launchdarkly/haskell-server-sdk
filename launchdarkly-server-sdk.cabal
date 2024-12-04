@@ -5,7 +5,7 @@ cabal-version: 1.12
 -- see: https://github.com/sol/hpack
 
 name:           launchdarkly-server-sdk
-version:        4.2.0
+version:        4.3.0
 synopsis:       Server-side SDK for integrating with LaunchDarkly
 description:    Please see the README on GitHub at <https://github.com/launchdarkly/haskell-server-sdk#readme>
 category:       Web
@@ -126,6 +126,7 @@ library
     , unordered-containers >=0.2.10.0 && <0.3
     , uuid >=1.3.13 && <1.4
     , yaml >=0.11.5.0 && <0.12
+    , zlib >=0.6.2.2 && <0.7
   default-language: Haskell2010
 
 test-suite haskell-server-sdk-test
@@ -237,4 +238,5 @@ test-suite haskell-server-sdk-test
     , unordered-containers >=0.2.10.0 && <0.3
     , uuid >=1.3.13 && <1.4
     , yaml >=0.11.5.0 && <0.12
+    , zlib >=0.6.2.2 && <0.7
   default-language: Haskell2010
