@@ -80,8 +80,9 @@ eventThread manager client clientContext = do
                         { requestBody = RequestBodyLBS compressed
                         , requestHeaders =
                             (requestHeaders req)
-                                & \l -> addToAL l "X-LaunchDarkly-Payload-ID" (UUID.toASCIIBytes payloadId)
-                                & \l -> if compressEvents then addToAL l "Content-Encoding" "gzip" else l
+                                & \l ->
+                                    addToAL l "X-LaunchDarkly-Payload-ID" (UUID.toASCIIBytes payloadId)
+                                        & \l -> if compressEvents then addToAL l "Content-Encoding" "gzip" else l
                         }
             (success, serverTime) <- processSend manager thisReq
             $(logDebug) $ T.append "sending events: " $ decodeUtf8 $ L.toStrict encoded

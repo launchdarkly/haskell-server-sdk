@@ -181,7 +181,6 @@ configSetEventsCapacity = setField @"eventsCapacity"
 configSetCompressEvents :: Bool -> Config -> Config
 configSetCompressEvents = setField @"compressEvents"
 
-
 -- | Set the logger to be used by the client.
 configSetLogger :: (LoggingT IO () -> IO ()) -> Config -> Config
 configSetLogger = setField @"logger"
