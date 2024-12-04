@@ -52,6 +52,8 @@ getAppStatus =
                 , "anonymous-redaction"
                 , "omit-anonymous-contexts"
                 , "client-prereq-events"
+                , "event-gzip"
+                , "optional-event-gzip"
                 ]
             }
 

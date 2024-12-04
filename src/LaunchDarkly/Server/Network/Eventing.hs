@@ -1,5 +1,6 @@
 module LaunchDarkly.Server.Network.Eventing (eventThread) where
 
+import qualified Codec.Compression.GZip as GZip
 import Control.Concurrent (killThread, myThreadId)
 import Control.Concurrent.MVar (modifyMVar_, readMVar, swapMVar, takeMVar)
 import Control.Monad (forever, unless, void, when)
@@ -59,7 +60,11 @@ updateLastKnownServerTime state serverTime = modifyMVar_ (getField @"lastKnownSe
 
 eventThread :: (MonadIO m, MonadLogger m, MonadMask m) => Manager -> Client -> ClientContext -> m ()
 eventThread manager client clientContext = do
-    let state = getField @"events" client; config = getField @"config" client; httpConfig = httpConfiguration clientContext
+    let
+        state = getField @"events" client
+        config = getField @"config" client
+        compressEvents = getField @"compressEvents" config
+        httpConfig = httpConfiguration clientContext
     rngRef <- liftIO $ newStdGen >>= newIORef
     req <- (liftIO $ prepareRequest httpConfig $ (T.unpack $ getField @"eventsURI" config) ++ "/bulk") >>= pure . setEventHeaders
     void $ tryAuthorized client $ forever $ do
@@ -69,12 +74,15 @@ eventThread manager client clientContext = do
             payloadId <- liftIO $ atomicModifyIORef' rngRef (swap . random)
             let
                 encoded = encode events'
+                payload = if compressEvents then GZip.compress encoded else encoded
                 thisReq =
                     req
-                        { requestBody = RequestBodyLBS encoded
+                        { requestBody = RequestBodyLBS payload
                         , requestHeaders =
                             (requestHeaders req)
-                                & \l -> addToAL l "X-LaunchDarkly-Payload-ID" (UUID.toASCIIBytes payloadId)
+                                & \l ->
+                                    addToAL l "X-LaunchDarkly-Payload-ID" (UUID.toASCIIBytes payloadId)
+                                        & \l -> if compressEvents then addToAL l "Content-Encoding" "gzip" else l
                         }
             (success, serverTime) <- processSend manager thisReq
             $(logDebug) $ T.append "sending events: " $ decodeUtf8 $ L.toStrict encoded

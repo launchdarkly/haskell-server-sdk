@@ -41,6 +41,7 @@ data Config = Config
     , pollIntervalSeconds :: !Natural
     , contextKeyLRUCapacity :: !Natural
     , eventsCapacity :: !Natural
+    , compressEvents :: !Bool
     , logger :: !(LoggingT IO () -> IO ())
     , sendEvents :: !Bool
     , offline :: !Bool

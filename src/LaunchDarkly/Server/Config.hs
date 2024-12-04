@@ -17,6 +17,7 @@ module LaunchDarkly.Server.Config
     , configSetContextKeyLRUCapacity
     , configSetUserKeyLRUCapacity
     , configSetEventsCapacity
+    , configSetCompressEvents
     , configSetLogger
     , configSetManager
     , configSetSendEvents
@@ -53,6 +54,7 @@ makeConfig key =
         , baseURI = "https://sdk.launchdarkly.com"
         , streamURI = "https://stream.launchdarkly.com"
         , eventsURI = "https://events.launchdarkly.com"
+        , compressEvents = False
         , storeBackend = Nothing
         , storeTTLSeconds = 10
         , streaming = True
@@ -168,6 +170,16 @@ configSetUserKeyLRUCapacity = configSetContextKeyLRUCapacity
 -- buffer is flushed, events will be discarded.
 configSetEventsCapacity :: Natural -> Config -> Config
 configSetEventsCapacity = setField @"eventsCapacity"
+
+-- |
+-- Should the event payload sent to LaunchDarkly use gzip compression. By
+-- default this is false to prevent backward breaking compatibility issues with
+-- older versions of the relay proxy.
+--
+-- Customers not using the relay proxy are strongly encouraged to enable this
+-- feature to reduce egress bandwidth cost.
+configSetCompressEvents :: Bool -> Config -> Config
+configSetCompressEvents = setField @"compressEvents"
 
 -- | Set the logger to be used by the client.
 configSetLogger :: (LoggingT IO () -> IO ()) -> Config -> Config
