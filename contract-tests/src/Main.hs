@@ -54,6 +54,7 @@ getAppStatus =
                 , "client-prereq-events"
                 , "event-gzip"
                 , "optional-event-gzip"
+                , "polling-gzip"
                 ]
             }
 
