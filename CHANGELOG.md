@@ -2,6 +2,13 @@
 
 All notable changes to the LaunchDarkly Haskell Server-side SDK will be documented in this file. This project adheres to [Semantic Versioning](http://semver.org).
 
+## [4.4.0](https://github.com/launchdarkly/haskell-server-sdk/compare/4.3.0...4.4.0) (2024-12-05)
+
+
+### Features
+
+* Add option to enable compression of event payloads ([#91](https://github.com/launchdarkly/haskell-server-sdk/issues/91)) ([cb21081](https://github.com/launchdarkly/haskell-server-sdk/commit/cb2108103c5210d08b7976e9ad4d3357c332b783))
+
 ## [4.3.0](https://github.com/launchdarkly/haskell-server-sdk/compare/4.2.0...4.3.0) (2024-10-24)
 
 
