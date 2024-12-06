@@ -2,6 +2,20 @@
 
 All notable changes to the LaunchDarkly Haskell Server-side SDK will be documented in this file. This project adheres to [Semantic Versioning](http://semver.org).
 
+## [4.4.0](https://github.com/launchdarkly/haskell-server-sdk/compare/4.3.0...4.4.0) (2024-12-05)
+
+This release introduces the ability to enable compression of event payloads. When enabled, the SDK will compress events before sending them to the LaunchDarkly servers. This can reduce the bandwidth required to send events, which can be useful in high-traffic environments to reduce egress traffic costs.
+
+> [!IMPORTANT]
+> Relay Proxy users **MUST** upgrade to version 8.9 or higher prior to enabling this option to prevent loss of event data.
+>
+> However, enabling this feature is **NOT** required when using the Relay Proxy as it will manage compression automatically.
+
+
+### Features
+
+* Add option to enable compression of event payloads ([#91](https://github.com/launchdarkly/haskell-server-sdk/issues/91)) ([cb21081](https://github.com/launchdarkly/haskell-server-sdk/commit/cb2108103c5210d08b7976e9ad4d3357c332b783))
+
 ## [4.3.0](https://github.com/launchdarkly/haskell-server-sdk/compare/4.2.0...4.3.0) (2024-10-24)
 
 
