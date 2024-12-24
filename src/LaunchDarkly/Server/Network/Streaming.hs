@@ -3,7 +3,7 @@
 
 module LaunchDarkly.Server.Network.Streaming (streamingThread) where
 
-import Control.Applicative (many)
+import Control.Applicative (many, (<|>))
 import Control.Concurrent (threadDelay)
 import Control.Exception (throwIO)
 import Control.Monad (mzero, void)
@@ -27,7 +27,7 @@ import System.Clock (Clock (Monotonic), TimeSpec (TimeSpec), getTime)
 import System.Random (Random (randomR), newStdGen)
 import System.Timeout (timeout)
 
-import LaunchDarkly.AesonCompat (KeyMap)
+import LaunchDarkly.AesonCompat (KeyMap, emptyObject)
 import LaunchDarkly.Server.Config.ClientContext (ClientContext (..))
 import LaunchDarkly.Server.Config.HttpConfiguration (HttpConfiguration (..), prepareRequest)
 import LaunchDarkly.Server.DataSource.Internal (DataSourceUpdates (..))
@@ -39,7 +39,7 @@ data PutBody = PutBody
     { flags :: !(KeyMap Flag)
     , segments :: !(KeyMap Segment)
     }
-    deriving (Generic, Show, FromJSON)
+    deriving (Generic, Show)
 
 data PathData d = PathData
     { path :: !Text
@@ -52,6 +52,12 @@ data PathVersion = PathVersion
     , version :: !Natural
     }
     deriving (Generic, Show, FromJSON)
+
+instance FromJSON PutBody where
+    parseJSON = withObject "PutBody" $ \o -> do
+        flags <- o .: "flags"
+        segments <- o .:? "segments" .!= emptyObject
+        pure $ PutBody {flags = flags, segments = segments}
 
 instance FromJSON a => FromJSON (PathData a) where
     parseJSON = withObject "Put" $ \o -> do
@@ -98,7 +104,7 @@ processField (fieldName, fieldValue) event = case fieldName of
 
 parseEvent :: Parser SSE
 parseEvent = do
-    fields <- many (many comment >> parseField >>= pure)
+    fields <- concat <$> many ((comment >> pure []) <|> fmap (: []) parseField)
     endOfLineSSE
     let event = foldr processField (SSE "" "" mzero mzero) fields
     if T.null (name event) || T.null (buffer event) then parseEvent else pure event
