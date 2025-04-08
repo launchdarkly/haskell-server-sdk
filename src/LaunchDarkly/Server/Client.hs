@@ -293,7 +293,7 @@ track client context key value metric = do
         makeBaseEvent $
             CustomEvent
                 { key = key
-                , contextKeys = getKeys context
+                , context = redactContextRedactAnonymous (getField @"config" client) context
                 , metricValue = metric
                 , value = value
                 }
