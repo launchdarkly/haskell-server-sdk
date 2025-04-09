@@ -214,7 +214,7 @@ makeFeatureEventWithContextPayload context includeReason event =
 
 data CustomEvent = CustomEvent
     { key :: !Text
-    , contextKeys :: !(KeyMap Text)
+    , context :: !Value
     , metricValue :: !(Maybe Double)
     , value :: !(Maybe Value)
     }
@@ -226,7 +226,7 @@ instance ToJSON CustomEvent where
             filter
                 ((/=) Null . snd)
                 [ ("key", toJSON $ getField @"key" ctx)
-                , ("contextKeys", toJSON $ getField @"contextKeys" ctx)
+                , ("context", toJSON $ getField @"context" ctx)
                 , ("metricValue", toJSON $ getField @"metricValue" ctx)
                 , ("data", toJSON $ getField @"value" ctx)
                 ]
