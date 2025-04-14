@@ -48,7 +48,7 @@ getAppStatus =
                 , "context-type"
                 , "secure-mode-hash"
                 , "tags"
-                , "inline-context"
+                , "inline-context-all"
                 , "anonymous-redaction"
                 , "omit-anonymous-contexts"
                 , "client-prereq-events"

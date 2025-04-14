@@ -55,7 +55,7 @@ import LaunchDarkly.Server.Config.ClientContext (ClientContext (..))
 import LaunchDarkly.Server.Config.HttpConfiguration (HttpConfiguration (..))
 import LaunchDarkly.Server.Config.Internal (ApplicationInfo, Config, getApplicationInfoHeader, shouldSendEvents)
 import LaunchDarkly.Server.Context (getValue)
-import LaunchDarkly.Server.Context.Internal (Context (Invalid), getCanonicalKey, getKey, getKeys, optionallyRedactAnonymous, redactContext)
+import LaunchDarkly.Server.Context.Internal (Context (Invalid), getCanonicalKey, getKey, optionallyRedactAnonymous, redactContext, redactContextRedactAnonymous)
 import LaunchDarkly.Server.DataSource.Internal (DataSource (..), DataSourceFactory, DataSourceUpdates (..), defaultDataSourceUpdates, nullDataSourceFactory)
 import LaunchDarkly.Server.Details (EvalErrorKind (..), EvaluationDetail (..), EvaluationReason (..))
 import LaunchDarkly.Server.Evaluate (evaluateDetail, evaluateTyped)
@@ -293,7 +293,7 @@ track client context key value metric = do
         makeBaseEvent $
             CustomEvent
                 { key = key
-                , contextKeys = getKeys context
+                , context = redactContextRedactAnonymous (getField @"config" client) context
                 , metricValue = metric
                 , value = value
                 }
