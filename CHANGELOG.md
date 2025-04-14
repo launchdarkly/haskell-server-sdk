@@ -2,6 +2,13 @@
 
 All notable changes to the LaunchDarkly Haskell Server-side SDK will be documented in this file. This project adheres to [Semantic Versioning](http://semver.org).
 
+## [4.5.0](https://github.com/launchdarkly/haskell-server-sdk/compare/4.4.1...4.5.0) (2025-04-14)
+
+
+### Features
+
+* Inline context for custom events ([#97](https://github.com/launchdarkly/haskell-server-sdk/issues/97)) ([0ad71aa](https://github.com/launchdarkly/haskell-server-sdk/commit/0ad71aa923ae62403f6762cebd673030a0cad9e5))
+
 ## [4.4.1](https://github.com/launchdarkly/haskell-server-sdk/compare/4.4.0...4.4.1) (2024-12-24)
 
 
