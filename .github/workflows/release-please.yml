@@ -38,11 +38,15 @@ jobs:
       # These remaining steps are ONLY run if a release was actually created
       #
       - uses: launchdarkly/gh-actions/actions/release-secrets@release-secrets-v1.2.0
-        name: 'Get Hackage token'
+        name: "Get Hackage token"
         if: ${{ steps.release.outputs.releases_created == 'true' }}
         with:
           aws_assume_role: ${{ vars.AWS_ROLE_ARN }}
-          ssm_parameter_pairs: '/production/common/releasing/hackage/password = HACKAGE_TOKEN'
+          ssm_parameter_pairs: "/production/common/releasing/hackage/password = HACKAGE_TOKEN"
+
+      - name: Install PCRE development libraries
+        if: ${{ steps.release.outputs.releases_created == 'true' }}
+        run: sudo apt-get update && sudo apt-get install -y libpcre3-dev
 
       - uses: ./.github/actions/setup-cache
         if: ${{ steps.release.outputs.releases_created == 'true' }}
@@ -60,7 +64,7 @@ jobs:
         if: ${{ steps.release.outputs.releases_created == 'true' }}
         with:
           token: ${{ env.HACKAGE_TOKEN }}
-          dry_run: 'false'
+          dry_run: "false"
 
       - uses: ./.github/actions/publish-docs
         if: ${{ steps.release.outputs.releases_created == 'true' }}
@@ -70,7 +74,7 @@ jobs:
           token: ${{secrets.GITHUB_TOKEN}}
 
   release-provenance:
-    needs: [ 'release-package' ]
+    needs: ["release-package"]
     if: ${{ needs.release-package.outputs.release-created == 'true' }}
     permissions:
       actions: read

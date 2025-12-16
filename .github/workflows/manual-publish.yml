@@ -3,7 +3,7 @@ on:
   workflow_dispatch:
     inputs:
       dry_run:
-        description: 'Is this a dry run. If so no package will be published.'
+        description: "Is this a dry run. If so no package will be published."
         type: boolean
         required: true
 
@@ -20,6 +20,9 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
+      - name: Install PCRE development libraries
+        run: sudo apt-get update && sudo apt-get install -y libpcre3-dev
+
       - uses: ./.github/actions/setup-cache
 
       - name: Build and Test
@@ -29,10 +32,10 @@ jobs:
           token: ${{secrets.GITHUB_TOKEN}}
 
       - uses: launchdarkly/gh-actions/actions/release-secrets@release-secrets-v1.2.0
-        name: 'Get Hackage token'
+        name: "Get Hackage token"
         with:
           aws_assume_role: ${{ vars.AWS_ROLE_ARN }}
-          ssm_parameter_pairs: '/production/common/releasing/hackage/password = HACKAGE_TOKEN'
+          ssm_parameter_pairs: "/production/common/releasing/hackage/password = HACKAGE_TOKEN"
 
       - name: Publish Package
         uses: ./.github/actions/publish
@@ -41,7 +44,7 @@ jobs:
           dry_run: ${{ inputs.dry_run }}
 
   release-provenance:
-    needs: [ 'build-publish' ]
+    needs: ["build-publish"]
     permissions:
       actions: read
       id-token: write
