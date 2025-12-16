@@ -2,6 +2,13 @@
 
 All notable changes to the LaunchDarkly Haskell Server-side SDK will be documented in this file. This project adheres to [Semantic Versioning](http://semver.org).
 
+## [4.5.1](https://github.com/launchdarkly/haskell-server-sdk/compare/4.5.0...4.5.1) (2025-12-16)
+
+
+### Bug Fixes
+
+* Export AllFlagsState selectors ([#100](https://github.com/launchdarkly/haskell-server-sdk/issues/100)) ([3cf57e5](https://github.com/launchdarkly/haskell-server-sdk/commit/3cf57e54252440715cad984f19a45f8fe7b60bf8))
+
 ## [4.5.0](https://github.com/launchdarkly/haskell-server-sdk/compare/4.4.1...4.5.0) (2025-04-14)
 
 
