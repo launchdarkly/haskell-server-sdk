@@ -55,7 +55,7 @@
           "introduced": "1.0"
         },
         "storingDataRedis": {
-          "introduced": "0.2"
+          "introduced": "1.0"
         },
         "testDataSource": {
           "introduced": "3.0"
