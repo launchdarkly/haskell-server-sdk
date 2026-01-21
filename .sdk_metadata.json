@@ -7,7 +7,66 @@
       "languages": [
         "Haskell"
       ],
-      "userAgents": ["HaskellServerClient"]
+      "userAgents": ["HaskellServerClient"],
+      "features": {
+        "allFlags": {
+          "introduced": "1.0"
+        },
+        "appMetadata": {
+          "introduced": "3.1"
+        },
+        "contexts": {
+          "introduced": "4.0"
+        },
+        "eventCompression": {
+          "introduced": "4.4"
+        },
+        "experimentation": {
+          "introduced": "2.2"
+        },
+        "fileDataSource": {
+          "introduced": "3.0"
+        },
+        "inlineContextCustomEvents": {
+          "introduced": "4.5"
+        },
+        "inlineContextEvaluationEvents": {
+          "introduced": "4.1"
+        },
+        "offlineMode": {
+          "introduced": "1.0"
+        },
+        "omitAnonContexts": {
+          "introduced": "4.2"
+        },
+        "privateAttrs": {
+          "introduced": "1.0"
+        },
+        "relayProxyDaemon": {
+          "introduced": "1.0"
+        },
+        "relayProxyProxy": {
+          "introduced": "1.0"
+        },
+        "secureMode": {
+          "introduced": "4.0"
+        },
+        "storingData": {
+          "introduced": "1.0"
+        },
+        "storingDataRedis": {
+          "introduced": "1.0"
+        },
+        "testDataSource": {
+          "introduced": "3.0"
+        },
+        "track": {
+          "introduced": "1.0"
+        },
+        "variationDetail": {
+          "introduced": "1.0"
+        }
+      }
     }
   }
 }
