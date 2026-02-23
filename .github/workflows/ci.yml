@@ -27,7 +27,7 @@ jobs:
     steps:
       - uses: actions/checkout@v4
         with:
-          fetch-depth: 0 # If you only need the current version keep this.
+          fetch-depth: 0
           
       - name: Install PCRE development libraries
         run: sudo apt-get update && sudo apt-get install -y libpcre3-dev
@@ -62,7 +62,7 @@ jobs:
     steps:
       - uses: actions/checkout@v4
         with:
-          fetch-depth: 0 # If you only need the current version keep this.
+          fetch-depth: 0
 
       - name: Setup C_INCLUDE_PATH
         run: |
@@ -91,7 +91,7 @@ jobs:
     steps:
       - uses: actions/checkout@v4
         with:
-          fetch-depth: 0 # If you only need the current version keep this.
+          fetch-depth: 0
 
       - uses: ./.github/actions/setup-cache
         with:
