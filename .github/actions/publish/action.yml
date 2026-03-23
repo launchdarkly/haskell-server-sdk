@@ -19,7 +19,7 @@ runs:
       shell: bash
       run: echo "STACK_DIR=$(stack --no-terminal path --dist-dir --resolver=${{ inputs.resolver }})" >> $GITHUB_ENV
 
-    - uses: haskell-actions/hackage-publish@v1
+    - uses: haskell-actions/hackage-publish@0fa2122fae62cebe8ba3b0fe9b036cc736337230 # v1
       with:
         hackageToken: ${{ inputs.token }}
         packagesPath: ${{ env.STACK_DIR }}
