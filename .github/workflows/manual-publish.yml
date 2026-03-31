@@ -47,6 +47,7 @@ jobs:
           dry_run: ${{ inputs.dry_run }}
 
       - name: Generate checksums file
+        if: ${{ !inputs.dry_run }}
         env:
           HASHES: ${{ steps.ci.outputs.package-hashes }}
         run: |
