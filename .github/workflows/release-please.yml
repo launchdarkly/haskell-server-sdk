@@ -70,15 +70,8 @@ jobs:
           # and another token, then add more tokens to the composite action.
           token: ${{secrets.GITHUB_TOKEN}}
 
-      - name: Generate checksums file
-        if: ${{ steps.release.outputs.releases_created == 'true' }}
-        env:
-          HASHES: ${{ steps.ci.outputs.package-hashes }}
-        run: |
-          echo "$HASHES" | base64 -d > checksums.txt
-
       - name: Attest build provenance
         if: ${{ steps.release.outputs.releases_created == 'true' }}
         uses: actions/attest@v4
         with:
-          subject-checksums: checksums.txt
+          subject-path: '${{ steps.ci.outputs.dist-dir }}/*tar.gz'
