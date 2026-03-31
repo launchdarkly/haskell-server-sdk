@@ -1,7 +1,6 @@
 {
   "packages": {
     ".": {
-      "force-tag-creation": true,
       "release-type": "simple",
       "bump-minor-pre-major": true,
       "versioning": "default",
