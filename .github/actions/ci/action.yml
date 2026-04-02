@@ -13,9 +13,9 @@ inputs:
     description: 'GH token used to download SDK test harness.'
     required: true
 outputs:
-  package-hashes:
-    description: "base64-encoded sha256 hashes of distribution files"
-    value: ${{ steps.package-hashes.outputs.package-hashes }}
+  dist-dir:
+    description: "Path to the stack dist directory containing built artifacts"
+    value: ${{ steps.dist-dir.outputs.dist-dir }}
 
 runs:
   using: composite
@@ -34,15 +34,12 @@ runs:
       run: stack --no-terminal --resolver=${{ inputs.resolver }} sdist
 
     - name: Setup dist directory
+      id: dist-dir
       shell: bash
-      run: echo "STACK_DIR=$(stack --no-terminal path --dist-dir --resolver=${{ inputs.resolver }})" >> $GITHUB_ENV
-
-    - name: Hash build files for provenance
-      id: package-hashes
-      shell: bash
-      working-directory: ${{ env.STACK_DIR }}
       run: |
-        echo "package-hashes=$(sha256sum *tar.gz | base64 -w0)" >> "$GITHUB_OUTPUT"
+        STACK_DIR=$(stack --no-terminal path --dist-dir --resolver=${{ inputs.resolver }})
+        echo "STACK_DIR=$STACK_DIR" >> $GITHUB_ENV
+        echo "dist-dir=$STACK_DIR" >> "$GITHUB_OUTPUT"
 
     - name: Run tests
       shell: bash

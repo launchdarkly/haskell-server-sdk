@@ -14,8 +14,7 @@ jobs:
     permissions:
       id-token: write
       contents: read
-    outputs:
-      package-hashes: ${{ steps.ci.outputs.package-hashes }}
+      attestations: write
 
     steps:
       - uses: actions/checkout@v4
@@ -43,13 +42,8 @@ jobs:
           token: ${{ env.HACKAGE_TOKEN }}
           dry_run: ${{ inputs.dry_run }}
 
-  release-provenance:
-    needs: ["build-publish"]
-    permissions:
-      actions: read
-      id-token: write
-      contents: write
-    uses: slsa-framework/slsa-github-generator/.github/workflows/generator_generic_slsa3.yml@5a775b367a56d5bd118a224a811bba288150a563 # v2.0.0
-    with:
-      base64-subjects: "${{ needs.build-publish.outputs.package-hashes }}"
-      upload-assets: ${{ !inputs.dry_run }}
+      - name: Attest build provenance
+        if: ${{ format('{0}', inputs.dry_run) == 'false' }}
+        uses: actions/attest@v4
+        with:
+          subject-path: '${{ steps.ci.outputs.dist-dir }}/*tar.gz'

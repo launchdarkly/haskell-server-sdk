@@ -13,10 +13,7 @@ jobs:
       id-token: write # Needed if using OIDC to get release secrets.
       contents: write # Contents and pull-requests are for release-please to make releases.
       pull-requests: write
-    outputs:
-      release-created: ${{ steps.release.outputs.release_created }}
-      upload-tag-name: ${{ steps.release.outputs.tag_name }}
-      package-hashes: ${{ steps.ci.outputs.package-hashes }}
+      attestations: write
 
     steps:
       - uses: googleapis/release-please-action@16a9c90856f42705d54a6fda1823352bdc62cf38 # v4
@@ -34,9 +31,6 @@ jobs:
         with:
           branch: ${{ fromJSON(steps.release.outputs.pr).headBranchName }}
 
-      #
-      # These remaining steps are ONLY run if a release was actually created
-      #
       - uses: launchdarkly/gh-actions/actions/release-secrets@release-secrets-v1.2.0
         name: "Get Hackage token"
         if: ${{ steps.release.outputs.releases_created == 'true' }}
@@ -73,15 +67,8 @@ jobs:
           # and another token, then add more tokens to the composite action.
           token: ${{secrets.GITHUB_TOKEN}}
 
-  release-provenance:
-    needs: ["release-package"]
-    if: ${{ needs.release-package.outputs.release-created == 'true' }}
-    permissions:
-      actions: read
-      id-token: write
-      contents: write
-    uses: slsa-framework/slsa-github-generator/.github/workflows/generator_generic_slsa3.yml@5a775b367a56d5bd118a224a811bba288150a563 # v2.0.0
-    with:
-      base64-subjects: "${{ needs.release-package.outputs.package-hashes }}"
-      upload-assets: true
-      upload-tag-name: ${{ needs.release-package.outputs.upload-tag-name }}
+      - name: Attest build provenance
+        if: ${{ steps.release.outputs.releases_created == 'true' }}
+        uses: actions/attest@v4
+        with:
+          subject-path: '${{ steps.ci.outputs.dist-dir }}/*tar.gz'
