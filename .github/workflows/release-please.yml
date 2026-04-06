@@ -14,7 +14,7 @@ jobs:
       pull-requests: write
 
     outputs:
-      releases_created: ${{ steps.release.outputs.releases_created }}
+      release_created: ${{ steps.release.outputs.release_created }}
 
     steps:
       # Create any releases first, then create tags, and then optionally create any new PRs.
@@ -63,7 +63,7 @@ jobs:
 
   release-package:
     needs: release-please
-    if: ${{ needs.release-please.outputs.releases_created == 'true' }}
+    if: ${{ needs.release-please.outputs.release_created == 'true' }}
     runs-on: ubuntu-latest
 
     permissions:
