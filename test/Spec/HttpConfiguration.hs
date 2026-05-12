@@ -3,6 +3,7 @@ module Spec.HttpConfiguration (allTests) where
 import qualified Data.ByteString as BS
 import qualified Data.ByteString.Char8 as BSC
 import Data.List (nub)
+import Data.Maybe (isJust)
 import qualified Data.Text.Encoding as TE
 import qualified Data.UUID as UUID
 import Network.HTTP.Types (HeaderName)
@@ -69,8 +70,8 @@ testMakeHttpConfigurationGeneratesDistinctInstanceIds = TestCase $ do
     h2 <- makeHttpConfiguration "test-version" (makeConfig "sdk-key")
     let id1 = lookup instanceIdHeader (defaultRequestHeaders h1)
         id2 = lookup instanceIdHeader (defaultRequestHeaders h2)
-    assertBool "first instance id present" (id1 /= Nothing)
-    assertBool "second instance id present" (id2 /= Nothing)
+    assertBool "first instance id present" (isJust id1)
+    assertBool "second instance id present" (isJust id2)
     assertBool "each SDK instance should generate its own instance id" (id1 /= id2)
 
 allTests :: Test
