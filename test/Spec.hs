@@ -10,6 +10,7 @@ import qualified Spec.Context
 import qualified Spec.DataSource
 import qualified Spec.Evaluate
 import qualified Spec.Features
+import qualified Spec.HttpConfiguration
 import qualified Spec.Integrations.FileData
 import qualified Spec.Integrations.TestData
 import qualified Spec.Operators
@@ -32,6 +33,7 @@ main = do
                 , Spec.DataSource.allTests
                 , Spec.Evaluate.allTests
                 , Spec.Features.allTests
+                , Spec.HttpConfiguration.allTests
                 , Spec.Operators.allTests
                 , Spec.Reference.allTests
                 , Spec.Segment.allTests

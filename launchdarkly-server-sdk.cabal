@@ -52,6 +52,7 @@ library
       LaunchDarkly.Server.Client.Status
       LaunchDarkly.Server.Config.ClientContext
       LaunchDarkly.Server.Config.HttpConfiguration
+      LaunchDarkly.Server.Config.HttpConfigurationInternal
       LaunchDarkly.Server.Config.Internal
       LaunchDarkly.Server.Context.Internal
       LaunchDarkly.Server.DataSource.Internal
@@ -140,6 +141,7 @@ test-suite haskell-server-sdk-test
       Spec.DataSource
       Spec.Evaluate
       Spec.Features
+      Spec.HttpConfiguration
       Spec.Integrations.FileData
       Spec.Integrations.TestData
       Spec.Operators
@@ -157,6 +159,7 @@ test-suite haskell-server-sdk-test
       LaunchDarkly.Server.Config
       LaunchDarkly.Server.Config.ClientContext
       LaunchDarkly.Server.Config.HttpConfiguration
+      LaunchDarkly.Server.Config.HttpConfigurationInternal
       LaunchDarkly.Server.Config.Internal
       LaunchDarkly.Server.Context
       LaunchDarkly.Server.Context.Internal
