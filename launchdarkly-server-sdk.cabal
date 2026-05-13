@@ -140,6 +140,7 @@ test-suite haskell-server-sdk-test
       Spec.DataSource
       Spec.Evaluate
       Spec.Features
+      Spec.HttpConfiguration
       Spec.Integrations.FileData
       Spec.Integrations.TestData
       Spec.Operators

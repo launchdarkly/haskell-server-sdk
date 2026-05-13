@@ -55,6 +55,7 @@ getAppStatus =
                 , "event-gzip"
                 , "optional-event-gzip"
                 , "polling-gzip"
+                , "instance-id"
                 ]
             }
 
