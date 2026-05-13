@@ -48,10 +48,9 @@ import Network.HTTP.Client.TLS (tlsManagerSettings)
 import System.Clock (TimeSpec (..))
 
 import LaunchDarkly.AesonCompat (KeyMap, emptyObject, filterObject, insertKey, mapValues)
-import LaunchDarkly.Server.Client.Internal (Client (..), clientVersion, getStatusI)
+import LaunchDarkly.Server.Client.Internal (Client (..), clientVersion, getStatusI, makeHttpConfiguration)
 import LaunchDarkly.Server.Client.Status (Status (..))
 import LaunchDarkly.Server.Config.ClientContext (ClientContext (..))
-import LaunchDarkly.Server.Config.HttpConfigurationInternal (makeHttpConfiguration)
 import LaunchDarkly.Server.Config.Internal (Config, shouldSendEvents)
 import LaunchDarkly.Server.Context (getValue)
 import LaunchDarkly.Server.Context.Internal (Context (Invalid), getCanonicalKey, getKey, optionallyRedactAnonymous, redactContext, redactContextRedactAnonymous)
@@ -93,7 +92,7 @@ networkDataSourceFactory threadF clientContext dataSourceUpdates = do
 makeClientContext :: Config -> IO ClientContext
 makeClientContext config = do
     let runLogger = getField @"logger" config
-    httpConfiguration <- makeHttpConfiguration clientVersion config
+    httpConfiguration <- makeHttpConfiguration config
     pure $ ClientContext {..}
 
 -- | Create a new instance of the LaunchDarkly client.
