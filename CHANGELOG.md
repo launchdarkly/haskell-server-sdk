@@ -2,6 +2,13 @@
 
 All notable changes to the LaunchDarkly Haskell Server-side SDK will be documented in this file. This project adheres to [Semantic Versioning](http://semver.org).
 
+## [4.6.0](https://github.com/launchdarkly/haskell-server-sdk/compare/4.5.1...4.6.0) (2026-05-28)
+
+
+### Features
+
+* add X-LaunchDarkly-Instance-Id header (SDK-2355) ([#111](https://github.com/launchdarkly/haskell-server-sdk/issues/111)) ([758c304](https://github.com/launchdarkly/haskell-server-sdk/commit/758c3046d1e505782392ee3c017e1e4dc6a4ff04))
+
 ## [4.5.1](https://github.com/launchdarkly/haskell-server-sdk/compare/4.5.0...4.5.1) (2025-12-16)
 
 
