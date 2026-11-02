@@ -25,6 +25,15 @@ runs:
         ghc-version: ${{ inputs.ghc-version }}
         enable-stack: true
 
+    # Use the GHC that the setup step installed. Without this, stack
+    # downloads a second copy of GHC. With install-ghc off, a mismatch
+    # between ghc-version and the resolver fails the build instead.
+    - name: Configure stack to use the installed GHC
+      shell: bash
+      run: |
+        stack config set system-ghc --global true
+        stack config set install-ghc --global false
+
     - name: Build library
       shell: bash
       run: stack --no-terminal --resolver=${{ inputs.resolver }} build
