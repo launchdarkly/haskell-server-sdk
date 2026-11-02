@@ -26,13 +26,11 @@ runs:
         enable-stack: true
 
     # Use the GHC that the setup step installed. Without this, stack
-    # downloads a second copy of GHC. With install-ghc off, a mismatch
-    # between ghc-version and the resolver fails the build instead.
+    # downloads a second copy of GHC. Stack still downloads GHC when a
+    # command uses a different resolver, for example the docs build.
     - name: Configure stack to use the installed GHC
       shell: bash
-      run: |
-        stack config set system-ghc --global true
-        stack config set install-ghc --global false
+      run: stack config set system-ghc --global true
 
     - name: Build library
       shell: bash
