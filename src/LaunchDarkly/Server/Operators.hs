@@ -20,7 +20,8 @@ import Data.Time.Clock (UTCTime)
 import Data.Time.Clock.POSIX (POSIXTime, posixSecondsToUTCTime)
 import Data.Time.ISO8601 (parseISO8601)
 import GHC.Generics (Generic)
-import Text.Regex.PCRE.Light (compileM, match)
+import System.IO.Unsafe (unsafePerformIO)
+import Text.Regex.PCRE.ByteString (compBlank, compile, execBlank, execute)
 
 data Op
     = OpIn
@@ -114,10 +115,20 @@ parseSemVer raw =
 compareSemVer :: (Version -> Version -> Bool) -> Text -> Text -> Bool
 compareSemVer op x y = fromRight False $ liftM2 op (parseSemVer x) (parseSemVer y)
 
+-- | Return True if the pattern matches part of the text.
+--
+-- A pattern that is not valid does not match. A match error, for example a
+-- match limit, also does not match. The pattern compiles without UTF mode.
+-- Thus, "." and case-insensitive matches operate on bytes of the UTF-8 text.
+--
+-- The function uses the IO functions of regex-pcre-builtin. The pure match
+-- functions throw an exception when a match error occurs.
 matches :: Text -> Text -> Bool
-matches text pattern = case compileM (encodeUtf8 pattern) [] of
-    Left _ -> False
-    Right compiled -> isJust $ match compiled (encodeUtf8 text) []
+matches text pattern = unsafePerformIO $ do
+    compiled <- compile compBlank execBlank (encodeUtf8 pattern)
+    case compiled of
+        Left _ -> pure False
+        Right regex -> either (const False) isJust <$> execute regex (encodeUtf8 text)
 
 getOperation :: Op -> (Value -> Value -> Bool)
 getOperation op = case op of
