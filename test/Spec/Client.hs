@@ -2,6 +2,7 @@ module Spec.Client (allTests) where
 
 import Data.Function ((&))
 import Data.Generics.Product (getField)
+import System.Timeout (timeout)
 import Test.HUnit
 
 import LaunchDarkly.Server.Client
@@ -26,6 +27,13 @@ testSecureModeHashIsGeneratedCorrectly = TestCase $ do
     userContext = makeContext "Message" "user"
     orgContext = makeContext "Message" "org"
 
+-- Test that flushEvents returns when no event thread takes the flush signal.
+testFlushEventsDoesNotBlock :: Test
+testFlushEventsDoesNotBlock = TestCase $ do
+    client <- makeTestClient "secret"
+    result <- timeout (5 * 1000000) $ flushEvents client >> flushEvents client
+    assertEqual "flushEvents returned" (Just ()) result
+
 makeTestClient :: Text -> IO Client
 makeTestClient sdkKey = do
     client <- makeClient $ (makeConfig sdkKey) & configSetOffline True
@@ -36,4 +44,5 @@ allTests :: Test
 allTests =
     TestList
         [ testSecureModeHashIsGeneratedCorrectly
+        , testFlushEventsDoesNotBlock
         ]
