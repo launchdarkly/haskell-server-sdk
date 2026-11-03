@@ -1,8 +1,8 @@
 module LaunchDarkly.Server.Events where
 
-import Control.Concurrent.MVar (MVar, modifyMVar, modifyMVar_, newEmptyMVar, newMVar, putMVar, readMVar, swapMVar, tryTakeMVar)
+import Control.Concurrent.MVar (MVar, modifyMVar, modifyMVar_, newEmptyMVar, newMVar, readMVar, swapMVar, tryPutMVar, tryTakeMVar)
 import Control.Lens ((%~), (&))
-import Control.Monad (when)
+import Control.Monad (void, when)
 import Data.Aeson (ToJSON, Value (..), object, toJSON, (.=))
 import Data.Cache.LRU (LRU, newLRU)
 import qualified Data.Cache.LRU as LRU
@@ -344,7 +344,7 @@ summarizeEvent summaryContext event unknown = result
     result = flip (insertKey $ getField @"key" event) summaryContext $ (root & field @"counters" %~ (insertKey key leaf) & field @"contextKinds" %~ (HS.union contextKinds))
 
 putIfEmptyMVar :: MVar a -> a -> IO ()
-putIfEmptyMVar mvar value = tryTakeMVar mvar >>= \case Just x -> putMVar mvar x; Nothing -> putMVar mvar value
+putIfEmptyMVar mvar value = void $ tryPutMVar mvar value
 
 runSummary :: Natural -> EventState -> EvalEvent -> Bool -> IO ()
 runSummary now state event unknown =
