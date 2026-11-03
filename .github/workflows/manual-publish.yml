@@ -9,7 +9,7 @@ on:
 
 jobs:
   build-publish:
-    runs-on: ubuntu-24.04
+    runs-on: ubuntu-latest
     # Needed to get tokens during publishing.
     permissions:
       id-token: write
