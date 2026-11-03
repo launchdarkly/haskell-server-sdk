@@ -1,6 +1,10 @@
 name: Setup caching for stack
 description: 'Enable caching for stack and cabal files'
 inputs:
+  resolver:
+    description: 'The stack resolver, used to keep each resolver in its own cache'
+    required: false
+    default: lts-18.28
   ghc-version:
     description: 'The version of GHC to use for cabal cache busting'
     required: false
@@ -13,17 +17,17 @@ runs:
       name: Cache ~/.stack
       with:
         path: ~/.stack
-        key: ${{ runner.os }}-stack-global-${{ hashFiles('stack.yaml') }}-${{ hashFiles('package.yaml') }}
+        key: ${{ runner.os }}-${{ runner.arch }}-stack-global-${{ inputs.resolver }}-${{ hashFiles('stack.yaml') }}-${{ hashFiles('package.yaml') }}
         restore-keys: |
-          ${{ runner.os }}-stack-global-
+          ${{ runner.os }}-${{ runner.arch }}-stack-global-${{ inputs.resolver }}-
 
     - uses: actions/cache@v4
       name: Cache .stack-work
       with:
         path: .stack-work
-        key: ${{ runner.os }}-stack-work-${{ hashFiles('stack.yaml') }}-${{ hashFiles('package.yaml') }}-${{ hashFiles('**/*.hs') }}
+        key: ${{ runner.os }}-${{ runner.arch }}-stack-work-${{ inputs.resolver }}-${{ hashFiles('stack.yaml') }}-${{ hashFiles('package.yaml') }}-${{ hashFiles('**/*.hs') }}
         restore-keys: |
-          ${{ runner.os }}-stack-work-
+          ${{ runner.os }}-${{ runner.arch }}-stack-work-${{ inputs.resolver }}-
 
     - name: Cache ~/.cabal/packages, ~/.cabal/store and dist-newstyle
       uses: actions/cache@v4
@@ -32,5 +36,5 @@ runs:
           ~/.cabal/packages
           ~/.cabal/store
           dist-newstyle
-        key: ${{ runner.os }}-${{ inputs.ghc-version }}-${{ hashFiles('**/*.cabal', '**/cabal.project', '**/cabal.project.freeze') }}
-        restore-keys: ${{ runner.os }}-${{ inputs.ghc-version }}-
+        key: ${{ runner.os }}-${{ runner.arch }}-${{ inputs.ghc-version }}-${{ hashFiles('**/*.cabal', '**/cabal.project', '**/cabal.project.freeze') }}
+        restore-keys: ${{ runner.os }}-${{ runner.arch }}-${{ inputs.ghc-version }}-
