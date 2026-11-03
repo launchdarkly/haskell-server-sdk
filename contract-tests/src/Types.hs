@@ -25,6 +25,14 @@ data ConfigurationParams = ConfigurationParams
     , polling :: !(Maybe PollingParams)
     , events :: !(Maybe EventParams)
     , tags :: !(Maybe TagParams)
+    , serviceEndpoints :: !(Maybe ServiceEndpointsParams)
+    }
+    deriving (FromJSON, ToJSON, Show, Generic)
+
+data ServiceEndpointsParams = ServiceEndpointsParams
+    { streaming :: !(Maybe Text)
+    , polling :: !(Maybe Text)
+    , events :: !(Maybe Text)
     }
     deriving (FromJSON, ToJSON, Show, Generic)
 
@@ -66,13 +74,15 @@ data CommandParams = CommandParams
     , identifyEvent :: !(Maybe IdentifyEventParams)
     , contextBuild :: !(Maybe ContextBuildParams)
     , contextConvert :: !(Maybe ContextConvertParams)
+    , contextComparison :: !(Maybe ContextComparisonPairParams)
     , secureModeHash :: !(Maybe SecureModeHashParams)
     }
     deriving (FromJSON, Generic)
 
 data EvaluateFlagParams = EvaluateFlagParams
     { flagKey :: !Text
-    , context :: !LD.Context
+    , context :: !(Maybe LD.Context)
+    , user :: !(Maybe LD.Context)
     , valueType :: !Text
     , defaultValue :: !Value
     , detail :: !Bool
@@ -87,7 +97,8 @@ data EvaluateFlagResponse = EvaluateFlagResponse
     deriving (ToJSON, Show, Generic)
 
 data EvaluateAllFlagsParams = EvaluateAllFlagsParams
-    { context :: !LD.Context
+    { context :: !(Maybe LD.Context)
+    , user :: !(Maybe LD.Context)
     , withReasons :: !Bool
     , clientSideOnly :: !Bool
     , detailsOnlyForTrackedFlags :: !Bool
@@ -101,7 +112,8 @@ data EvaluateAllFlagsResponse = EvaluateAllFlagsResponse
 
 data CustomEventParams = CustomEventParams
     { eventKey :: !Text
-    , context :: !LD.Context
+    , context :: !(Maybe LD.Context)
+    , user :: !(Maybe LD.Context)
     , dataValue :: !(Maybe Value)
     , omitNullData :: !(Maybe Bool)
     , metricValue :: !(Maybe Double)
@@ -111,14 +123,16 @@ data CustomEventParams = CustomEventParams
 instance FromJSON CustomEventParams where
     parseJSON = withObject "CustomEvent" $ \o -> do
         eventKey <- o .: "eventKey"
-        context <- o .: "context"
+        context <- o .:? "context"
+        user <- o .:? "user"
         dataValue <- o .:? "data"
         omitNullData <- o .:? "omitNullData"
         metricValue <- o .:? "metricValue"
         return $ CustomEventParams {..}
 
 data IdentifyEventParams = IdentifyEventParams
-    { context :: !LD.Context
+    { context :: !(Maybe LD.Context)
+    , user :: !(Maybe LD.Context)
     }
     deriving (FromJSON, Generic)
 
@@ -154,8 +168,46 @@ instance ToJSON ContextResponse where
     toJSON (ContextResponse {output = _, errorMessage = Just e}) = object [("error", String e)]
     toJSON _ = object [("error", String "Invalid context response was generated")]
 
+data ContextComparisonPairParams = ContextComparisonPairParams
+    { context1 :: !ContextComparisonParams
+    , context2 :: !ContextComparisonParams
+    }
+    deriving (FromJSON, Generic)
+
+data ContextComparisonParams = ContextComparisonParams
+    { single :: !(Maybe ContextComparisonSingleParams)
+    , multi :: !(Maybe [ContextComparisonSingleParams])
+    }
+    deriving (FromJSON, Generic)
+
+data ContextComparisonSingleParams = ContextComparisonSingleParams
+    { kind :: !Text
+    , key :: !Text
+    , attributes :: !(Maybe [AttributeDefinition])
+    , privateAttributes :: !(Maybe [PrivateAttribute])
+    }
+    deriving (FromJSON, Generic)
+
+data AttributeDefinition = AttributeDefinition
+    { name :: !Text
+    , value :: !(Maybe Value)
+    }
+    deriving (FromJSON, Generic)
+
+data PrivateAttribute = PrivateAttribute
+    { value :: !Text
+    , literal :: !Bool
+    }
+    deriving (FromJSON, Generic)
+
+data ContextComparisonResponse = ContextComparisonResponse
+    { equals :: !Bool
+    }
+    deriving (ToJSON, Show, Generic)
+
 data SecureModeHashParams = SecureModeHashParams
     { context :: !(Maybe LD.Context)
+    , user :: !(Maybe LD.Context)
     }
     deriving (FromJSON, Generic)
 

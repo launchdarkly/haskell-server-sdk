@@ -20,7 +20,7 @@ import Data.Text.Lazy.Encoding (decodeUtf8, encodeUtf8)
 import GHC.Generics (Generic)
 import LaunchDarkly.Server (Context, getError, withAttribute, withPrivateAttributes)
 import qualified LaunchDarkly.Server as LD
-import LaunchDarkly.Server.Reference (makeReference)
+import LaunchDarkly.Server.Reference (makeLiteral, makeReference)
 import Network.HTTP.Types
 import System.Timeout (timeout)
 import Types
@@ -56,6 +56,9 @@ getAppStatus =
                 , "optional-event-gzip"
                 , "polling-gzip"
                 , "instance-id"
+                , "service-endpoints"
+                , "user-type"
+                , "context-comparison"
                 ]
             }
 
@@ -94,12 +97,20 @@ runCommand appStateRef = do
             "flushEvents" -> liftIO $ LD.flushEvents c
             "contextBuild" -> contextBuildCommand $ contextBuild commandParams
             "contextConvert" -> contextConvertCommand $ contextConvert commandParams
+            "contextComparison" -> contextComparisonCommand $ contextComparison commandParams
             "secureModeHash" -> secureModeHashCommand c (secureModeHash commandParams)
             _ -> error "An unknown command was requested"
 
 identifyCommand :: LD.Client -> Maybe IdentifyEventParams -> ActionM ()
 identifyCommand _ Nothing = error "Missing identify event params"
-identifyCommand c (Just p) = liftIO $ LD.identify c (getField @"context" p)
+identifyCommand c (Just p) = liftIO $ LD.identify c (contextOrUser (getField @"context" p) (getField @"user" p))
+
+-- The harness sends a user instead of a context for the old user tests. The
+-- SDK parses a JSON object with no kind as a legacy user.
+contextOrUser :: Maybe LD.Context -> Maybe LD.Context -> LD.Context
+contextOrUser (Just context) _ = context
+contextOrUser Nothing (Just user) = user
+contextOrUser Nothing Nothing = error "Missing context or user"
 
 contextBuildCommand :: Maybe ContextBuildParams -> ActionM ()
 contextBuildCommand Nothing = error "Missing context build params"
@@ -122,6 +133,23 @@ contextWithAttribute :: Text -> (Maybe Value) -> Context -> Context
 contextWithAttribute _ Nothing c = c
 contextWithAttribute attr (Just v) c = withAttribute attr v c
 
+contextComparisonCommand :: Maybe ContextComparisonPairParams -> ActionM ()
+contextComparisonCommand Nothing = error "Missing context comparison params"
+contextComparisonCommand (Just ContextComparisonPairParams {context1, context2}) =
+    json $ ContextComparisonResponse {equals = contextComparisonBuild context1 == contextComparisonBuild context2}
+
+contextComparisonBuild :: ContextComparisonParams -> LD.Context
+contextComparisonBuild (ContextComparisonParams {single = Just param}) = contextComparisonSingle param
+contextComparisonBuild (ContextComparisonParams {multi = Just params}) = LD.makeMultiContext $ L.map contextComparisonSingle params
+contextComparisonBuild _ = error "No comparison parameters provided"
+
+contextComparisonSingle :: ContextComparisonSingleParams -> LD.Context
+contextComparisonSingle (ContextComparisonSingleParams {kind, key, attributes, privateAttributes}) =
+    let context = L.foldl' (\c (AttributeDefinition {name, value}) -> contextWithAttribute name value c) (LD.makeContext key kind) (fromMaybe [] attributes)
+     in withPrivateAttributes (S.fromList $ L.map toReference $ fromMaybe [] privateAttributes) context
+  where
+    toReference (PrivateAttribute {value, literal}) = if literal then makeLiteral value else makeReference value
+
 contextConvertCommand :: Maybe ContextConvertParams -> ActionM ()
 contextConvertCommand Nothing = error "Missing context convert params"
 contextConvertCommand (Just ContextConvertParams {input}) =
@@ -137,12 +165,11 @@ createContextResponse c = case LD.isValid c of
 
 secureModeHashCommand :: LD.Client -> Maybe SecureModeHashParams -> ActionM ()
 secureModeHashCommand _ Nothing = error "Missing secure mode hash params"
-secureModeHashCommand _ (Just (SecureModeHashParams {context = Nothing})) = error "This SDK does not support secure mode on non-context types"
-secureModeHashCommand c (Just (SecureModeHashParams {context = Just context})) = json $ SecureModeHashResponse {result = LD.secureModeHash c context}
+secureModeHashCommand c (Just p) = json $ SecureModeHashResponse {result = LD.secureModeHash c (contextOrUser (getField @"context" p) (getField @"user" p))}
 
 customCommand :: LD.Client -> Maybe CustomEventParams -> ActionM ()
 customCommand _ Nothing = error "Missing custom event params"
-customCommand c (Just p) = liftIO $ LD.track c (getField @"context" p) (getField @"eventKey" p) (getField @"dataValue" p) (getField @"metricValue" p)
+customCommand c (Just p) = liftIO $ LD.track c (contextOrUser (getField @"context" p) (getField @"user" p)) (getField @"eventKey" p) (getField @"dataValue" p) (getField @"metricValue" p)
 
 evaluateCommand :: LD.Client -> Maybe EvaluateFlagParams -> ActionM ()
 evaluateCommand _ Nothing = error "Missing evaluate params"
@@ -154,7 +181,7 @@ evaluateCommand c (Just p)
         d <- liftIO $ evaluateWithoutDetail c context flagKey valueType defaultValue
         json d
   where
-    context = (getField @"context" p)
+    context = contextOrUser (getField @"context" p) (getField @"user" p)
     flagKey = (getField @"flagKey" p)
     valueType = (getField @"valueType" p)
     defaultValue = (getField @"defaultValue" p)
@@ -198,7 +225,7 @@ evaluateWithoutDetail _ _ _ _ _ = error ("Invalid type provided")
 evaluateAllCommand :: LD.Client -> Maybe EvaluateAllFlagsParams -> ActionM ()
 evaluateAllCommand _ Nothing = error "Missing evaluate all params"
 evaluateAllCommand c (Just p) = do
-    s <- liftIO $ LD.allFlagsState c (getField @"context" p) (getField @"clientSideOnly" p) (getField @"withReasons" p) (getField @"detailsOnlyForTrackedFlags" p)
+    s <- liftIO $ LD.allFlagsState c (contextOrUser (getField @"context" p) (getField @"user" p)) (getField @"clientSideOnly" p) (getField @"withReasons" p) (getField @"detailsOnlyForTrackedFlags" p)
     json $ EvaluateAllFlagsResponse {state = s}
 
 stopClient :: IORef AppState -> ActionM ()

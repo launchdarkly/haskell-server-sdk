@@ -26,6 +26,7 @@ waitClient client = do
 createConfig :: ConfigurationParams -> LD.Config
 createConfig p =
     LD.makeConfig (getField @"credential" p)
+        & serviceEndpointsConfig (getField @"serviceEndpoints" p)
         & streamingConfig (getField @"streaming" p)
         & pollingConfig (getField @"polling" p)
         & tagsConfig (getField @"tags" p)
@@ -34,6 +35,15 @@ createConfig p =
 updateConfig :: (a -> LD.Config -> LD.Config) -> Maybe a -> LD.Config -> LD.Config
 updateConfig f Nothing config = config
 updateConfig f (Just x) config = f x config
+
+-- Applied first so that a base URI in the streaming, polling or events
+-- configuration takes precedence.
+serviceEndpointsConfig :: Maybe ServiceEndpointsParams -> LD.Config -> LD.Config
+serviceEndpointsConfig Nothing c = c
+serviceEndpointsConfig (Just p) c =
+    updateConfig LD.configSetStreamURI (getField @"streaming" p) $
+        updateConfig LD.configSetBaseURI (getField @"polling" p) $
+            updateConfig LD.configSetEventsURI (getField @"events" p) c
 
 streamingConfig :: Maybe StreamingParams -> LD.Config -> LD.Config
 streamingConfig Nothing c = c
