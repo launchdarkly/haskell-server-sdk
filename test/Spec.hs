@@ -2,7 +2,7 @@ module Main where
 
 import Test.HUnit (Counts (..), Test (TestLabel, TestList), runTestTT)
 
-import Control.Monad.Cont (when)
+import Control.Monad (when)
 import qualified Spec.Bucket
 import qualified Spec.Client
 import qualified Spec.Config
