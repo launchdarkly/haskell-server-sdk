@@ -1,8 +1,8 @@
 module LaunchDarkly.Server.Events where
 
-import Control.Concurrent.MVar (MVar, modifyMVar, modifyMVar_, newEmptyMVar, newMVar, readMVar, swapMVar, tryPutMVar, tryTakeMVar)
+import Control.Concurrent.MVar (MVar, modifyMVar, modifyMVar_, newEmptyMVar, newMVar, readMVar, swapMVar)
 import Control.Lens ((%~), (&))
-import Control.Monad (void, when)
+import Control.Monad (when)
 import Data.Aeson (ToJSON, Value (..), object, toJSON, (.=))
 import Data.Cache.LRU (LRU, newLRU)
 import qualified Data.Cache.LRU as LRU
@@ -43,8 +43,7 @@ data EventState = EventState
     { events :: !(MVar [EventType])
     , lastKnownServerTime :: !(MVar Integer)
     , flush :: !(MVar ())
-    , summary :: !(MVar (KeyMap FlagSummaryContext))
-    , startDate :: !(MVar Natural)
+    , summary :: !(MVar SummaryState)
     , contextKeyLRU :: !(MVar (LRU Text ()))
     }
     deriving (Generic)
@@ -54,8 +53,7 @@ makeEventState config = do
     events <- newMVar []
     lastKnownServerTime <- newMVar 0
     flush <- newEmptyMVar
-    summary <- newMVar mempty
-    startDate <- newEmptyMVar
+    summary <- newMVar emptySummaryState
     contextKeyLRU <- newMVar $ newLRU $ pure $ fromIntegral $ getField @"contextKeyLRUCapacity" config
     pure EventState {..}
 
@@ -75,13 +73,22 @@ unixMilliseconds = round . (* 1000) <$> getPOSIXTime
 makeBaseEvent :: a -> IO (BaseEvent a)
 makeBaseEvent child = unixMilliseconds >>= \now -> pure $ BaseEvent {creationDate = now, event = child}
 
+-- The summary data for the current flush window.
+--
+-- The start date and the counters are in one value. Thus a single MVar
+-- operation changes both together. The start date is Nothing only when
+-- there are no counters.
+data SummaryState = SummaryState !(Maybe Natural) !(KeyMap FlagSummaryContext)
+
+emptySummaryState :: SummaryState
+emptySummaryState = SummaryState Nothing mempty
+
 processSummary :: Config -> EventState -> IO ()
 processSummary config state =
-    tryTakeMVar (getField @"startDate" state) >>= \case
-        Nothing -> pure ()
-        (Just startDate) -> do
+    swapMVar (getField @"summary" state) emptySummaryState >>= \case
+        SummaryState Nothing _ -> pure ()
+        SummaryState (Just startDate) features -> do
             endDate <- unixMilliseconds
-            features <- swapMVar (getField @"summary" state) mempty
             queueEvent config state $ EventTypeSummary $ SummaryEvent {..}
 
 class EventKind a where
@@ -98,9 +105,9 @@ instance EventKind SummaryEvent where
     eventKind _ = "summary"
 
 data FlagSummaryContext = FlagSummaryContext
-    { defaultValue :: Maybe Value
-    , counters :: KeyMap CounterContext
-    , contextKinds :: HS.HashSet Text
+    { defaultValue :: !(Maybe Value)
+    , counters :: !(KeyMap CounterContext)
+    , contextKinds :: !(HS.HashSet Text)
     }
     deriving (Generic, Show)
 
@@ -341,15 +348,17 @@ summarizeEvent summaryContext event unknown = result
                 , value = getField @"value" event
                 , unknown = unknown
                 }
-    result = flip (insertKey $ getField @"key" event) summaryContext $ (root & field @"counters" %~ (insertKey key leaf) & field @"contextKinds" %~ (HS.union contextKinds))
-
-putIfEmptyMVar :: MVar a -> a -> IO ()
-putIfEmptyMVar mvar value = void $ tryPutMVar mvar value
+    root' = root & field @"counters" %~ (insertKey key leaf) & field @"contextKinds" %~ (HS.union contextKinds)
+    -- The map does not evaluate its values. Evaluate them here, so that
+    -- repeated updates do not keep a chain of unevaluated values in memory.
+    result = leaf `seq` root' `seq` insertKey (getField @"key" event) root' summaryContext
 
 runSummary :: Natural -> EventState -> EvalEvent -> Bool -> IO ()
 runSummary now state event unknown =
-    putIfEmptyMVar (getField @"startDate" state) now
-        >> modifyMVar_ (getField @"summary" state) (\summary -> pure $ summarizeEvent summary event unknown)
+    modifyMVar_ (getField @"summary" state) $ \(SummaryState startDate features) ->
+        -- Callers read the time before they get the MVar. Thus a later caller
+        -- can write first. Keep the earliest time as the start date.
+        pure $! SummaryState (Just $ maybe now (min now) startDate) (summarizeEvent features event unknown)
 
 processEvalEvent :: Natural -> Config -> EventState -> Context -> Bool -> Bool -> EvalEvent -> IO ()
 processEvalEvent now config state context includeReason unknown event = do
@@ -371,7 +380,10 @@ processEvalEvent now config state context includeReason unknown event = do
 
 processEvalEvents :: Config -> EventState -> Context -> Bool -> [EvalEvent] -> Bool -> IO ()
 processEvalEvents config state context includeReason events unknown =
-    unixMilliseconds >>= \now -> mapM_ (processEvalEvent now config state context includeReason unknown) events
+    -- Do not record any event data when the SDK does not send events.
+    -- Otherwise the summary data grows without limit.
+    when (shouldSendEvents config) $
+        unixMilliseconds >>= \now -> mapM_ (processEvalEvent now config state context includeReason unknown) events
 
 maybeIndexContext :: Natural -> Config -> Context -> EventState -> IO ()
 maybeIndexContext now config context state = do

@@ -28,7 +28,7 @@ module LaunchDarkly.Server.Client
     ) where
 
 import Control.Concurrent (forkFinally, killThread)
-import Control.Concurrent.MVar (newEmptyMVar, putMVar, takeMVar)
+import Control.Concurrent.MVar (newEmptyMVar, putMVar, takeMVar, tryPutMVar)
 import Control.Monad (forM_, void)
 import Control.Monad.Fix (mfix)
 import Control.Monad.IO.Class (liftIO)
@@ -297,7 +297,7 @@ secureModeHash client context =
 -- be delivered as soon as possible. Flushing is asynchronous, so this method
 -- will return before it is complete.
 flushEvents :: Client -> IO ()
-flushEvents client = putMVar (getField @"flush" $ getField @"events" client) ()
+flushEvents client = void $ tryPutMVar (getField @"flush" $ getField @"events" client) ()
 
 -- |
 -- Close shuts down the LaunchDarkly client. After calling this, the
