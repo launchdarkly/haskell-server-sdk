@@ -357,8 +357,10 @@ runSummary :: Natural -> EventState -> EvalEvent -> Bool -> IO ()
 runSummary now state event unknown =
     modifyMVar_ (getField @"summary" state) $ \(SummaryState startDate features) ->
         -- Callers read the time before they get the MVar. Thus a later caller
-        -- can write first. Keep the earliest time as the start date.
-        pure $! SummaryState (Just $ maybe now (min now) startDate) (summarizeEvent features event unknown)
+        -- can write first. Keep the earliest time as the start date. Evaluate
+        -- it now, so that repeated updates do not keep a chain of
+        -- unevaluated values in memory.
+        pure $! SummaryState (Just $! maybe now (min now) startDate) (summarizeEvent features event unknown)
 
 processEvalEvent :: Natural -> Config -> EventState -> Context -> Bool -> Bool -> EvalEvent -> IO ()
 processEvalEvent now config state context includeReason unknown event = do
