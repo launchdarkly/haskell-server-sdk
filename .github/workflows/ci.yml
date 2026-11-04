@@ -70,9 +70,7 @@ jobs:
           token: ${{ secrets.GITHUB_TOKEN }}
 
   quality-checks:
-    # GHC 9.4.7 links with the gold linker. Ubuntu 26.04 does not include
-    # the gold linker. Thus, this job stays on Ubuntu 24.04.
-    runs-on: ubuntu-24.04
+    runs-on: ubuntu-latest
 
     steps:
       - uses: actions/checkout@v4
@@ -85,6 +83,8 @@ jobs:
       - uses: haskell-actions/setup@f9150cb1d140e9a9271700670baa38991e6fa25c # v2
         with:
           ghc-version: '9.4.7'
+
+      - uses: ./.github/actions/use-default-linker
 
       - name: 'Set up HLint'
         uses: haskell-actions/hlint-setup@fe9cd1cd1af94a23900c06738e73f6ddb092966a # v2

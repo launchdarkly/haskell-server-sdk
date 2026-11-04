@@ -4,6 +4,16 @@ description: 'Build Documentation.'
 runs:
   using: composite
   steps:
+    # The documentation uses the default resolver. Stack installs a
+    # separate GHC for it, so that GHC also needs the default linker.
+    - name: Install GHC for the default resolver
+      shell: bash
+      run: stack --no-terminal setup
+
+    - uses: ./.github/actions/use-default-linker
+      with:
+        ghc: stack --no-terminal exec -- ghc
+
     - name: Build Documentation
       shell: bash
       run: stack --no-terminal haddock
