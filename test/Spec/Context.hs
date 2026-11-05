@@ -70,17 +70,20 @@ multiKindWithSingleKindWillReturnSingleKind =
 canonicalKeyForSingleUserOmitsKindPrefix :: Test
 canonicalKeyForSingleUserOmitsKindPrefix =
     TestCase $
-        assertEqual "" "user-key" $ getCanonicalKey (makeContext "user-key" "user")
+        assertEqual "" "user-key" $
+            getCanonicalKey (makeContext "user-key" "user")
 
 canonicalKeyForSingleNonUserIncludesKindPrefix :: Test
 canonicalKeyForSingleNonUserIncludesKindPrefix =
     TestCase $
-        assertEqual "" "org:org-key" $ getCanonicalKey (makeContext "org-key" "org")
+        assertEqual "" "org:org-key" $
+            getCanonicalKey (makeContext "org-key" "org")
 
 canonicalKeyEscapesPercentAndColonInKey :: Test
 canonicalKeyEscapesPercentAndColonInKey =
     TestCase $
-        assertEqual "" "org:a%25b%3Ac" $ getCanonicalKey (makeContext "a%b:c" "org")
+        assertEqual "" "org:a%25b%3Ac" $
+            getCanonicalKey (makeContext "a%b:c" "org")
 
 canonicalKeyForMultiIncludesUserKindPrefix :: Test
 canonicalKeyForMultiIncludesUserKindPrefix =
@@ -475,12 +478,14 @@ expectedMeta = Just $ Object $ fromList [("privateAttributes", Array $ fromList 
 singleContextSerializesPrivateAttributesInMeta :: Test
 singleContextSerializesPrivateAttributesInMeta =
     TestCase $
-        assertEqual "" expectedMeta $ metaOf (toJSON $ privateAttributesContext "user-key" "user")
+        assertEqual "" expectedMeta $
+            metaOf (toJSON $ privateAttributesContext "user-key" "user")
 
 singleContextWithoutPrivateAttributesOmitsMeta :: Test
 singleContextWithoutPrivateAttributesOmitsMeta =
     TestCase $
-        assertEqual "" Nothing $ metaOf (toJSON $ makeContext "user-key" "user")
+        assertEqual "" Nothing $
+            metaOf (toJSON $ makeContext "user-key" "user")
 
 multiContextSerializesPrivateAttributesPerContext :: Test
 multiContextSerializesPrivateAttributesPerContext =
