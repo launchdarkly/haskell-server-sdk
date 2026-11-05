@@ -3,7 +3,7 @@ module Spec.Context (allTests) where
 import Test.HUnit
 
 import Control.Monad.IO.Class (liftIO)
-import Data.Aeson (Value (..), decode, encode)
+import Data.Aeson (Value (..), decode, encode, toJSON)
 import Data.Function ((&))
 import Data.Maybe (fromJust)
 import qualified Data.Set as S
@@ -12,7 +12,7 @@ import GHC.Exts (fromList)
 import LaunchDarkly.AesonCompat (lookupKey)
 import LaunchDarkly.Server.Config (configSetAllAttributesPrivate, makeConfig)
 import LaunchDarkly.Server.Context
-import LaunchDarkly.Server.Context.Internal (redactContext, redactContextRedactAnonymous, withoutAnonymousContexts)
+import LaunchDarkly.Server.Context.Internal (getCanonicalKey, redactContext, redactContextRedactAnonymous, withoutAnonymousContexts)
 import qualified LaunchDarkly.Server.Reference as R
 
 confirmInvalidContext :: Context -> Text -> Assertion
@@ -66,6 +66,32 @@ multiKindWithSingleKindWillReturnSingleKind =
         assertEqual "" user (makeMultiContext [user])
   where
     user = makeContext "user-key" "user"
+
+canonicalKeyForSingleUserOmitsKindPrefix :: Test
+canonicalKeyForSingleUserOmitsKindPrefix =
+    TestCase $
+        assertEqual "" "user-key" $
+            getCanonicalKey (makeContext "user-key" "user")
+
+canonicalKeyForSingleNonUserIncludesKindPrefix :: Test
+canonicalKeyForSingleNonUserIncludesKindPrefix =
+    TestCase $
+        assertEqual "" "org:org-key" $
+            getCanonicalKey (makeContext "org-key" "org")
+
+canonicalKeyEscapesPercentAndColonInKey :: Test
+canonicalKeyEscapesPercentAndColonInKey =
+    TestCase $
+        assertEqual "" "org:a%25b%3Ac" $
+            getCanonicalKey (makeContext "a%b:c" "org")
+
+canonicalKeyForMultiIncludesUserKindPrefix :: Test
+canonicalKeyForMultiIncludesUserKindPrefix =
+    TestCase $
+        let user = makeContext "user-key" "user"
+            org = makeContext "org-key" "org"
+            multi = makeMultiContext [user, org]
+         in assertEqual "" "org:org-key:user:user-key" $ getCanonicalKey multi
 
 multiKindCanOnlyRetrieveKindAttribute :: Test
 multiKindCanOnlyRetrieveKindAttribute =
@@ -416,6 +442,71 @@ canRedactAnonymousContextsAsExpected =
                 assertEqual "" False $ isValid $ withoutAnonymousContexts anonMc
             )
 
+canonicalKeyForMultiSortsKindsAndEscapesKeys :: Test
+canonicalKeyForMultiSortsKindsAndEscapesKeys =
+    TestCase $
+        let user = makeContext "a:b" "user"
+            org = makeContext "c%d" "org"
+         in assertEqual "" "org:c%25d:user:a%3Ab" $ getCanonicalKey (makeMultiContext [user, org])
+
+canonicalKeyForMultiWithoutUser :: Test
+canonicalKeyForMultiWithoutUser =
+    TestCase $
+        let org = makeContext "org-key" "org"
+            device = makeContext "device-key" "device"
+         in assertEqual "" "device:device-key:org:org-key" $ getCanonicalKey (makeMultiContext [org, device])
+
+canonicalKeyForParsedMultiIncludesUserKindPrefix :: Test
+canonicalKeyForParsedMultiIncludesUserKindPrefix =
+    TestCase $
+        assertEqual "" (Just "org:org-key:user:user-key") $
+            getCanonicalKey <$> decode "{\"kind\": \"multi\", \"user\": {\"key\": \"user-key\"}, \"org\": {\"key\": \"org-key\"}}"
+
+privateAttributesContext :: Text -> Text -> Context
+privateAttributesContext key kind =
+    makeContext key kind
+        & withAttribute "name" "Sandy"
+        & withPrivateAttributes (S.fromList [R.makeReference "name", R.makeReference "/address/city"])
+
+metaOf :: Value -> Maybe Value
+metaOf (Object o) = lookupKey "_meta" o
+metaOf _ = Nothing
+
+expectedMeta :: Maybe Value
+expectedMeta = Just $ Object $ fromList [("privateAttributes", Array $ fromList ["/address/city", "name"])]
+
+singleContextSerializesPrivateAttributesInMeta :: Test
+singleContextSerializesPrivateAttributesInMeta =
+    TestCase $
+        assertEqual "" expectedMeta $
+            metaOf (toJSON $ privateAttributesContext "user-key" "user")
+
+singleContextWithoutPrivateAttributesOmitsMeta :: Test
+singleContextWithoutPrivateAttributesOmitsMeta =
+    TestCase $
+        assertEqual "" Nothing $
+            metaOf (toJSON $ makeContext "user-key" "user")
+
+multiContextSerializesPrivateAttributesPerContext :: Test
+multiContextSerializesPrivateAttributesPerContext =
+    TestCase $ do
+        assertEqual "" expectedMeta $ metaOf user
+        assertEqual "" Nothing $ metaOf org
+  where
+    multi = makeMultiContext [privateAttributesContext "user-key" "user", makeContext "org-key" "org"]
+    (user, org) = case toJSON multi of
+        Object o -> (fromJust $ lookupKey "user" o, fromJust $ lookupKey "org" o)
+        _ -> error "expected object"
+
+privateAttributesSurviveRoundTrip :: Test
+privateAttributesSurviveRoundTrip =
+    TestCase $ do
+        assertEqual "" (Just single) $ decode (encode single)
+        assertEqual "" (Just multi) $ decode (encode multi)
+  where
+    single = privateAttributesContext "user-key" "user"
+    multi = makeMultiContext [single, privateAttributesContext "org-key" "org"]
+
 allTests :: Test
 allTests =
     TestList
@@ -425,6 +516,17 @@ allTests =
         , multiKindRequiresUnique
         , multiKindRequiresSingleContextsOnly
         , multiKindWithSingleKindWillReturnSingleKind
+        , canonicalKeyForSingleUserOmitsKindPrefix
+        , canonicalKeyForSingleNonUserIncludesKindPrefix
+        , canonicalKeyEscapesPercentAndColonInKey
+        , canonicalKeyForMultiIncludesUserKindPrefix
+        , canonicalKeyForMultiSortsKindsAndEscapesKeys
+        , canonicalKeyForMultiWithoutUser
+        , canonicalKeyForParsedMultiIncludesUserKindPrefix
+        , singleContextSerializesPrivateAttributesInMeta
+        , singleContextWithoutPrivateAttributesOmitsMeta
+        , multiContextSerializesPrivateAttributesPerContext
+        , privateAttributesSurviveRoundTrip
         , multiKindCanOnlyRetrieveKindAttribute
         , canRetrievalIndividualContextsFromMultiKindContext
         , canRetrievalIndividualContextsFromSingleKindContext

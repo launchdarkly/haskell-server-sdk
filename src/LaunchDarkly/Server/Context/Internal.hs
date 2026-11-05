@@ -159,7 +159,7 @@ makeMultiContext contexts =
             _ ->
                 Multi
                     MultiContext
-                        { fullKey = intercalate ":" $ map (\c -> canonicalizeKey (getField @"key" c) (kind c)) sorted
+                        { fullKey = intercalate ":" $ map (\c -> canonicalizeKeyForMulti (getField @"key" c) (kind c)) sorted
                         , contexts = fromList $ map (\c -> ((kind c), c)) singleContexts
                         }
 
@@ -251,15 +251,18 @@ withPrivateAttributes attrs (Single c)
     | otherwise = Single $ c {privateAttributes = Just attrs}
 withPrivateAttributes _ c = c
 
--- Given a key and kind, generate a canonical key.
---
--- In a multi-kind context, each individual context should theoretically
--- contain the same key. To address this restriction, we generate a canonical
--- key that includes the context's kind. However, if the kind is "user", we
--- omit the kind inclusion to maintain backwards compatibility.
+-- Given a key and kind, generate a canonical key for a standalone single-kind
+-- context. The "user" kind is omitted from the canonical form to maintain
+-- backwards compatibility with the pre-context user model.
 canonicalizeKey :: Text -> Text -> Text
 canonicalizeKey key "user" = key
-canonicalizeKey key kind = kind <> ":" <> (replace "%" "%25" key & replace ":" "%3A")
+canonicalizeKey key kind = canonicalizeKeyForMulti key kind
+
+-- Canonical key form used for a sub-context inside a multi-kind context. The
+-- kind prefix is always included -- the user-prefix-omission rule applies only
+-- to standalone single-kind contexts.
+canonicalizeKeyForMulti :: Text -> Text -> Text
+canonicalizeKeyForMulti key kind = kind <> ":" <> (replace "%" "%25" key & replace ":" "%3A")
 
 unwrapSingleContext :: Context -> Maybe SingleContext
 unwrapSingleContext (Single c) = Just c
@@ -337,7 +340,6 @@ getMapOfRequiredProperties includeKind SingleContext {key, kind, anonymous, priv
         [ ("key", toJSON $ key)
         , ("kind", toJSON $ if includeKind then String kind else Null)
         , ("anonymous", toJSON $ if anonymous then Bool True else Null)
-        , ("_meta", maybe Null toJSON privateAttributes)
         ,
             ( "_meta"
             , case privateAttributes of
