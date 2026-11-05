@@ -2,6 +2,17 @@
 
 All notable changes to the LaunchDarkly Haskell Server-side SDK will be documented in this file. This project adheres to [Semantic Versioning](http://semver.org).
 
+## [4.6.1](https://github.com/launchdarkly/haskell-server-sdk/compare/4.6.0...4.6.1) (2026-11-05)
+
+
+### Bug Fixes
+
+* Make putIfEmptyMVar atomic to avoid blocking evaluations ([#117](https://github.com/launchdarkly/haskell-server-sdk/issues/117)) ([74e0af5](https://github.com/launchdarkly/haskell-server-sdk/commit/74e0af596ef19a53cdaebc2bd784010010a33c0c))
+* Match other SDKs in the secure mode hash and canonical key for multi-kind contexts with a user ([#125](https://github.com/launchdarkly/haskell-server-sdk/issues/125)) ([3b19794](https://github.com/launchdarkly/haskell-server-sdk/commit/3b197949c86f36faab190b2b23570fd233a3a52e))
+* Prevent event summary start dates from retaining memory between flushes ([#124](https://github.com/launchdarkly/haskell-server-sdk/issues/124)) ([1754765](https://github.com/launchdarkly/haskell-server-sdk/commit/1754765edd4dca7fed95b9560e9ebcbe8488e8f7))
+* Prevent unbounded memory growth and lost counts in event summaries ([#121](https://github.com/launchdarkly/haskell-server-sdk/issues/121)) ([7ca8b8b](https://github.com/launchdarkly/haskell-server-sdk/commit/7ca8b8b3e710cc8c8ae1b264b2e591df2e64d588))
+* Remove the need for a system PCRE library to build the SDK ([#122](https://github.com/launchdarkly/haskell-server-sdk/issues/122)) ([d5f6ee4](https://github.com/launchdarkly/haskell-server-sdk/commit/d5f6ee422f8914ab46132f10bb64afe3153d0379))
+
 ## [4.6.0](https://github.com/launchdarkly/haskell-server-sdk/compare/4.5.1...4.6.0) (2026-05-28)
 
 
