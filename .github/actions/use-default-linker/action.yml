@@ -1,0 +1,26 @@
+name: Use the default linker
+description: 'Remove the gold linker flag from the GHC installation.'
+inputs:
+  ghc:
+    description: 'The command that runs the GHC to change'
+    required: false
+    default: ghc
+
+runs:
+  using: composite
+  steps:
+    # GHC can save the gold linker flag when it is installed. Ubuntu 26.04
+    # does not include the gold linker. Remove the flag, so that GHC uses
+    # the default linker. The flag is in the GHC settings file and in the
+    # hsc2hs wrapper scripts.
+    - name: Remove the gold linker flag from the GHC installation
+      if: runner.os == 'Linux'
+      shell: bash
+      run: |
+        libdir="$(${{ inputs.ghc }} --print-libdir)"
+        sed -i 's/ *-fuse-ld=gold//g' "$libdir/settings"
+        { find "$libdir/../../.." -maxdepth 4 -type f -name 'hsc2hs*' \
+            -exec grep -lI -e '-fuse-ld=gold' {} + || true; } |
+          xargs -r sed -i -e 's/ *--lflag=-fuse-ld=gold//g' -e 's/ *-fuse-ld=gold//g'
+        echo "Files that still contain the flag:"
+        grep -rlI -e '-fuse-ld=gold' "$libdir/settings" $(find "$libdir/../../.." -maxdepth 4 -type f -name 'hsc2hs*') || echo "none"

@@ -4,7 +4,7 @@ on:
 name: Publish Documentation
 jobs:
   build-publish:
-    runs-on: ubuntu-24.04
+    runs-on: ubuntu-latest
 
     permissions:
       id-token: write # Needed if using OIDC to get release secrets.
@@ -12,9 +12,6 @@ jobs:
 
     steps:
       - uses: actions/checkout@v4
-
-      - name: Install PCRE development libraries
-        run: sudo apt-get update && sudo apt-get install -y libpcre3-dev
 
       - uses: ./.github/actions/setup-cache
 

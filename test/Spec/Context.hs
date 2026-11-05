@@ -2,7 +2,7 @@ module Spec.Context (allTests) where
 
 import Test.HUnit
 
-import Control.Monad.Cont (liftIO)
+import Control.Monad.IO.Class (liftIO)
 import Data.Aeson (Value (..), decode, encode)
 import Data.Function ((&))
 import Data.Maybe (fromJust)

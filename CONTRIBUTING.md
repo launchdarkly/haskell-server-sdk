@@ -18,19 +18,9 @@ Build instructions
 
 ### Prerequisites
 
-The SDK is built using [Stack](https://docs.haskellstack.org/en/stable/README/).
+The SDK is built using [Stack](https://docs.haskellstack.org/en/stable/README/). If you use [Homebrew](https://brew.sh/), you can install the `haskell-stack` package to install Stack.
 
-### Prerequisites
-
-The SDK depends on [PCRE](https://www.pcre.org/) and [`pkgconf`](https://github.com/pkgconf/pkgconf). You'll need to make sure these are installed.
-
-If you use [Homebrew](https://brew.sh/) you can install the necessary packages by running the following command:
-
-```
-brew install pcre pkg-config
-```
-
-Additionally, you can install the `haskell-stack` package to install Stack via Homebrew.
+The SDK does not need any system libraries. The [`regex-pcre-builtin`](https://hackage.haskell.org/package/regex-pcre-builtin) package that the SDK uses for regular expressions includes the PCRE C sources and builds them with the package.
 
 ### Building
 

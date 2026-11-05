@@ -2,3 +2,7 @@ resolver: lts-16.31
 
 packages:
 - .
+
+# hashtables uses C code that newer C compilers reject by default.
+ghc-options:
+  hashtables: -optc-std=gnu17

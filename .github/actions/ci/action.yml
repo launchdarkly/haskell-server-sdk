@@ -25,6 +25,8 @@ runs:
         ghc-version: ${{ inputs.ghc-version }}
         enable-stack: true
 
+    - uses: ./.github/actions/use-default-linker
+
     # Use the GHC that the setup step installed. Without this, stack
     # downloads a second copy of GHC. Stack still downloads GHC when a
     # command uses a different resolver, for example the docs build.

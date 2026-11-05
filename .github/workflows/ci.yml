@@ -11,7 +11,7 @@ on:
 
 jobs:
   build-linux:
-    runs-on: ubuntu-24.04
+    runs-on: ubuntu-latest
 
     strategy:
       fail-fast: false
@@ -26,9 +26,6 @@ jobs:
 
     steps:
       - uses: actions/checkout@v4
-          
-      - name: Install PCRE development libraries
-        run: sudo apt-get update && sudo apt-get install -y libpcre3-dev
 
       - uses: ./.github/actions/setup-cache
         with:
@@ -59,8 +56,7 @@ jobs:
 
       - name: Setup C_INCLUDE_PATH
         run: |
-          brew install pcre
-          echo "C_INCLUDE_PATH=$(find /opt/homebrew/Cellar/pcre -name 'pcre.h' -exec dirname {} \;):$(xcrun --show-sdk-path)/usr/include/ffi" >> $GITHUB_ENV
+          echo "C_INCLUDE_PATH=$(xcrun --show-sdk-path)/usr/include/ffi" >> $GITHUB_ENV
 
       - uses: ./.github/actions/setup-cache
         with:
@@ -74,7 +70,7 @@ jobs:
           token: ${{ secrets.GITHUB_TOKEN }}
 
   quality-checks:
-    runs-on: ubuntu-24.04
+    runs-on: ubuntu-latest
 
     steps:
       - uses: actions/checkout@v4
@@ -87,6 +83,8 @@ jobs:
       - uses: haskell-actions/setup@f9150cb1d140e9a9271700670baa38991e6fa25c # v2
         with:
           ghc-version: '9.4.7'
+
+      - uses: ./.github/actions/use-default-linker
 
       - name: 'Set up HLint'
         uses: haskell-actions/hlint-setup@fe9cd1cd1af94a23900c06738e73f6ddb092966a # v2
