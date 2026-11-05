@@ -203,6 +203,7 @@ valueForAll val fb =
     fb
         & variations [Aeson.toJSON val]
         & variationForAll (0 :: VariationIndex)
+        & offVariation (0 :: VariationIndex)
 
 {-# DEPRECATED valueForAllUsers "Use valueForAll instead" #-}
 
