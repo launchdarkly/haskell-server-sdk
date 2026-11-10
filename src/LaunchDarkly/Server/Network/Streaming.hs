@@ -5,9 +5,9 @@ module LaunchDarkly.Server.Network.Streaming (streamingThread) where
 
 import Control.Applicative (many, (<|>))
 import Control.Concurrent (threadDelay)
-import Control.Exception (throwIO)
+import Control.Exception (SomeAsyncException, SomeException, displayException, fromException, throwIO)
 import Control.Monad (mzero, void)
-import Control.Monad.Catch (Exception, MonadCatch, MonadMask, try)
+import Control.Monad.Catch (Exception, MonadCatch, MonadMask, MonadThrow, catch, throwM, try)
 import Control.Monad.IO.Class (MonadIO, liftIO)
 import Control.Monad.Logger (MonadLogger, logDebug, logError, logWarn)
 import Control.Monad.Loops (iterateUntilM)
@@ -16,9 +16,11 @@ import Data.Attoparsec.Text as P hiding (Result, try)
 import Data.ByteString (ByteString)
 import qualified Data.ByteString as B
 import qualified Data.ByteString.Lazy as L
+import Data.IORef (IORef, newIORef, readIORef, writeIORef)
+import Data.Maybe (isJust)
 import Data.Text (Text)
 import qualified Data.Text as T
-import Data.Text.Encoding (decodeUtf8, encodeUtf8)
+import Data.Text.Encoding (Decoding (Some), encodeUtf8, streamDecodeUtf8)
 import GHC.Generics (Generic)
 import GHC.Natural (Natural)
 import Network.HTTP.Client (HttpException (..), HttpExceptionContent (..), Manager, Request, Response (..), brRead)
@@ -188,17 +190,25 @@ tryReadE :: MonadCatch m => m a -> m (Either ReadE a)
 tryReadE = try
 
 -- heartbeat expected every 120 seconds
-readWithException :: IO ByteString -> IO Text
-readWithException body =
+-- A read can end partway through a multi-byte character, so the decoder keeps those bytes for the next read.
+-- `parseWith` treats empty text as end of input, so a read that decodes to nothing reads again.
+readWithException :: IORef (ByteString -> Decoding) -> IO ByteString -> IO Text
+readWithException decoder body =
     timeout (1_000_000 * 300) (brRead body) >>= \case
         Nothing -> throwIO ReadETimeout
-        Just bytes -> if bytes == B.empty then throwIO ReadEClosed else pure (decodeUtf8 bytes)
+        Just bytes ->
+            if bytes == B.empty
+                then throwIO ReadEClosed
+                else do
+                    Some text _ next <- ($ bytes) <$> readIORef decoder
+                    writeIORef decoder next
+                    if T.null text then readWithException decoder body else pure text
 
 readStream :: (MonadIO m, MonadLogger m, MonadMask m) => IO ByteString -> DataSourceUpdates -> m Bool
-readStream body dataSourceUpdates = loop "" False
+readStream body dataSourceUpdates = liftIO (newIORef streamDecodeUtf8) >>= \decoder -> loop decoder "" False
   where
-    loop initial processedEvent =
-        tryReadE (parseWith (liftIO $ readWithException body) parseEvent initial) >>= \case
+    loop decoder initial processedEvent =
+        tryReadE (parseWith (liftIO $ readWithException decoder body) parseEvent initial) >>= \case
             (Left ReadETimeout) -> do
                 $(logError) "streaming connection unexpectedly closed"
                 pure processedEvent
@@ -208,13 +218,23 @@ readStream body dataSourceUpdates = loop "" False
             (Right parsed) -> case parsed of
                 Done remaining event -> do
                     processed <- processEvent dataSourceUpdates (name event) (L.fromStrict $ encodeUtf8 $ buffer event)
-                    if processed then loop remaining True else pure processedEvent
+                    if processed then loop decoder remaining True else pure processedEvent
                 Fail _ context err -> do
                     $(logError) $ T.intercalate " " ["failed parsing SSE frame", T.pack $ show context, T.pack err]
                     pure processedEvent
                 Partial _ -> do
                     $(logError) "failed parsing SSE frame unexpected partial"
                     pure processedEvent
+
+-- `tryHTTP` only catches `HttpException`. Any other exception from the body read (a socket reset, a TLS error,
+-- invalid UTF-8) would end the streaming thread with no log and no reconnect, so it is logged and rethrown as an
+-- `HttpException` to get the usual backoff and reconnect. Async exceptions pass through so `close` can stop the thread.
+logReadError :: (MonadLogger m, MonadThrow m) => Request -> SomeException -> m a
+logReadError request e
+    | isJust (fromException @SomeAsyncException e) || isJust (fromException @HttpException e) = throwM e
+    | otherwise = do
+        $(logError) $ T.append "streaming connection failed, will retry: " (T.pack $ displayException e)
+        throwM $ HttpExceptionRequest request (InternalException e)
 
 -- This function is responsible for consuming a streaming connection.
 --
@@ -227,7 +247,7 @@ startNewConnection manager request dataSourceUpdates state@(StreamingState {acti
     status <- tryHTTP $ withResponseGeneric request manager $ \response -> do
         checkAuthorization response
             >> throwIfNot200 request response
-            >> readStream (responseBody response) dataSourceUpdates
+            >> (readStream (responseBody response) dataSourceUpdates `catch` logReadError request)
     now <- liftIO $ getTime Monotonic
     handleResponse state now status
   where
