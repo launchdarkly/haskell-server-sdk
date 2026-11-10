@@ -24,6 +24,7 @@ allTests =
         , testTargeting
         , testRules
         , testValueForAll
+        , testValueForAllTargetingOff
         ]
 
 testConfig :: DataSourceFactory -> Config
@@ -225,5 +226,22 @@ testValueForAll = TestCase $ do
 
     assertEqual "ben receives CustomType1" "CustomType1" =<< stringVariation client "flag-key-1" ben "CustomType2"
     assertEqual "todd receives CustomType1" "CustomType1" =<< stringVariation client "flag-key-1" todd "CustomType2"
+
+    close client
+
+testValueForAllTargetingOff :: Test
+testValueForAllTargetingOff = TestCase $ do
+    td <- TestData.newTestData
+    TestData.update td
+        =<< ( TestData.flag td "flag-key-1"
+                <&> TestData.valueForAll ("value" :: Text)
+                <&> TestData.on False
+            )
+    let config = testConfig (TestData.dataSourceFactory td)
+        user = makeContext "user" "user"
+
+    client <- makeClient config
+
+    assertEqual "user receives value with targeting off" "value" =<< stringVariation client "flag-key-1" user "default"
 
     close client
