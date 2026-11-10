@@ -30,7 +30,7 @@ import LaunchDarkly.Server.Config.ClientContext (ClientContext (..))
 import LaunchDarkly.Server.Config.HttpConfiguration (HttpConfiguration (..))
 import LaunchDarkly.Server.DataSource.Internal (DataSourceUpdates (..))
 import LaunchDarkly.Server.Features (Flag)
-import LaunchDarkly.Server.Network.Streaming (streamingThread)
+import LaunchDarkly.Server.Network.Streaming (backoffCeiling, streamingThread)
 import Util.Features (makeTestFlag)
 
 allTests :: Test
@@ -41,6 +41,7 @@ allTests =
         , TestLabel "reconnects after a socket reset mid-body" testReconnectAfterSocketReset
         , TestLabel "decodes UTF-8 split across reads" testUtf8SplitAcrossReads
         , TestLabel "killThread stops the streaming thread" testKillThreadStopsStream
+        , TestLabel "backoff stays at the cap after many attempts" testBackoffCeiling
         ]
 
 -- | One socket read. 'Fail' throws from inside the read, the way a reset socket does.
@@ -190,3 +191,8 @@ testKillThreadStopsStream = TestCase $ do
         case exited run of
             Just (Left e) -> fromException e == Just ThreadKilled
             _ -> False
+
+testBackoffCeiling :: Test
+testBackoffCeiling = TestCase $ do
+    assertEqual "first attempt waits the initial delay" 1_000_000 (backoffCeiling 1000 1)
+    assertEqual "attempt 46 stays at the 30 s cap" 30_000_000 (backoffCeiling 1000 46)

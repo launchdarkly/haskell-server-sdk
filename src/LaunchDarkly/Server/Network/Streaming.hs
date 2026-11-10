@@ -1,7 +1,7 @@
 {-# LANGUAGE NamedFieldPuns #-}
 {-# LANGUAGE NumericUnderscores #-}
 
-module LaunchDarkly.Server.Network.Streaming (streamingThread) where
+module LaunchDarkly.Server.Network.Streaming (streamingThread, backoffCeiling) where
 
 import Control.Applicative (many, (<|>))
 import Control.Concurrent (threadDelay)
@@ -290,9 +290,13 @@ startNewConnection manager request dataSourceUpdates state@(StreamingState {acti
     calculateDelay StreamingState {initialRetryDelay, attempt = att} = do
         liftIO $
             newStdGen >>= \gen ->
-                let timespan = min (30 * 1_000_000) ((initialRetryDelay * 1_000) * (2 ^ (att - 1)))
+                let timespan = backoffCeiling initialRetryDelay att
                     jitter = fst $ randomR (0, timespan `div` 2) gen
                  in pure $ (timespan - jitter)
+
+-- The retry delay in microseconds before jitter, given the initial delay in milliseconds and the attempt number.
+backoffCeiling :: Int -> Int -> Int
+backoffCeiling initialRetryDelay att = min (30 * 1_000_000) ((initialRetryDelay * 1_000) * (2 ^ (att - 1)))
 
 data StreamingState = StreamingState
     { initialConnection :: Bool -- Marker used to determine the first time the streamer connects.
