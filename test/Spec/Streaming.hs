@@ -196,3 +196,4 @@ testBackoffCeiling :: Test
 testBackoffCeiling = TestCase $ do
     assertEqual "first attempt waits the initial delay" 1_000_000 (backoffCeiling 1000 1)
     assertEqual "attempt 46 stays at the 30 s cap" 30_000_000 (backoffCeiling 1000 46)
+    assertEqual "an initial delay too large for Int arithmetic stays at the 30 s cap" 30_000_000 (backoffCeiling maxBound 1)
