@@ -295,8 +295,11 @@ startNewConnection manager request dataSourceUpdates state@(StreamingState {acti
                  in pure $ (timespan - jitter)
 
 -- The retry delay in microseconds before jitter, given the initial delay in milliseconds and the attempt number.
+--
+-- Without the exponent cap, the `Int` product overflows after 45 failed attempts at the default 1 s initial delay,
+-- and the delay drops to zero. Any initial delay of 1 ms or more reaches the 30 s cap by 2^15.
 backoffCeiling :: Int -> Int -> Int
-backoffCeiling initialRetryDelay att = min (30 * 1_000_000) ((initialRetryDelay * 1_000) * (2 ^ (att - 1)))
+backoffCeiling initialRetryDelay att = min (30 * 1_000_000) ((initialRetryDelay * 1_000) * (2 ^ min 15 (att - 1)))
 
 data StreamingState = StreamingState
     { initialConnection :: Bool -- Marker used to determine the first time the streamer connects.
