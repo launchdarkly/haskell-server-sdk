@@ -36,11 +36,10 @@ import Util.Features (makeTestFlag)
 allTests :: Test
 allTests =
     TestList
-        [ TestLabel "healthy stream initializes" testHealthyStream
+        [ TestLabel "healthy stream initializes and killThread stops it" testKillThreadStopsStream
         , TestLabel "reconnects after an HttpException mid-body" testReconnectAfterHttpException
         , TestLabel "reconnects after a socket reset mid-body" testReconnectAfterSocketReset
         , TestLabel "decodes UTF-8 split across reads" testUtf8SplitAcrossReads
-        , TestLabel "killThread stops the streaming thread" testKillThreadStopsStream
         , TestLabel "backoff stays at the cap after many attempts" testBackoffCeiling
         ]
 
@@ -85,7 +84,7 @@ pop ref = atomicModifyIORef' ref $ \case
 blockForever :: IO a
 blockForever = forever $ threadDelay 1_000_000_000
 
--- | Runs 'streamingThread' against the scripts until it initializes or exits (at most 5 s), then kills it.
+-- | Runs 'streamingThread' against the scripts until it initializes or exits, for at most 5 s, then kills it.
 runStream :: [ConnectionScript] -> IO StreamRun
 runStream scripts = do
     pending <- newIORef scripts
@@ -156,12 +155,6 @@ assertInitialized run =
         ("stream never initialized; thread exit: " ++ show (exited run) ++ "; logs: " ++ show (logs run))
         (isJust $ initialized run >>= lookupKey "café")
 
-testHealthyStream :: Test
-testHealthyStream = TestCase $ do
-    run <- runStream [healthyConnection]
-    assertInitialized run
-    assertEqual "connections" 1 (connections run)
-
 testReconnectAfterHttpException :: Test
 testReconnectAfterHttpException = TestCase $ do
     run <- runStream [[responseHead, Send "zz\r\n"], healthyConnection]
@@ -187,6 +180,7 @@ testKillThreadStopsStream :: Test
 testKillThreadStopsStream = TestCase $ do
     run <- runStream [healthyConnection]
     assertInitialized run
+    assertEqual "connections" 1 (connections run)
     assertBool ("thread stopped by ThreadKilled, got: " ++ show (exited run)) $
         case exited run of
             Just (Left e) -> fromException e == Just ThreadKilled
