@@ -200,7 +200,8 @@ readWithException decoder body =
             if bytes == B.empty
                 then throwIO ReadEClosed
                 else do
-                    Some text _ next <- ($ bytes) <$> readIORef decoder
+                    decode <- readIORef decoder
+                    let Some text _ next = decode bytes
                     writeIORef decoder next
                     if T.null text then readWithException decoder body else pure text
 
@@ -298,7 +299,7 @@ startNewConnection manager request dataSourceUpdates state@(StreamingState {acti
 
 -- The retry delay in microseconds before jitter, given the initial delay in milliseconds and the attempt number.
 --
--- The product is an `Integer` because it overflows `Int` on 32-bit runtimes at the default 1 s initial delay, and
+-- The product uses `Integer` because in `Int` it overflows on 32-bit runtimes at the default 1 s initial delay, and
 -- on any runtime for a large enough initial delay. Any initial delay of 1 ms or more reaches the 30 s cap by 2^15,
 -- so the exponent cap keeps the `Integer` small without changing the result.
 backoffCeiling :: Int -> Int -> Int
