@@ -7,7 +7,7 @@ import Control.Applicative (many, (<|>))
 import Control.Concurrent (threadDelay)
 import Control.Exception (SomeAsyncException, SomeException, displayException, fromException, throwIO)
 import Control.Monad (mzero, void)
-import Control.Monad.Catch (Exception, MonadCatch, MonadMask, MonadThrow, catch, throwM, try)
+import Control.Monad.Catch (Exception, MonadCatch, MonadMask, MonadThrow, catchIf, throwM, try)
 import Control.Monad.IO.Class (MonadIO, liftIO)
 import Control.Monad.Logger (MonadLogger, logDebug, logError, logWarn)
 import Control.Monad.Loops (iterateUntilM)
@@ -226,15 +226,17 @@ readStream body dataSourceUpdates = liftIO (newIORef streamDecodeUtf8) >>= \deco
                     $(logError) "failed parsing SSE frame unexpected partial"
                     pure processedEvent
 
--- `tryHTTP` only catches `HttpException`. Any other exception from the body read (a socket reset, a TLS error,
--- invalid UTF-8) would end the streaming thread with no log and no reconnect, so it is logged and rethrown as an
--- `HttpException` to get the usual backoff and reconnect. Async exceptions pass through so `close` can stop the thread.
-logReadError :: (MonadLogger m, MonadThrow m) => Request -> SomeException -> m a
-logReadError request e
-    | isJust (fromException @SomeAsyncException e) || isJust (fromException @HttpException e) = throwM e
-    | otherwise = do
-        $(logError) $ T.append "streaming connection failed, will retry: " (T.pack $ displayException e)
-        throwM $ HttpExceptionRequest request (InternalException e)
+-- `tryHTTP` only catches `HttpException`. Any other exception from reading the body or processing its events would end
+-- the streaming thread with no log and no reconnect, such as a socket reset, a TLS error, invalid UTF-8, or a failed
+-- store write. Async exceptions stay uncaught so `close` can stop the thread.
+isRetryableReadError :: SomeException -> Bool
+isRetryableReadError e = not (isJust (fromException @SomeAsyncException e) || isJust (fromException @HttpException e))
+
+-- Rethrows the error as an `HttpException` so `tryHTTP` catches it and the stream reconnects with backoff.
+retryReadError :: (MonadLogger m, MonadThrow m) => Request -> SomeException -> m a
+retryReadError request e = do
+    $(logError) $ T.append "streaming connection failed, will retry: " (T.pack $ displayException e)
+    throwM $ HttpExceptionRequest request (InternalException e)
 
 -- This function is responsible for consuming a streaming connection.
 --
@@ -247,7 +249,7 @@ startNewConnection manager request dataSourceUpdates state@(StreamingState {acti
     status <- tryHTTP $ withResponseGeneric request manager $ \response -> do
         checkAuthorization response
             >> throwIfNot200 request response
-            >> (readStream (responseBody response) dataSourceUpdates `catch` logReadError request)
+            >> catchIf isRetryableReadError (readStream (responseBody response) dataSourceUpdates) (retryReadError request)
     now <- liftIO $ getTime Monotonic
     handleResponse state now status
   where
