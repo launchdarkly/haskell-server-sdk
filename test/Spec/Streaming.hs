@@ -31,7 +31,7 @@ import LaunchDarkly.Server.Config.ClientContext (ClientContext (..))
 import LaunchDarkly.Server.Config.HttpConfiguration (HttpConfiguration (..))
 import LaunchDarkly.Server.DataSource.Internal (DataSourceUpdates (..))
 import LaunchDarkly.Server.Features (Flag)
-import LaunchDarkly.Server.Network.Streaming (backoffCeiling, retryAttempt, streamingThread)
+import LaunchDarkly.Server.Network.Streaming (backoffCeiling, readStream, retryAttempt, streamingThread)
 import Util.Features (makeTestFlag)
 
 allTests :: Test
@@ -40,6 +40,8 @@ allTests =
         [ TestLabel "healthy stream initializes and killThread stops it" testKillThreadStopsStream
         , TestLabel "reconnects after an HttpException mid-body" testReconnectAfterHttpException
         , TestLabel "reconnects after a socket reset mid-body" testReconnectAfterSocketReset
+        , TestLabel "logs a closed connection and reconnects" testLogsClosedConnection
+        , TestLabel "logs a read timeout" testLogsReadTimeout
         , TestLabel "decodes UTF-8 split across reads" testUtf8SplitAcrossReads
         , TestLabel "backoff stays at the cap after many attempts" testBackoffCeiling
         , TestLabel "a connection open for 60 s resets the backoff" testRetryAttempt
@@ -200,3 +202,37 @@ testRetryAttempt = TestCase $ do
     assertEqual "a connection open for less than 60 s increments the attempt" 7 (retryAttempt 6 (Just (TimeSpec 100 0)) (TimeSpec 159 0))
     assertEqual "a connection open for 60 s resets to the first attempt" 1 (retryAttempt 6 (Just (TimeSpec 100 0)) (TimeSpec 160 0))
     assertEqual "a connection open for hours resets to the first attempt" 1 (retryAttempt 6 (Just (TimeSpec 100 0)) (TimeSpec 10_000 0))
+
+hasError :: Text -> [(LogLevel, Text)] -> Bool
+hasError message = elem (LevelError, message)
+
+testLogsClosedConnection :: Test
+testLogsClosedConnection = TestCase $ do
+    -- The server ends the chunked body. 'Connection: close' stops http-client from reusing the socket for the retry.
+    let closingHead = Send "HTTP/1.1 200 OK\r\nContent-Type: text/event-stream\r\nTransfer-Encoding: chunked\r\nConnection: close\r\n\r\n"
+    run <- runStream [[closingHead, Send "0\r\n\r\n"], healthyConnection]
+    assertInitialized run
+    assertEqual "connections" 2 (connections run)
+    assertBool ("logs the closed connection, got: " ++ show (logs run)) $
+        hasError "streaming connection unexpectedly closed" (logs run)
+    assertBool "does not log a timeout" $ not $ hasError "timeout waiting for SSE event" (logs run)
+
+-- The streaming thread waits 300 s for a read. This test calls 'readStream' with a 10 ms wait instead.
+testLogsReadTimeout :: Test
+testLogsReadTimeout = TestCase $ do
+    logRef <- newIORef []
+    let logTo _ _ level msg = atomicModifyIORef' logRef (\xs -> ((level, decodeUtf8With lenientDecode $ fromLogStr msg) : xs, ()))
+        updates =
+            DataSourceUpdates
+                { dataSourceUpdatesInit = \_ _ -> pure (Right ())
+                , dataSourceUpdatesInsertFlag = const $ pure (Right ())
+                , dataSourceUpdatesInsertSegment = const $ pure (Right ())
+                , dataSourceUpdatesDeleteFlag = \_ _ -> pure (Right ())
+                , dataSourceUpdatesDeleteSegment = \_ _ -> pure (Right ())
+                , dataSourceUpdatesSetStatus = const $ pure ()
+                }
+    result <- timeout 5_000_000 $ runLoggingT (readStream 10_000 blockForever updates) logTo
+    assertEqual "readStream returns without a processed event" (Just False) result
+    logs <- reverse <$> readIORef logRef
+    assertBool ("logs the timeout, got: " ++ show logs) $ hasError "timeout waiting for SSE event" logs
+    assertBool "does not log a closed connection" $ not $ hasError "streaming connection unexpectedly closed" logs
