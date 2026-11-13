@@ -204,7 +204,7 @@ testRetryAttempt = TestCase $ do
     assertEqual "a connection open for hours resets to the first attempt" 1 (retryAttempt 6 (Just (TimeSpec 100 0)) (TimeSpec 10_000 0))
 
 hasError :: Text -> [(LogLevel, Text)] -> Bool
-hasError message = any (== (LevelError, message))
+hasError message = elem (LevelError, message)
 
 testLogsClosedConnection :: Test
 testLogsClosedConnection = TestCase $ do
