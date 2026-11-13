@@ -254,9 +254,10 @@ testLogsErrorBodyFailure = TestCase $ do
     assertEqual "connections" 2 (connections run)
     assertOneRetryLog run "user error (reset in body)"
 
--- The logged delay must be the delay the stream waits, after jitter. The 200 ms initial delay gives a jitter of up
--- to 100 ms, so a log of the delay before jitter fails this test. The stream waits at least the delay, so the check
--- allows only for the rounding to 1 ms.
+-- The logged delay must be the delay the stream waits, after jitter. The 200 ms initial delay gives a delay of 100 ms
+-- to 200 ms, so the logged delay must be in that range. The stream waits at least the delay, so the logged delay must
+-- also be no more than the time to the next connection. That check fails for a log of the delay before jitter. Both
+-- checks allow only for the rounding to 1 ms.
 testLogsActualDelay :: Test
 testLogsActualDelay = TestCase $ do
     run <- runStreamWith "http://localhost" 200 [emptyResponse "503 Service Unavailable" [], healthyConnection]
@@ -266,6 +267,7 @@ testLogsActualDelay = TestCase $ do
         [(loggedAt, msg)] -> do
             let logged = read (T.unpack $ T.takeWhile (/= ' ') $ T.drop (T.length prefix) msg) :: Double
                 waited = maybe 0 (\time -> fromIntegral (toNanoSecs (time - loggedAt)) / 1e9) (initializedAt run)
+            assertBool ("logged a delay of " ++ show logged ++ " s, outside 0.1 s to 0.2 s") $ logged >= 0.1 && logged <= 0.2
             assertBool ("logged a delay of " ++ show logged ++ " s but waited " ++ show waited ++ " s") $ waited >= logged - 0.0005
         other -> assertFailure $ "expected one retry log, got: " ++ show other
 
