@@ -181,13 +181,13 @@ retryLogs :: StreamRun -> [(LogLevel, Text)]
 retryLogs = filter (\(_, msg) -> T.isInfixOf "will retry" msg || T.isInfixOf "will not retry" msg) . logs
 
 -- | Asserts one Warn retry log with the delay and the given reason.
--- The test delay is 1 ms minus up to 0.5 ms of jitter, so it prints as 0.001.
+-- The test delay is 1 ms minus up to 0.5 ms of jitter. It prints as 0.001, or as 0.000 at the full 0.5 ms of jitter.
 assertOneRetryLog :: StreamRun -> Text -> Assertion
 assertOneRetryLog run reason = case retryLogs run of
     [(level, msg)] -> do
         assertEqual "log level" LevelWarn level
         assertBool ("logs the delay and the reason, got: " ++ T.unpack msg) $
-            msg == "LaunchDarkly streaming connection was interrupted and will retry in 0.001 s. Reason: " <> reason
+            msg `elem` [T.concat ["LaunchDarkly streaming connection was interrupted and will retry in ", delay, " s. Reason: ", reason] | delay <- ["0.000", "0.001"]]
     other -> assertFailure $ "expected one retry log, got: " ++ show other
 
 -- | Asserts one Error log for a permanent error with the given reason, and no retry.
@@ -266,6 +266,7 @@ testLogsInvalidUri = TestCase $ do
         "logs"
         [(LevelError, "A permanent error has been encountered with the LaunchDarkly streaming connection. It will not retry. Reason: invalid stream URI: Invalid URL")]
         (retryLogs run)
+    assertBool "no log line contains the password" $ not $ any (T.isInfixOf "secret" . snd) (logs run)
 
 testUtf8SplitAcrossReads :: Test
 testUtf8SplitAcrossReads = TestCase $ do
