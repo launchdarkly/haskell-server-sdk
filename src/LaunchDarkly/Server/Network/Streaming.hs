@@ -1,13 +1,13 @@
 {-# LANGUAGE NamedFieldPuns #-}
 {-# LANGUAGE NumericUnderscores #-}
 
-module LaunchDarkly.Server.Network.Streaming (streamingThread) where
+module LaunchDarkly.Server.Network.Streaming (streamingThread, backoffCeiling, retryAttempt) where
 
 import Control.Applicative (many, (<|>))
 import Control.Concurrent (threadDelay)
-import Control.Exception (throwIO)
+import Control.Exception (SomeAsyncException, SomeException, displayException, fromException, throwIO)
 import Control.Monad (mzero, void)
-import Control.Monad.Catch (Exception, MonadCatch, MonadMask, try)
+import Control.Monad.Catch (Exception, MonadCatch, MonadMask, MonadThrow, catchIf, throwM, try)
 import Control.Monad.IO.Class (MonadIO, liftIO)
 import Control.Monad.Logger (MonadLogger, logDebug, logError, logWarn)
 import Control.Monad.Loops (iterateUntilM)
@@ -16,9 +16,11 @@ import Data.Attoparsec.Text as P hiding (Result, try)
 import Data.ByteString (ByteString)
 import qualified Data.ByteString as B
 import qualified Data.ByteString.Lazy as L
+import Data.IORef (IORef, newIORef, readIORef, writeIORef)
+import Data.Maybe (isJust)
 import Data.Text (Text)
 import qualified Data.Text as T
-import Data.Text.Encoding (decodeUtf8, encodeUtf8)
+import Data.Text.Encoding (Decoding (Some), encodeUtf8, streamDecodeUtf8)
 import GHC.Generics (Generic)
 import GHC.Natural (Natural)
 import Network.HTTP.Client (HttpException (..), HttpExceptionContent (..), Manager, Request, Response (..), brRead)
@@ -188,17 +190,26 @@ tryReadE :: MonadCatch m => m a -> m (Either ReadE a)
 tryReadE = try
 
 -- heartbeat expected every 120 seconds
-readWithException :: IO ByteString -> IO Text
-readWithException body =
+-- A read can end partway through a multi-byte character, so the decoder keeps those bytes for the next read.
+-- `parseWith` treats empty text as end of input, so a read that decodes to nothing reads again.
+readWithException :: IORef (ByteString -> Decoding) -> IO ByteString -> IO Text
+readWithException decoder body =
     timeout (1_000_000 * 300) (brRead body) >>= \case
         Nothing -> throwIO ReadETimeout
-        Just bytes -> if bytes == B.empty then throwIO ReadEClosed else pure (decodeUtf8 bytes)
+        Just bytes ->
+            if bytes == B.empty
+                then throwIO ReadEClosed
+                else do
+                    decode <- readIORef decoder
+                    let Some text _ next = decode bytes
+                    writeIORef decoder next
+                    if T.null text then readWithException decoder body else pure text
 
 readStream :: (MonadIO m, MonadLogger m, MonadMask m) => IO ByteString -> DataSourceUpdates -> m Bool
-readStream body dataSourceUpdates = loop "" False
+readStream body dataSourceUpdates = liftIO (newIORef streamDecodeUtf8) >>= \decoder -> loop decoder "" False
   where
-    loop initial processedEvent =
-        tryReadE (parseWith (liftIO $ readWithException body) parseEvent initial) >>= \case
+    loop decoder initial processedEvent =
+        tryReadE (parseWith (liftIO $ readWithException decoder body) parseEvent initial) >>= \case
             (Left ReadETimeout) -> do
                 $(logError) "streaming connection unexpectedly closed"
                 pure processedEvent
@@ -208,7 +219,7 @@ readStream body dataSourceUpdates = loop "" False
             (Right parsed) -> case parsed of
                 Done remaining event -> do
                     processed <- processEvent dataSourceUpdates (name event) (L.fromStrict $ encodeUtf8 $ buffer event)
-                    if processed then loop remaining True else pure processedEvent
+                    if processed then loop decoder remaining True else pure processedEvent
                 Fail _ context err -> do
                     $(logError) $ T.intercalate " " ["failed parsing SSE frame", T.pack $ show context, T.pack err]
                     pure processedEvent
@@ -216,28 +227,43 @@ readStream body dataSourceUpdates = loop "" False
                     $(logError) "failed parsing SSE frame unexpected partial"
                     pure processedEvent
 
+-- `tryHTTP` only catches `HttpException`. Any other exception from reading the body or processing its events would end
+-- the streaming thread with no log and no reconnect, such as a socket reset, a TLS error, invalid UTF-8, or a failed
+-- store write. Async exceptions stay uncaught so `close` can stop the thread.
+isRetryableReadError :: SomeException -> Bool
+isRetryableReadError e = not (isJust (fromException @SomeAsyncException e) || isJust (fromException @HttpException e))
+
+-- Rethrows the error as an `HttpException` so `tryHTTP` catches it and the stream reconnects with backoff.
+retryReadError :: (MonadLogger m, MonadThrow m) => Request -> SomeException -> m a
+retryReadError request e = do
+    $(logError) $ T.append "streaming connection failed, will retry: " (T.pack $ displayException e)
+    throwM $ HttpExceptionRequest request (InternalException e)
+
 -- This function is responsible for consuming a streaming connection.
 --
 -- It is responsible for opening the connection, parsing the body for as long as it is able, and then handling shut down
 -- cleanly. While events are being processed, it is responsible for implementing a sane retry policy that prevents the
 -- stampeding herd problem in the unlikely event of upstream failures.
 startNewConnection :: (MonadIO m, MonadLogger m, MonadMask m) => Manager -> Request -> DataSourceUpdates -> StreamingState -> m StreamingState
-startNewConnection manager request dataSourceUpdates state@(StreamingState {activeSince}) = do
+startNewConnection manager request dataSourceUpdates state = do
     $(logDebug) "starting new streaming connection"
+    connectedAt <- liftIO $ newIORef Nothing
     status <- tryHTTP $ withResponseGeneric request manager $ \response -> do
         checkAuthorization response
             >> throwIfNot200 request response
-            >> readStream (responseBody response) dataSourceUpdates
+            >> liftIO (getTime Monotonic >>= writeIORef connectedAt . Just)
+            >> catchIf isRetryableReadError (readStream (responseBody response) dataSourceUpdates) (retryReadError request)
+    activeSince <- liftIO $ readIORef connectedAt
     now <- liftIO $ getTime Monotonic
-    handleResponse state now status
+    handleResponse state now activeSince status
   where
     -- This function is responsible for parsing the final output from a now closed streaming connection.
     --
     -- Given the result of the stream run, this function can choose to either mark the state as cancelled, stopping all
     -- further attempts, or it can update the state and wait some amount of time before starting another attempt.
-    handleResponse :: (MonadIO m, MonadLogger m, MonadMask m) => StreamingState -> TimeSpec -> (Either HttpException Bool) -> m StreamingState
-    handleResponse state now result =
-        let state' = updateState state now result
+    handleResponse :: (MonadIO m, MonadLogger m, MonadMask m) => StreamingState -> TimeSpec -> Maybe TimeSpec -> (Either HttpException Bool) -> m StreamingState
+    handleResponse state now activeSince result =
+        let state' = updateState state now activeSince result
          in if cancel state'
                 then pure state'
                 else do
@@ -249,19 +275,11 @@ startNewConnection manager request dataSourceUpdates state@(StreamingState {acti
     --
     -- Given the result of a stream run, this function can either choose to mark the state as cancelled, meaning halt all
     -- further attempts, or it can be updated according to the rules of our streaming specification.
-    updateState :: StreamingState -> TimeSpec -> (Either HttpException Bool) -> StreamingState
-    updateState state now (Right _) = state {initialConnection = False, activeSince = Just now, attempt = 1}
-    updateState state@(StreamingState {attempt = att}) now (Left (HttpExceptionRequest _ (StatusCodeException response _)))
-        | isHttpUnrecoverable code = state {cancel = True}
-        | otherwise = do
-            case activeSince of
-                (Just time)
-                    | (now >= time + (TimeSpec 60 0)) -> state {attempt = 1, activeSince = Nothing}
-                    | otherwise -> state {attempt = att + 1}
-                Nothing -> state {attempt = att + 1}
-      where
-        code = statusCode (responseStatus response)
-    updateState state@(StreamingState {attempt = att}) _ _ = state {attempt = att + 1}
+    updateState :: StreamingState -> TimeSpec -> Maybe TimeSpec -> (Either HttpException Bool) -> StreamingState
+    updateState state@(StreamingState {attempt = att}) now activeSince (Right _) = state {initialConnection = False, attempt = retryAttempt att activeSince now}
+    updateState state _ _ (Left (HttpExceptionRequest _ (StatusCodeException response _)))
+        | isHttpUnrecoverable (statusCode (responseStatus response)) = state {cancel = True}
+    updateState state@(StreamingState {attempt = att}) now activeSince (Left _) = state {attempt = retryAttempt att activeSince now}
 
     -- Calculate the next delay period following a backoff + jitter + max delay algorithm.
     --
@@ -270,14 +288,33 @@ startNewConnection manager request dataSourceUpdates state@(StreamingState {acti
     calculateDelay StreamingState {initialRetryDelay, attempt = att} = do
         liftIO $
             newStdGen >>= \gen ->
-                let timespan = min (30 * 1_000_000) ((initialRetryDelay * 1_000) * (2 ^ (att - 1)))
+                let timespan = backoffCeiling initialRetryDelay att
                     jitter = fst $ randomR (0, timespan `div` 2) gen
                  in pure $ (timespan - jitter)
+
+-- The retry delay in microseconds before jitter, given the initial delay in milliseconds and the attempt number.
+--
+-- The product uses `Integer` because in `Int` it overflows on 32-bit runtimes at the default 1 s initial delay, and
+-- on any runtime for a large enough initial delay. Any initial delay of 1 ms or more reaches the 30 s cap by 2^15,
+-- so the exponent cap keeps the `Integer` small without changing the result.
+backoffCeiling :: Int -> Int -> Int
+backoffCeiling initialRetryDelay att =
+    fromInteger $ min (30 * 1_000_000) (toInteger initialRetryDelay * 1_000 * 2 ^ min 15 (att - 1))
+
+-- The attempt number for the retry after a connection ends.
+--
+-- Every end of a connection counts as a failure, also a clean close by the server.
+-- `activeSince` is the time the connection got a 200 response, or `Nothing` if it did not get one.
+-- A connection that stayed open for 60 s or more resets the backoff to the first attempt.
+-- Otherwise, the attempt number increases by one.
+retryAttempt :: Int -> Maybe TimeSpec -> TimeSpec -> Int
+retryAttempt att activeSince now = case activeSince of
+    Just time | now >= time + TimeSpec 60 0 -> 1
+    _ -> att + 1
 
 data StreamingState = StreamingState
     { initialConnection :: Bool -- Marker used to determine the first time the streamer connects.
     , initialRetryDelay :: Int -- The base duration used for the retry delay calculation
-    , activeSince :: Maybe TimeSpec -- TimeSpec to denote the last time the SDK successfully connected to the stream
     , attempt :: Int -- A number representing the attempt # of this connection
     , cancel :: Bool -- A marker to shortcut logic and halt the streaming process
     }
@@ -292,4 +329,4 @@ streamingThread streamURI initialRetryDelay clientContext dataSourceUpdates = do
   where
     processStream :: (MonadIO m, MonadLogger m, MonadMask m) => Manager -> Request -> m ()
     processStream manager req = do
-        void $ iterateUntilM (cancel) (\state -> startNewConnection manager req dataSourceUpdates state) StreamingState {initialConnection = True, initialRetryDelay, activeSince = Nothing, attempt = 0, cancel = False}
+        void $ iterateUntilM (cancel) (\state -> startNewConnection manager req dataSourceUpdates state) StreamingState {initialConnection = True, initialRetryDelay, attempt = 0, cancel = False}
