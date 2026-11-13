@@ -5,7 +5,7 @@ module LaunchDarkly.Server.Network.Streaming (streamingThread, backoffCeiling, r
 
 import Control.Applicative (many, (<|>))
 import Control.Concurrent (threadDelay)
-import Control.Exception (SomeAsyncException, SomeException, displayException, fromException, throwIO)
+import Control.Exception (SomeAsyncException, SomeException, displayException, fromException, throwIO, toException)
 import Control.Monad (mzero, void)
 import Control.Monad.Catch (Exception, MonadCatch, MonadMask, MonadThrow, catchIf, throwM, try)
 import Control.Monad.IO.Class (MonadIO, liftIO)
@@ -28,6 +28,7 @@ import Network.HTTP.Types.Status (Status (statusCode))
 import System.Clock (Clock (Monotonic), TimeSpec (TimeSpec), getTime)
 import System.Random (Random (randomR), newStdGen)
 import System.Timeout (timeout)
+import Text.Printf (printf)
 
 import LaunchDarkly.AesonCompat (KeyMap, emptyObject)
 import LaunchDarkly.Server.Config.ClientContext (ClientContext (..))
@@ -233,11 +234,27 @@ readStream body dataSourceUpdates = liftIO (newIORef streamDecodeUtf8) >>= \deco
 isRetryableReadError :: SomeException -> Bool
 isRetryableReadError e = not (isJust (fromException @SomeAsyncException e) || isJust (fromException @HttpException e))
 
+-- Marks a read error that `retryReadError` already logged, so `handleResponse` does not log it again.
+newtype LoggedReadError = LoggedReadError SomeException deriving (Show)
+
+instance Exception LoggedReadError
+
 -- Rethrows the error as an `HttpException` so `tryHTTP` catches it and the stream reconnects with backoff.
 retryReadError :: (MonadLogger m, MonadThrow m) => Request -> SomeException -> m a
 retryReadError request e = do
     $(logError) $ T.append "streaming connection failed, will retry: " (T.pack $ displayException e)
-    throwM $ HttpExceptionRequest request (InternalException e)
+    throwM $ HttpExceptionRequest request (InternalException $ toException $ LoggedReadError e)
+
+-- True if `retryReadError` already logged the error.
+isLoggedReadError :: HttpException -> Bool
+isLoggedReadError (HttpExceptionRequest _ (InternalException e)) = isJust (fromException @LoggedReadError e)
+isLoggedReadError _ = False
+
+-- A short description of the error for the retry log. It leaves out the request, which `displayException` includes.
+describeHttpException :: HttpException -> String
+describeHttpException (HttpExceptionRequest _ (StatusCodeException response _)) = "HTTP error " ++ show (statusCode (responseStatus response))
+describeHttpException (HttpExceptionRequest _ content) = show content
+describeHttpException e = displayException e
 
 -- This function is responsible for consuming a streaming connection.
 --
@@ -268,6 +285,9 @@ startNewConnection manager request dataSourceUpdates state = do
                 then pure state'
                 else do
                     delay <- calculateDelay state'
+                    case result of
+                        Left e | not (isLoggedReadError e) -> $(logWarn) $ T.pack $ printf "Error in stream connection (will retry in %.3f s): %s" (fromIntegral delay / 1_000_000 :: Double) (describeHttpException e)
+                        _ -> pure ()
                     _ <- liftIO $ threadDelay delay
                     pure state'
 

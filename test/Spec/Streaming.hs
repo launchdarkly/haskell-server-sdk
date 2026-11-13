@@ -40,6 +40,7 @@ allTests =
         [ TestLabel "healthy stream initializes and killThread stops it" testKillThreadStopsStream
         , TestLabel "reconnects after an HttpException mid-body" testReconnectAfterHttpException
         , TestLabel "reconnects after a socket reset mid-body" testReconnectAfterSocketReset
+        , TestLabel "logs a retried HTTP error status" testLogsRetriedStatus
         , TestLabel "decodes UTF-8 split across reads" testUtf8SplitAcrossReads
         , TestLabel "backoff stays at the cap after many attempts" testBackoffCeiling
         , TestLabel "a connection open for 60 s resets the backoff" testRetryAttempt
@@ -163,13 +164,32 @@ testReconnectAfterHttpException = TestCase $ do
     assertInitialized run
     assertEqual "connections" 2 (connections run)
 
+-- | The log lines that report a retry.
+retryLogs :: StreamRun -> [(LogLevel, Text)]
+retryLogs = filter (T.isInfixOf "will retry" . snd) . logs
+
 testReconnectAfterSocketReset :: Test
 testReconnectAfterSocketReset = TestCase $ do
     run <- runStream [[responseHead, chunk beforeAccent, Fail $ toException $ userError "Connection reset by peer"], healthyConnection]
     assertInitialized run
     assertEqual "connections" 2 (connections run)
-    assertBool "logs the read error" $
-        any (\(level, msg) -> level == LevelError && T.isPrefixOf "streaming connection failed, will retry" msg) (logs run)
+    case retryLogs run of
+        [(level, msg)] -> do
+            assertEqual "log level" LevelError level
+            assertBool ("logs the read error, got: " ++ T.unpack msg) $ T.isPrefixOf "streaming connection failed, will retry" msg
+        other -> assertFailure $ "expected one retry log, got: " ++ show other
+
+testLogsRetriedStatus :: Test
+testLogsRetriedStatus = TestCase $ do
+    run <- runStream [[Send "HTTP/1.1 503 Service Unavailable\r\nContent-Length: 0\r\nConnection: close\r\n\r\n"], healthyConnection]
+    assertInitialized run
+    assertEqual "connections" 2 (connections run)
+    case retryLogs run of
+        [(level, msg)] -> do
+            assertEqual "log level" LevelWarn level
+            assertBool ("logs the error and the delay, got: " ++ T.unpack msg) $
+                T.isPrefixOf "Error in stream connection (will retry in 0.00" msg && T.isSuffixOf "): HTTP error 503" msg
+        other -> assertFailure $ "expected one retry log, got: " ++ show other
 
 testUtf8SplitAcrossReads :: Test
 testUtf8SplitAcrossReads = TestCase $ do
