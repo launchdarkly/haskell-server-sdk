@@ -22,6 +22,7 @@ import Data.Text.Encoding.Error (lenientDecode)
 import Network.HTTP.Client (Manager, defaultManagerSettings, managerRawConnection, newManager, responseTimeoutNone)
 import Network.HTTP.Client.Internal (makeConnection)
 import Numeric (showHex)
+import System.Clock (TimeSpec (TimeSpec))
 import System.Timeout (timeout)
 import Test.HUnit
 
@@ -30,7 +31,7 @@ import LaunchDarkly.Server.Config.ClientContext (ClientContext (..))
 import LaunchDarkly.Server.Config.HttpConfiguration (HttpConfiguration (..))
 import LaunchDarkly.Server.DataSource.Internal (DataSourceUpdates (..))
 import LaunchDarkly.Server.Features (Flag)
-import LaunchDarkly.Server.Network.Streaming (backoffCeiling, streamingThread)
+import LaunchDarkly.Server.Network.Streaming (backoffCeiling, retryAttempt, streamingThread)
 import Util.Features (makeTestFlag)
 
 allTests :: Test
@@ -41,6 +42,7 @@ allTests =
         , TestLabel "reconnects after a socket reset mid-body" testReconnectAfterSocketReset
         , TestLabel "decodes UTF-8 split across reads" testUtf8SplitAcrossReads
         , TestLabel "backoff stays at the cap after many attempts" testBackoffCeiling
+        , TestLabel "a connection open for 60 s resets the backoff" testRetryAttempt
         ]
 
 -- | One socket read. 'Fail' throws from inside the read, the way a reset socket does.
@@ -191,3 +193,10 @@ testBackoffCeiling = TestCase $ do
     assertEqual "first attempt waits the initial delay" 1_000_000 (backoffCeiling 1000 1)
     assertEqual "attempt 46 stays at the 30 s cap" 30_000_000 (backoffCeiling 1000 46)
     assertEqual "an initial delay too large for Int arithmetic stays at the 30 s cap" 30_000_000 (backoffCeiling maxBound 1)
+
+testRetryAttempt :: Test
+testRetryAttempt = TestCase $ do
+    assertEqual "a connection that did not open increments the attempt" 7 (retryAttempt 6 Nothing (TimeSpec 1000 0))
+    assertEqual "a connection open for less than 60 s increments the attempt" 7 (retryAttempt 6 (Just (TimeSpec 100 0)) (TimeSpec 159 0))
+    assertEqual "a connection open for 60 s resets to the first attempt" 1 (retryAttempt 6 (Just (TimeSpec 100 0)) (TimeSpec 160 0))
+    assertEqual "a connection open for hours resets to the first attempt" 1 (retryAttempt 6 (Just (TimeSpec 100 0)) (TimeSpec 10_000 0))

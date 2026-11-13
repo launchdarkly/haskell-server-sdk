@@ -1,7 +1,7 @@
 {-# LANGUAGE NamedFieldPuns #-}
 {-# LANGUAGE NumericUnderscores #-}
 
-module LaunchDarkly.Server.Network.Streaming (streamingThread, backoffCeiling) where
+module LaunchDarkly.Server.Network.Streaming (streamingThread, backoffCeiling, retryAttempt) where
 
 import Control.Applicative (many, (<|>))
 import Control.Concurrent (threadDelay)
@@ -245,22 +245,25 @@ retryReadError request e = do
 -- cleanly. While events are being processed, it is responsible for implementing a sane retry policy that prevents the
 -- stampeding herd problem in the unlikely event of upstream failures.
 startNewConnection :: (MonadIO m, MonadLogger m, MonadMask m) => Manager -> Request -> DataSourceUpdates -> StreamingState -> m StreamingState
-startNewConnection manager request dataSourceUpdates state@(StreamingState {activeSince}) = do
+startNewConnection manager request dataSourceUpdates state = do
     $(logDebug) "starting new streaming connection"
+    connectedAt <- liftIO $ newIORef Nothing
     status <- tryHTTP $ withResponseGeneric request manager $ \response -> do
         checkAuthorization response
             >> throwIfNot200 request response
+            >> liftIO (getTime Monotonic >>= writeIORef connectedAt . Just)
             >> catchIf isRetryableReadError (readStream (responseBody response) dataSourceUpdates) (retryReadError request)
+    activeSince <- liftIO $ readIORef connectedAt
     now <- liftIO $ getTime Monotonic
-    handleResponse state now status
+    handleResponse state now activeSince status
   where
     -- This function is responsible for parsing the final output from a now closed streaming connection.
     --
     -- Given the result of the stream run, this function can choose to either mark the state as cancelled, stopping all
     -- further attempts, or it can update the state and wait some amount of time before starting another attempt.
-    handleResponse :: (MonadIO m, MonadLogger m, MonadMask m) => StreamingState -> TimeSpec -> (Either HttpException Bool) -> m StreamingState
-    handleResponse state now result =
-        let state' = updateState state now result
+    handleResponse :: (MonadIO m, MonadLogger m, MonadMask m) => StreamingState -> TimeSpec -> Maybe TimeSpec -> (Either HttpException Bool) -> m StreamingState
+    handleResponse state now activeSince result =
+        let state' = updateState state now activeSince result
          in if cancel state'
                 then pure state'
                 else do
@@ -272,19 +275,11 @@ startNewConnection manager request dataSourceUpdates state@(StreamingState {acti
     --
     -- Given the result of a stream run, this function can either choose to mark the state as cancelled, meaning halt all
     -- further attempts, or it can be updated according to the rules of our streaming specification.
-    updateState :: StreamingState -> TimeSpec -> (Either HttpException Bool) -> StreamingState
-    updateState state now (Right _) = state {initialConnection = False, activeSince = Just now, attempt = 1}
-    updateState state@(StreamingState {attempt = att}) now (Left (HttpExceptionRequest _ (StatusCodeException response _)))
-        | isHttpUnrecoverable code = state {cancel = True}
-        | otherwise = do
-            case activeSince of
-                (Just time)
-                    | (now >= time + (TimeSpec 60 0)) -> state {attempt = 1, activeSince = Nothing}
-                    | otherwise -> state {attempt = att + 1}
-                Nothing -> state {attempt = att + 1}
-      where
-        code = statusCode (responseStatus response)
-    updateState state@(StreamingState {attempt = att}) _ _ = state {attempt = att + 1}
+    updateState :: StreamingState -> TimeSpec -> Maybe TimeSpec -> (Either HttpException Bool) -> StreamingState
+    updateState state@(StreamingState {attempt = att}) now activeSince (Right _) = state {initialConnection = False, attempt = retryAttempt att activeSince now}
+    updateState state _ _ (Left (HttpExceptionRequest _ (StatusCodeException response _)))
+        | isHttpUnrecoverable (statusCode (responseStatus response)) = state {cancel = True}
+    updateState state@(StreamingState {attempt = att}) now activeSince (Left _) = state {attempt = retryAttempt att activeSince now}
 
     -- Calculate the next delay period following a backoff + jitter + max delay algorithm.
     --
@@ -306,10 +301,20 @@ backoffCeiling :: Int -> Int -> Int
 backoffCeiling initialRetryDelay att =
     fromInteger $ min (30 * 1_000_000) (toInteger initialRetryDelay * 1_000 * 2 ^ min 15 (att - 1))
 
+-- The attempt number for the retry after a connection ends.
+--
+-- Every end of a connection counts as a failure, also a clean close by the server.
+-- `activeSince` is the time the connection got a 200 response, or `Nothing` if it did not get one.
+-- A connection that stayed open for 60 s or more resets the backoff to the first attempt.
+-- Otherwise, the attempt number increases by one.
+retryAttempt :: Int -> Maybe TimeSpec -> TimeSpec -> Int
+retryAttempt att activeSince now = case activeSince of
+    Just time | now >= time + TimeSpec 60 0 -> 1
+    _ -> att + 1
+
 data StreamingState = StreamingState
     { initialConnection :: Bool -- Marker used to determine the first time the streamer connects.
     , initialRetryDelay :: Int -- The base duration used for the retry delay calculation
-    , activeSince :: Maybe TimeSpec -- TimeSpec to denote the last time the SDK successfully connected to the stream
     , attempt :: Int -- A number representing the attempt # of this connection
     , cancel :: Bool -- A marker to shortcut logic and halt the streaming process
     }
@@ -324,4 +329,4 @@ streamingThread streamURI initialRetryDelay clientContext dataSourceUpdates = do
   where
     processStream :: (MonadIO m, MonadLogger m, MonadMask m) => Manager -> Request -> m ()
     processStream manager req = do
-        void $ iterateUntilM (cancel) (\state -> startNewConnection manager req dataSourceUpdates state) StreamingState {initialConnection = True, initialRetryDelay, activeSince = Nothing, attempt = 0, cancel = False}
+        void $ iterateUntilM (cancel) (\state -> startNewConnection manager req dataSourceUpdates state) StreamingState {initialConnection = True, initialRetryDelay, attempt = 0, cancel = False}
