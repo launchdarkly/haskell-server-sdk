@@ -2,6 +2,14 @@
 
 All notable changes to the LaunchDarkly Haskell Server-side SDK will be documented in this file. This project adheres to [Semantic Versioning](http://semver.org).
 
+## [4.6.2](https://github.com/launchdarkly/haskell-server-sdk/compare/4.6.1...4.6.2) (2026-11-13)
+
+
+### Bug Fixes
+
+* Make TestData valueForAll return its value when targeting is off ([#126](https://github.com/launchdarkly/haskell-server-sdk/issues/126)) ([6f1f61b](https://github.com/launchdarkly/haskell-server-sdk/commit/6f1f61b4d24a42ea325160feae9d7b7921437124))
+* Reconnect the stream after non-HTTP read errors ([#128](https://github.com/launchdarkly/haskell-server-sdk/issues/128)) ([c92c118](https://github.com/launchdarkly/haskell-server-sdk/commit/c92c1187ed181d1530da6a83decd10d577d899b9))
+
 ## [4.6.1](https://github.com/launchdarkly/haskell-server-sdk/compare/4.6.0...4.6.1) (2026-11-05)
 
 
