@@ -22,7 +22,7 @@ import Data.Text.Encoding.Error (lenientDecode)
 import Network.HTTP.Client (Manager, defaultManagerSettings, managerRawConnection, newManager, responseTimeoutNone)
 import Network.HTTP.Client.Internal (makeConnection)
 import Numeric (showHex)
-import System.Clock (TimeSpec (TimeSpec))
+import System.Clock (Clock (Monotonic), TimeSpec (TimeSpec), getTime, toNanoSecs)
 import System.Timeout (timeout)
 import Test.HUnit
 
@@ -43,6 +43,7 @@ allTests =
         , TestLabel "logs a retried HTTP error status" testLogsRetriedStatus
         , TestLabel "logs a connection failure before the response" testLogsConnectionFailure
         , TestLabel "logs a failure reading an error response body" testLogsErrorBodyFailure
+        , TestLabel "logs the delay the stream waits before it retries" testLogsActualDelay
         , TestLabel "logs a retry after the server closes the stream" testLogsCleanClose
         , TestLabel "logs a redirect loop without the responses" testLogsRedirectLoop
         , TestLabel "logs a permanent HTTP error and stops" testLogsPermanentStatus
@@ -64,7 +65,11 @@ data StreamRun = StreamRun
     -- ^ How many scripted connections the SDK opened
     , initialized :: Maybe (KeyMap Flag)
     -- ^ The flags passed to 'dataSourceUpdatesInit', if it was called
+    , initializedAt :: Maybe TimeSpec
+    -- ^ The monotonic time when 'dataSourceUpdatesInit' was called
     , logs :: [(LogLevel, Text)]
+    , logTimes :: [TimeSpec]
+    -- ^ The monotonic time of each entry in 'logs'
     , exited :: Maybe (Either SomeException ())
     -- ^ How the streaming thread ended. 'Nothing' when it was still running 1 s after 'killThread'.
     }
@@ -100,14 +105,20 @@ runStream = runStreamAt "http://localhost"
 
 -- | Like 'runStream', with the stream URI given.
 runStreamAt :: Text -> [ConnectionScript] -> IO StreamRun
-runStreamAt streamURI scripts = do
+runStreamAt streamURI = runStreamWith streamURI 1
+
+-- | Like 'runStreamAt', with the initial retry delay in milliseconds given.
+runStreamWith :: Text -> Int -> [ConnectionScript] -> IO StreamRun
+runStreamWith streamURI initialRetryDelay scripts = do
     pending <- newIORef scripts
     logRef <- newIORef []
     initVar <- newEmptyMVar
     settled <- newEmptyMVar
     done <- newEmptyMVar
     manager <- scriptedManager pending
-    let logTo _ _ level msg = atomicModifyIORef' logRef (\xs -> ((level, decodeUtf8With lenientDecode $ fromLogStr msg) : xs, ()))
+    let logTo _ _ level msg = do
+            now <- getTime Monotonic
+            atomicModifyIORef' logRef (\xs -> ((now, (level, decodeUtf8With lenientDecode $ fromLogStr msg)) : xs, ()))
         context =
             ClientContext
                 { runLogger = (`runLoggingT` logTo)
@@ -120,7 +131,11 @@ runStreamAt streamURI scripts = do
                 }
         updates =
             DataSourceUpdates
-                { dataSourceUpdatesInit = \flags _ -> tryPutMVar initVar flags >> tryPutMVar settled () >> pure (Right ())
+                { dataSourceUpdatesInit = \flags _ -> do
+                    now <- getTime Monotonic
+                    void $ tryPutMVar initVar (flags, now)
+                    void $ tryPutMVar settled ()
+                    pure (Right ())
                 , dataSourceUpdatesInsertFlag = const $ pure (Right ())
                 , dataSourceUpdatesInsertSegment = const $ pure (Right ())
                 , dataSourceUpdatesDeleteFlag = \_ _ -> pure (Right ())
@@ -129,15 +144,23 @@ runStreamAt streamURI scripts = do
                 }
     thread <-
         forkFinally
-            (runLogger context $ streamingThread streamURI 1 context updates)
+            (runLogger context $ streamingThread streamURI initialRetryDelay context updates)
             (\result -> putMVar done result >> void (tryPutMVar settled ()))
     void $ timeout 5_000_000 $ readMVar settled
     killThread thread
     exited <- timeout 1_000_000 $ readMVar done
-    initialized <- tryReadMVar initVar
+    initResult <- tryReadMVar initVar
     remaining <- readIORef pending
-    logs <- reverse <$> readIORef logRef
-    pure StreamRun {connections = length scripts - length remaining, initialized, logs, exited}
+    timedLogs <- reverse <$> readIORef logRef
+    pure
+        StreamRun
+            { connections = length scripts - length remaining
+            , initialized = fst <$> initResult
+            , initializedAt = snd <$> initResult
+            , logs = map snd timedLogs
+            , logTimes = map fst timedLogs
+            , exited
+            }
 
 responseHead :: ReadStep
 responseHead = Send "HTTP/1.1 200 OK\r\nContent-Type: text/event-stream\r\nTransfer-Encoding: chunked\r\n\r\n"
@@ -230,6 +253,21 @@ testLogsErrorBodyFailure = TestCase $ do
     assertInitialized run
     assertEqual "connections" 2 (connections run)
     assertOneRetryLog run "user error (reset in body)"
+
+-- The logged delay must be the delay the stream waits, after jitter. The 200 ms initial delay gives a jitter of up
+-- to 100 ms, so a log of the delay before jitter fails this test. The stream waits at least the delay, so the check
+-- allows only for the rounding to 1 ms.
+testLogsActualDelay :: Test
+testLogsActualDelay = TestCase $ do
+    run <- runStreamWith "http://localhost" 200 [emptyResponse "503 Service Unavailable" [], healthyConnection]
+    assertInitialized run
+    let prefix = "LaunchDarkly streaming connection was interrupted and will retry in "
+    case [(time, msg) | (time, (_, msg)) <- zip (logTimes run) (logs run), T.isPrefixOf prefix msg] of
+        [(loggedAt, msg)] -> do
+            let logged = read (T.unpack $ T.takeWhile (/= ' ') $ T.drop (T.length prefix) msg) :: Double
+                waited = maybe 0 (\time -> fromIntegral (toNanoSecs (time - loggedAt)) / 1e9) (initializedAt run)
+            assertBool ("logged a delay of " ++ show logged ++ " s but waited " ++ show waited ++ " s") $ waited >= logged - 0.0005
+        other -> assertFailure $ "expected one retry log, got: " ++ show other
 
 testLogsCleanClose :: Test
 testLogsCleanClose = TestCase $ do
