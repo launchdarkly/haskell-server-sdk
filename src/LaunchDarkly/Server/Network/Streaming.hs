@@ -5,7 +5,7 @@ module LaunchDarkly.Server.Network.Streaming (streamingThread, backoffCeiling, r
 
 import Control.Applicative (many, (<|>))
 import Control.Concurrent (threadDelay)
-import Control.Exception (SomeAsyncException, SomeException, displayException, fromException, throwIO, toException)
+import Control.Exception (SomeAsyncException, SomeException, displayException, fromException, throwIO)
 import Control.Monad (mzero, void)
 import Control.Monad.Catch (Exception, MonadCatch, MonadMask, MonadThrow, catchIf, throwM, try)
 import Control.Monad.IO.Class (MonadIO, liftIO)
@@ -234,27 +234,29 @@ readStream body dataSourceUpdates = liftIO (newIORef streamDecodeUtf8) >>= \deco
 isRetryableReadError :: SomeException -> Bool
 isRetryableReadError e = not (isJust (fromException @SomeAsyncException e) || isJust (fromException @HttpException e))
 
--- Marks a read error that `retryReadError` already logged, so `handleResponse` does not log it again.
-newtype LoggedReadError = LoggedReadError SomeException deriving (Show)
-
-instance Exception LoggedReadError
-
 -- Rethrows the error as an `HttpException` so `tryHTTP` catches it and the stream reconnects with backoff.
-retryReadError :: (MonadLogger m, MonadThrow m) => Request -> SomeException -> m a
-retryReadError request e = do
-    $(logError) $ T.append "streaming connection failed, will retry: " (T.pack $ displayException e)
-    throwM $ HttpExceptionRequest request (InternalException $ toException $ LoggedReadError e)
+-- `handleResponse` logs the error.
+retryReadError :: MonadThrow m => Request -> SomeException -> m a
+retryReadError request e = throwM $ HttpExceptionRequest request (InternalException e)
 
--- True if `retryReadError` already logged the error.
-isLoggedReadError :: HttpException -> Bool
-isLoggedReadError (HttpExceptionRequest _ (InternalException e)) = isJust (fromException @LoggedReadError e)
-isLoggedReadError _ = False
-
--- A short description of the error for the retry log. It leaves out the request, which `displayException` includes.
+-- A short description of the error for the log. It leaves out the request, which `displayException` includes.
+-- It also leaves out the responses of a redirect loop, because they can contain cookies and other server data.
 describeHttpException :: HttpException -> String
 describeHttpException (HttpExceptionRequest _ (StatusCodeException response _)) = "HTTP error " ++ show (statusCode (responseStatus response))
+describeHttpException (HttpExceptionRequest _ (TooManyRedirects _)) = "too many redirects"
+describeHttpException (HttpExceptionRequest _ (InternalException e)) = displayException e
 describeHttpException (HttpExceptionRequest _ content) = show content
 describeHttpException e = displayException e
+
+-- The reason to log when a connection ends. A connection that ends without an `HttpException` has already logged
+-- the cause in `readStream`.
+describeResult :: Either HttpException Bool -> String
+describeResult (Left e) = describeHttpException e
+describeResult (Right _) = "the stream ended"
+
+logPermanentError :: MonadLogger m => String -> m ()
+logPermanentError reason =
+    $(logError) $ T.pack $ "A permanent error has been encountered with the LaunchDarkly streaming connection. It will not retry. Reason: " ++ reason
 
 -- This function is responsible for consuming a streaming connection.
 --
@@ -267,7 +269,7 @@ startNewConnection manager request dataSourceUpdates state = do
     connectedAt <- liftIO $ newIORef Nothing
     status <- tryHTTP $ withResponseGeneric request manager $ \response -> do
         checkAuthorization response
-            >> throwIfNot200 request response
+            >> catchIf isRetryableReadError (throwIfNot200 request response) (retryReadError request)
             >> liftIO (getTime Monotonic >>= writeIORef connectedAt . Just)
             >> catchIf isRetryableReadError (readStream (responseBody response) dataSourceUpdates) (retryReadError request)
     activeSince <- liftIO $ readIORef connectedAt
@@ -282,12 +284,12 @@ startNewConnection manager request dataSourceUpdates state = do
     handleResponse state now activeSince result =
         let state' = updateState state now activeSince result
          in if cancel state'
-                then pure state'
+                then do
+                    logPermanentError (describeResult result)
+                    pure state'
                 else do
                     delay <- calculateDelay state'
-                    case result of
-                        Left e | not (isLoggedReadError e) -> $(logWarn) $ T.pack $ printf "Error in stream connection (will retry in %.3f s): %s" (fromIntegral delay / 1_000_000 :: Double) (describeHttpException e)
-                        _ -> pure ()
+                    $(logWarn) $ T.pack $ printf "LaunchDarkly streaming connection was interrupted and will retry in %.3f s. Reason: %s" (fromIntegral delay / 1_000_000 :: Double) (describeResult result)
                     _ <- liftIO $ threadDelay delay
                     pure state'
 
@@ -344,8 +346,9 @@ data StreamingState = StreamingState
 streamingThread :: (MonadIO m, MonadLogger m, MonadMask m) => Text -> Int -> ClientContext -> DataSourceUpdates -> m ()
 streamingThread streamURI initialRetryDelay clientContext dataSourceUpdates = do
     let manager = tlsManager $ httpConfiguration clientContext
-    req <- prepareRequest (httpConfiguration clientContext) (T.unpack streamURI ++ "/all")
-    handleUnauthorized dataSourceUpdates (processStream manager req)
+    tryHTTP (prepareRequest (httpConfiguration clientContext) (T.unpack streamURI ++ "/all")) >>= \case
+        Left e -> logPermanentError (describeHttpException e)
+        Right req -> handleUnauthorized dataSourceUpdates (processStream manager req)
   where
     processStream :: (MonadIO m, MonadLogger m, MonadMask m) => Manager -> Request -> m ()
     processStream manager req = do

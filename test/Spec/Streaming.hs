@@ -41,6 +41,12 @@ allTests =
         , TestLabel "reconnects after an HttpException mid-body" testReconnectAfterHttpException
         , TestLabel "reconnects after a socket reset mid-body" testReconnectAfterSocketReset
         , TestLabel "logs a retried HTTP error status" testLogsRetriedStatus
+        , TestLabel "logs a connection failure before the response" testLogsConnectionFailure
+        , TestLabel "logs a retry after the server closes the stream" testLogsCleanClose
+        , TestLabel "logs a redirect loop without the responses" testLogsRedirectLoop
+        , TestLabel "logs a permanent HTTP error and stops" testLogsPermanentStatus
+        , TestLabel "does not retry an unauthorized SDK key" testUnauthorizedDoesNotRetry
+        , TestLabel "logs an invalid stream URI and stops" testLogsInvalidUri
         , TestLabel "decodes UTF-8 split across reads" testUtf8SplitAcrossReads
         , TestLabel "backoff stays at the cap after many attempts" testBackoffCeiling
         , TestLabel "a connection open for 60 s resets the backoff" testRetryAttempt
@@ -89,7 +95,11 @@ blockForever = forever $ threadDelay 1_000_000_000
 
 -- | Runs 'streamingThread' against the scripts until it initializes or exits, for at most 5 s, then kills it.
 runStream :: [ConnectionScript] -> IO StreamRun
-runStream scripts = do
+runStream = runStreamAt "http://localhost"
+
+-- | Like 'runStream', with the stream URI given.
+runStreamAt :: Text -> [ConnectionScript] -> IO StreamRun
+runStreamAt streamURI scripts = do
     pending <- newIORef scripts
     logRef <- newIORef []
     initVar <- newEmptyMVar
@@ -118,7 +128,7 @@ runStream scripts = do
                 }
     thread <-
         forkFinally
-            (runLogger context $ streamingThread "http://localhost" 1 context updates)
+            (runLogger context $ streamingThread streamURI 1 context updates)
             (\result -> putMVar done result >> void (tryPutMVar settled ()))
     void $ timeout 5_000_000 $ readMVar settled
     killThread thread
@@ -163,33 +173,93 @@ testReconnectAfterHttpException = TestCase $ do
     run <- runStream [[responseHead, Send "zz\r\n"], healthyConnection]
     assertInitialized run
     assertEqual "connections" 2 (connections run)
+    assertOneRetryLog run "InvalidChunkHeaders"
 
--- | The log lines that report a retry.
+-- | The log lines that report a retry or a permanent error.
 retryLogs :: StreamRun -> [(LogLevel, Text)]
-retryLogs = filter (T.isInfixOf "will retry" . snd) . logs
+retryLogs = filter (\(_, msg) -> T.isInfixOf "will retry" msg || T.isInfixOf "will not retry" msg) . logs
+
+-- | Asserts one Warn retry log with the delay and the given reason. The test delay of 1 ms prints as 0.000 or 0.001.
+assertOneRetryLog :: StreamRun -> Text -> Assertion
+assertOneRetryLog run reason = case retryLogs run of
+    [(level, msg)] -> do
+        assertEqual "log level" LevelWarn level
+        assertBool ("logs the delay and the reason, got: " ++ T.unpack msg) $
+            T.isPrefixOf "LaunchDarkly streaming connection was interrupted and will retry in 0.00" msg
+                && T.isSuffixOf (" s. Reason: " <> reason) msg
+    other -> assertFailure $ "expected one retry log, got: " ++ show other
+
+-- | Asserts one Error log for a permanent error with the given reason, and no retry.
+assertPermanentError :: StreamRun -> Text -> Assertion
+assertPermanentError run reason = do
+    assertEqual "connections" 1 (connections run)
+    assertEqual
+        "logs"
+        [(LevelError, "A permanent error has been encountered with the LaunchDarkly streaming connection. It will not retry. Reason: " <> reason)]
+        (retryLogs run)
+
+-- | A response with no body that closes the connection, so the next request opens a new scripted connection.
+emptyResponse :: ByteString -> [ByteString] -> ConnectionScript
+emptyResponse status headers = [Send $ "HTTP/1.1 " <> status <> "\r\n" <> B.concat (map (<> "\r\n") headers) <> "Content-Length: 0\r\nConnection: close\r\n\r\n"]
 
 testReconnectAfterSocketReset :: Test
 testReconnectAfterSocketReset = TestCase $ do
     run <- runStream [[responseHead, chunk beforeAccent, Fail $ toException $ userError "Connection reset by peer"], healthyConnection]
     assertInitialized run
     assertEqual "connections" 2 (connections run)
-    case retryLogs run of
-        [(level, msg)] -> do
-            assertEqual "log level" LevelError level
-            assertBool ("logs the read error, got: " ++ T.unpack msg) $ T.isPrefixOf "streaming connection failed, will retry" msg
-        other -> assertFailure $ "expected one retry log, got: " ++ show other
+    assertOneRetryLog run "user error (Connection reset by peer)"
 
 testLogsRetriedStatus :: Test
 testLogsRetriedStatus = TestCase $ do
-    run <- runStream [[Send "HTTP/1.1 503 Service Unavailable\r\nContent-Length: 0\r\nConnection: close\r\n\r\n"], healthyConnection]
+    run <- runStream [emptyResponse "503 Service Unavailable" [], healthyConnection]
     assertInitialized run
     assertEqual "connections" 2 (connections run)
+    assertOneRetryLog run "HTTP error 503"
+
+testLogsConnectionFailure :: Test
+testLogsConnectionFailure = TestCase $ do
+    run <- runStream [[Fail $ toException $ userError "Connection refused"], healthyConnection]
+    assertInitialized run
+    assertEqual "connections" 2 (connections run)
+    assertOneRetryLog run "user error (Connection refused)"
+
+testLogsCleanClose :: Test
+testLogsCleanClose = TestCase $ do
+    let closingHead = Send "HTTP/1.1 200 OK\r\nContent-Type: text/event-stream\r\nTransfer-Encoding: chunked\r\nConnection: close\r\n\r\n"
+    run <- runStream [[closingHead, Send "0\r\n\r\n"], healthyConnection]
+    assertInitialized run
+    assertEqual "connections" 2 (connections run)
+    assertOneRetryLog run "the stream ended"
+
+testLogsRedirectLoop :: Test
+testLogsRedirectLoop = TestCase $ do
+    let redirect = emptyResponse "302 Found" ["Location: http://localhost/all", "Set-Cookie: session=secret"]
+    run <- runStream (replicate 11 redirect ++ [healthyConnection])
+    assertInitialized run
+    assertEqual "connections" 12 (connections run)
+    assertOneRetryLog run "too many redirects"
+
+testLogsPermanentStatus :: Test
+testLogsPermanentStatus = TestCase $ do
+    run <- runStream [emptyResponse "404 Not Found" [], healthyConnection]
+    assertPermanentError run "HTTP error 404"
+
+testUnauthorizedDoesNotRetry :: Test
+testUnauthorizedDoesNotRetry = TestCase $ do
+    run <- runStream [emptyResponse "401 Unauthorized" [], healthyConnection]
+    assertEqual "connections" 1 (connections run)
+    assertEqual "retry logs" [] (retryLogs run)
+
+testLogsInvalidUri :: Test
+testLogsInvalidUri = TestCase $ do
+    run <- runStreamAt "not a uri" [healthyConnection]
+    assertEqual "connections" 0 (connections run)
     case retryLogs run of
-        [(level, msg)] -> do
-            assertEqual "log level" LevelWarn level
-            assertBool ("logs the error and the delay, got: " ++ T.unpack msg) $
-                T.isPrefixOf "Error in stream connection (will retry in 0.00" msg && T.isSuffixOf "): HTTP error 503" msg
-        other -> assertFailure $ "expected one retry log, got: " ++ show other
+        [(LevelError, msg)] ->
+            assertBool ("logs the invalid URI, got: " ++ T.unpack msg) $
+                T.isPrefixOf "A permanent error has been encountered with the LaunchDarkly streaming connection. It will not retry. Reason: " msg
+                    && T.isInfixOf "not a uri" msg
+        other -> assertFailure $ "expected one permanent error log, got: " ++ show other
 
 testUtf8SplitAcrossReads :: Test
 testUtf8SplitAcrossReads = TestCase $ do
