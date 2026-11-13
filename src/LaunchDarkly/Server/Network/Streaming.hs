@@ -241,12 +241,13 @@ retryReadError request e = throwM $ HttpExceptionRequest request (InternalExcept
 
 -- A short description of the error for the log. It leaves out the request, which `displayException` includes.
 -- It also leaves out the responses of a redirect loop, because they can contain cookies and other server data.
+-- It leaves out an invalid URI, because the URI can contain a password.
 describeHttpException :: HttpException -> String
 describeHttpException (HttpExceptionRequest _ (StatusCodeException response _)) = "HTTP error " ++ show (statusCode (responseStatus response))
 describeHttpException (HttpExceptionRequest _ (TooManyRedirects _)) = "too many redirects"
 describeHttpException (HttpExceptionRequest _ (InternalException e)) = displayException e
 describeHttpException (HttpExceptionRequest _ content) = show content
-describeHttpException e = displayException e
+describeHttpException (InvalidUrlException _ reason) = "invalid stream URI: " ++ reason
 
 -- The reason to log when a connection ends. A connection that ends without an `HttpException` has already logged
 -- the cause in `readStream`.

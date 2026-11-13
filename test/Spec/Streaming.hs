@@ -42,6 +42,7 @@ allTests =
         , TestLabel "reconnects after a socket reset mid-body" testReconnectAfterSocketReset
         , TestLabel "logs a retried HTTP error status" testLogsRetriedStatus
         , TestLabel "logs a connection failure before the response" testLogsConnectionFailure
+        , TestLabel "logs a failure reading an error response body" testLogsErrorBodyFailure
         , TestLabel "logs a retry after the server closes the stream" testLogsCleanClose
         , TestLabel "logs a redirect loop without the responses" testLogsRedirectLoop
         , TestLabel "logs a permanent HTTP error and stops" testLogsPermanentStatus
@@ -179,14 +180,14 @@ testReconnectAfterHttpException = TestCase $ do
 retryLogs :: StreamRun -> [(LogLevel, Text)]
 retryLogs = filter (\(_, msg) -> T.isInfixOf "will retry" msg || T.isInfixOf "will not retry" msg) . logs
 
--- | Asserts one Warn retry log with the delay and the given reason. The test delay of 1 ms prints as 0.000 or 0.001.
+-- | Asserts one Warn retry log with the delay and the given reason.
+-- The test delay is 1 ms minus up to 0.5 ms of jitter, so it prints as 0.001.
 assertOneRetryLog :: StreamRun -> Text -> Assertion
 assertOneRetryLog run reason = case retryLogs run of
     [(level, msg)] -> do
         assertEqual "log level" LevelWarn level
         assertBool ("logs the delay and the reason, got: " ++ T.unpack msg) $
-            T.isPrefixOf "LaunchDarkly streaming connection was interrupted and will retry in 0.00" msg
-                && T.isSuffixOf (" s. Reason: " <> reason) msg
+            msg == "LaunchDarkly streaming connection was interrupted and will retry in 0.001 s. Reason: " <> reason
     other -> assertFailure $ "expected one retry log, got: " ++ show other
 
 -- | Asserts one Error log for a permanent error with the given reason, and no retry.
@@ -223,6 +224,13 @@ testLogsConnectionFailure = TestCase $ do
     assertEqual "connections" 2 (connections run)
     assertOneRetryLog run "user error (Connection refused)"
 
+testLogsErrorBodyFailure :: Test
+testLogsErrorBodyFailure = TestCase $ do
+    run <- runStream [[Send "HTTP/1.1 503 Service Unavailable\r\nContent-Length: 100\r\n\r\nab", Fail $ toException $ userError "reset in body"], healthyConnection]
+    assertInitialized run
+    assertEqual "connections" 2 (connections run)
+    assertOneRetryLog run "user error (reset in body)"
+
 testLogsCleanClose :: Test
 testLogsCleanClose = TestCase $ do
     let closingHead = Send "HTTP/1.1 200 OK\r\nContent-Type: text/event-stream\r\nTransfer-Encoding: chunked\r\nConnection: close\r\n\r\n"
@@ -252,14 +260,12 @@ testUnauthorizedDoesNotRetry = TestCase $ do
 
 testLogsInvalidUri :: Test
 testLogsInvalidUri = TestCase $ do
-    run <- runStreamAt "not a uri" [healthyConnection]
+    run <- runStreamAt "https://user:secret@relay:port" [healthyConnection]
     assertEqual "connections" 0 (connections run)
-    case retryLogs run of
-        [(LevelError, msg)] ->
-            assertBool ("logs the invalid URI, got: " ++ T.unpack msg) $
-                T.isPrefixOf "A permanent error has been encountered with the LaunchDarkly streaming connection. It will not retry. Reason: " msg
-                    && T.isInfixOf "not a uri" msg
-        other -> assertFailure $ "expected one permanent error log, got: " ++ show other
+    assertEqual
+        "logs"
+        [(LevelError, "A permanent error has been encountered with the LaunchDarkly streaming connection. It will not retry. Reason: invalid stream URI: Invalid URL")]
+        (retryLogs run)
 
 testUtf8SplitAcrossReads :: Test
 testUtf8SplitAcrossReads = TestCase $ do
