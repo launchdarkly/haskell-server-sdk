@@ -1,7 +1,7 @@
 {-# LANGUAGE NamedFieldPuns #-}
 {-# LANGUAGE NumericUnderscores #-}
 
-module LaunchDarkly.Server.Network.Streaming (streamingThread, backoffCeiling, retryAttempt) where
+module LaunchDarkly.Server.Network.Streaming (streamingThread, backoffCeiling, retryAttempt, readStream, streamReadTimeout) where
 
 import Control.Applicative (many, (<|>))
 import Control.Concurrent (threadDelay)
@@ -189,12 +189,16 @@ data ReadE = ReadETimeout | ReadEClosed deriving (Show, Exception)
 tryReadE :: MonadCatch m => m a -> m (Either ReadE a)
 tryReadE = try
 
--- heartbeat expected every 120 seconds
+-- The time in microseconds to wait for data on the stream before it reconnects.
+-- The server sends a heartbeat every 120 seconds.
+streamReadTimeout :: Int
+streamReadTimeout = 1_000_000 * 300
+
 -- A read can end partway through a multi-byte character, so the decoder keeps those bytes for the next read.
 -- `parseWith` treats empty text as end of input, so a read that decodes to nothing reads again.
-readWithException :: IORef (ByteString -> Decoding) -> IO ByteString -> IO Text
-readWithException decoder body =
-    timeout (1_000_000 * 300) (brRead body) >>= \case
+readWithException :: Int -> IORef (ByteString -> Decoding) -> IO ByteString -> IO Text
+readWithException readTimeout decoder body =
+    timeout readTimeout (brRead body) >>= \case
         Nothing -> throwIO ReadETimeout
         Just bytes ->
             if bytes == B.empty
@@ -203,18 +207,19 @@ readWithException decoder body =
                     decode <- readIORef decoder
                     let Some text _ next = decode bytes
                     writeIORef decoder next
-                    if T.null text then readWithException decoder body else pure text
+                    if T.null text then readWithException readTimeout decoder body else pure text
 
-readStream :: (MonadIO m, MonadLogger m, MonadMask m) => IO ByteString -> DataSourceUpdates -> m Bool
-readStream body dataSourceUpdates = liftIO (newIORef streamDecodeUtf8) >>= \decoder -> loop decoder "" False
+-- `readTimeout` is the time in microseconds to wait for each read. Tests use a shorter time than `streamReadTimeout`.
+readStream :: (MonadIO m, MonadLogger m, MonadMask m) => Int -> IO ByteString -> DataSourceUpdates -> m Bool
+readStream readTimeout body dataSourceUpdates = liftIO (newIORef streamDecodeUtf8) >>= \decoder -> loop decoder "" False
   where
     loop decoder initial processedEvent =
-        tryReadE (parseWith (liftIO $ readWithException decoder body) parseEvent initial) >>= \case
+        tryReadE (parseWith (liftIO $ readWithException readTimeout decoder body) parseEvent initial) >>= \case
             (Left ReadETimeout) -> do
-                $(logError) "streaming connection unexpectedly closed"
+                $(logError) "timeout waiting for SSE event"
                 pure processedEvent
             (Left ReadEClosed) -> do
-                $(logError) "timeout waiting for SSE event"
+                $(logError) "streaming connection unexpectedly closed"
                 pure processedEvent
             (Right parsed) -> case parsed of
                 Done remaining event -> do
@@ -252,7 +257,7 @@ startNewConnection manager request dataSourceUpdates state = do
         checkAuthorization response
             >> throwIfNot200 request response
             >> liftIO (getTime Monotonic >>= writeIORef connectedAt . Just)
-            >> catchIf isRetryableReadError (readStream (responseBody response) dataSourceUpdates) (retryReadError request)
+            >> catchIf isRetryableReadError (readStream streamReadTimeout (responseBody response) dataSourceUpdates) (retryReadError request)
     activeSince <- liftIO $ readIORef connectedAt
     now <- liftIO $ getTime Monotonic
     handleResponse state now activeSince status
