@@ -1,16 +1,25 @@
 module Spec.Client (allTests) where
 
+import Control.Concurrent (killThread)
+import Control.Concurrent.MVar (readMVar)
+import Control.Monad (forM_)
+import Data.Aeson (Value (..))
 import Data.Function ((&))
 import Data.Generics.Product (getField)
 import System.Timeout (timeout)
 import Test.HUnit
 
+import LaunchDarkly.AesonCompat (objectValues, singleton)
 import LaunchDarkly.Server.Client
+import LaunchDarkly.Server.Client.Internal (Status (Initialized), setStatus)
 import LaunchDarkly.Server.Config
 import LaunchDarkly.Server.Context
+import LaunchDarkly.Server.Events (EventType (..), processSummary)
+import LaunchDarkly.Server.Features (Flag (..), VariationOrRollout (..))
 import LaunchDarkly.Server.Store.Internal
 
 import Data.Text (Text)
+import Util.Features (makeTestFlag)
 
 makeEmptyStore :: IO (StoreHandle IO)
 makeEmptyStore = do
@@ -34,6 +43,47 @@ testFlushEventsDoesNotBlock = TestCase $ do
     result <- timeout (5 * 1000000) $ flushEvents client >> flushEvents client
     assertEqual "flushEvents returned" (Just ()) result
 
+-- Test that a typed evaluation of the wrong type records the default value in the events.
+-- The feature event and the summary counter must not record the value or variation of the flag.
+testWrongTypeEventRecordsDefaultValue :: Test
+testWrongTypeEventRecordsDefaultValue = TestCase $ do
+    let config =
+            makeConfig "secret"
+                & configSetUseLdd True
+                & configSetFlushIntervalSeconds 3600
+                & configSetEventsURI "http://127.0.0.1:1"
+        flag =
+            (makeTestFlag "flag" 5)
+                { trackEvents = True
+                , variations = [Bool True]
+                , fallthrough = VariationOrRollout {variation = Just 0, rollout = Nothing}
+                }
+    client <- makeClient config
+    -- Stop the event thread before the evaluation. The thread flushes the event queue when it starts,
+    -- and that flush can remove the events that this test reads.
+    forM_ (getField @"eventThreadPair" client) $ \(thread, sync) -> killThread thread >> readMVar sync
+    initializeStore (getField @"store" client) (singleton "flag" flag) mempty
+    setStatus client Initialized
+
+    detail <- stringVariationDetail client "flag" (makeContext "user-key" "user") "default"
+    assertEqual "returned detail" (EvaluationDetail "default" Nothing (EvaluationReasonError EvalErrorWrongType)) detail
+
+    let state = getField @"events" client
+    processSummary config state
+    events <- readMVar $ getField @"events" state
+    case [getField @"event" e | EventTypeFeature e <- events] of
+        [feature] -> do
+            assertEqual "feature event value" (String "default") (getField @"value" feature)
+            assertEqual "feature event variation" Nothing (getField @"variation" feature)
+            assertEqual "feature event reason" (Just $ EvaluationReasonError EvalErrorWrongType) (getField @"reason" feature)
+        other -> assertFailure $ "expected one feature event, got " ++ show (length other)
+    case [counter | EventTypeSummary summary <- events, flagSummary <- objectValues (getField @"features" summary), counter <- objectValues (getField @"counters" flagSummary)] of
+        [counter] -> do
+            assertEqual "counter value" (String "default") (getField @"value" counter)
+            assertEqual "counter variation" Nothing (getField @"variation" counter)
+            assertEqual "counter version" (Just 5) (getField @"version" counter)
+        other -> assertFailure $ "expected one summary counter, got " ++ show (length other)
+
 makeTestClient :: Text -> IO Client
 makeTestClient sdkKey = do
     client <- makeClient $ (makeConfig sdkKey) & configSetOffline True
@@ -45,4 +95,5 @@ allTests =
     TestList
         [ testSecureModeHashIsGeneratedCorrectly
         , testFlushEventsDoesNotBlock
+        , testWrongTypeEventRecordsDefaultValue
         ]
