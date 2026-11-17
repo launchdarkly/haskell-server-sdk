@@ -56,16 +56,22 @@ evaluateTyped client key context fallback wrap includeReason convert =
         if status /= Initialized
             then pure $ EvaluationDetail fallback Nothing $ EvaluationReasonError EvalErrorClientNotReady
             else
-                evaluateInternalClient client key context (wrap fallback) includeReason >>= \(detail, _) ->
+                evaluateInternalClient client key context (wrap fallback) includeReason (isJust . convert) >>= \(detail, _) ->
                     pure $
                         maybe
                             (EvaluationDetail fallback Nothing $ if isError (getField @"reason" detail) then (getField @"reason" detail) else EvaluationReasonError EvalErrorWrongType)
                             (setValue detail)
                             (convert $ getField @"value" detail)
 
-evaluateInternalClient :: Client -> Text -> Context -> Value -> Bool -> IO (EvaluationDetail Value, Maybe [Text])
-evaluateInternalClient _ _ (Invalid _) fallback _ = pure $ (errorDefault EvalErrorInvalidContext fallback, Nothing)
-evaluateInternalClient client key context fallback includeReason = do
+-- | Evaluates a flag and records the analytics events for the evaluation.
+--
+-- The last argument tells if a value has the type that the caller requested.
+-- The check occurs before the SDK makes the event. If the value has the wrong
+-- type, the event and the result contain the default value, no variation index,
+-- and a WRONG_TYPE reason.
+evaluateInternalClient :: Client -> Text -> Context -> Value -> Bool -> (Value -> Bool) -> IO (EvaluationDetail Value, Maybe [Text])
+evaluateInternalClient _ _ (Invalid _) fallback _ _ = pure $ (errorDefault EvalErrorInvalidContext fallback, Nothing)
+evaluateInternalClient client key context fallback includeReason hasExpectedType = do
     (detail, unknown, events, prereqs) <-
         getFlagC (getField @"store" client) key >>= \case
             Left err -> do
@@ -76,7 +82,7 @@ evaluateInternalClient client key context fallback includeReason = do
                 pure (errorDefault EvalErrorFlagNotFound fallback, True, pure event, Nothing)
             Right (Just flag) -> do
                 (detail, events, prereqs) <- evaluateDetail flag context HS.empty $ getField @"store" client
-                let detail' = setFallback detail fallback
+                let detail' = checkType $ setFallback detail fallback
                 pure
                     ( detail'
                     , False
@@ -93,6 +99,12 @@ evaluateInternalClient client key context fallback includeReason = do
                     )
     processEvalEvents (getField @"config" client) (getField @"events" client) context includeReason events unknown
     pure (detail, prereqs)
+  where
+    -- A result without a variation index already contains the default value.
+    checkType detail
+        | isJust (getField @"variationIndex" detail) && not (hasExpectedType $ getField @"value" detail) =
+            EvaluationDetail fallback Nothing $ EvaluationReasonError EvalErrorWrongType
+        | otherwise = detail
 
 getOffValue :: Flag -> EvaluationReason -> EvaluationDetail Value
 getOffValue flag reason = case getField @"offVariation" flag of
