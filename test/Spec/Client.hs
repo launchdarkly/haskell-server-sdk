@@ -1,6 +1,8 @@
 module Spec.Client (allTests) where
 
+import Control.Concurrent (killThread)
 import Control.Concurrent.MVar (readMVar)
+import Control.Monad (forM_)
 import Data.Aeson (Value (..))
 import Data.Function ((&))
 import Data.Generics.Product (getField)
@@ -12,7 +14,7 @@ import LaunchDarkly.Server.Client
 import LaunchDarkly.Server.Client.Internal (Status (Initialized), setStatus)
 import LaunchDarkly.Server.Config
 import LaunchDarkly.Server.Context
-import LaunchDarkly.Server.Events (BaseEvent (..), EventType (..), processSummary)
+import LaunchDarkly.Server.Events (EventType (..), processSummary)
 import LaunchDarkly.Server.Features (Flag (..), VariationOrRollout (..))
 import LaunchDarkly.Server.Store.Internal
 
@@ -57,6 +59,9 @@ testWrongTypeEventRecordsDefaultValue = TestCase $ do
                 , fallthrough = VariationOrRollout {variation = Just 0, rollout = Nothing}
                 }
     client <- makeClient config
+    -- Stop the event thread before the evaluation. The thread flushes the event queue when it starts,
+    -- and that flush can remove the events that this test reads.
+    forM_ (getField @"eventThreadPair" client) $ \(thread, sync) -> killThread thread >> readMVar sync
     initializeStore (getField @"store" client) (singleton "flag" flag) mempty
     setStatus client Initialized
 
