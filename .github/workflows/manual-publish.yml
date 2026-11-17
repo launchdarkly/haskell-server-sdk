@@ -17,7 +17,7 @@ jobs:
       attestations: write
 
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
 
       - uses: ./.github/actions/setup-cache
 
@@ -27,7 +27,7 @@ jobs:
         with:
           token: ${{secrets.GITHUB_TOKEN}}
 
-      - uses: launchdarkly/gh-actions/actions/release-secrets@release-secrets-v1.2.0
+      - uses: launchdarkly/gh-actions/actions/release-secrets@release-secrets-v1.2.1
         name: "Get Hackage token"
         with:
           aws_assume_role: ${{ vars.AWS_ROLE_ARN }}

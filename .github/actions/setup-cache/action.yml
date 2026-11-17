@@ -13,7 +13,7 @@ inputs:
 runs:
   using: composite
   steps:
-    - uses: actions/cache@v4
+    - uses: actions/cache@v6
       name: Cache ~/.stack
       with:
         path: ~/.stack
@@ -21,7 +21,7 @@ runs:
         restore-keys: |
           ${{ runner.os }}-${{ runner.arch }}-stack-global-${{ inputs.resolver }}-
 
-    - uses: actions/cache@v4
+    - uses: actions/cache@v6
       name: Cache .stack-work
       with:
         path: .stack-work
@@ -30,7 +30,7 @@ runs:
           ${{ runner.os }}-${{ runner.arch }}-stack-work-${{ inputs.resolver }}-
 
     - name: Cache ~/.cabal/packages, ~/.cabal/store and dist-newstyle
-      uses: actions/cache@v4
+      uses: actions/cache@v6
       with:
         path: |
           ~/.cabal/packages

@@ -19,7 +19,7 @@ runs:
     - uses: ./.github/actions/use-default-linker
 
     - name: Cache ~/.cabal/packages, ~/.cabal/store and dist-newstyle
-      uses: actions/cache@v4
+      uses: actions/cache@v6
       with:
         path: |
           ~/.cabal/packages
@@ -28,7 +28,7 @@ runs:
         key: ${{ runner.os }}-${{ inputs.ghc-version }}-${{ hashFiles('**/*.cabal', '**/cabal.project', '**/cabal.project.freeze') }}
         restore-keys: ${{ runner.os }}-${{ inputs.ghc-version }}-
 
-    - uses: actions/checkout@v4
+    - uses: actions/checkout@v7
       with:
         ref: ${{ inputs.branch }}
 
