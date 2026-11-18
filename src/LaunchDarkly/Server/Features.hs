@@ -43,7 +43,7 @@ instance FromJSON Rule where
         clauses <- o .: "clauses"
         variation <- o .:? "variation"
         rollout <- o .:? "rollout"
-        trackEvents <- o .: "trackEvents"
+        trackEvents <- o .:? "trackEvents" .!= False
         pure
             Rule
                 { id = fromMaybe "" id
@@ -185,14 +185,14 @@ instance FromJSON Flag where
         key <- obj .: "key"
         version <- obj .: "version"
         on <- obj .: "on"
-        trackEvents <- obj .: "trackEvents"
-        trackEventsFallthrough <- obj .: "trackEventsFallthrough"
-        deleted <- obj .: "deleted"
-        prerequisites <- obj .: "prerequisites"
-        salt <- obj .: "salt"
-        targets <- obj .: "targets"
+        trackEvents <- obj .:? "trackEvents" .!= False
+        trackEventsFallthrough <- obj .:? "trackEventsFallthrough" .!= False
+        deleted <- obj .:? "deleted" .!= False
+        prerequisites <- obj .:? "prerequisites" .!= mempty
+        salt <- obj .:? "salt" .!= ""
+        targets <- obj .:? "targets" .!= mempty
         contextTargets <- obj .:? "contextTargets" .!= mempty
-        rules <- obj .: "rules"
+        rules <- obj .:? "rules" .!= mempty
         fallthrough <- obj .: "fallthrough"
         offVariation <- obj .:? "offVariation"
         variations <- obj .: "variations"
@@ -236,7 +236,7 @@ data SegmentRule = SegmentRule
 
 instance FromJSON SegmentRule where
     parseJSON = withObject "SegmentRule" $ \o -> do
-        id <- o .: "id"
+        id <- o .:? "id" .!= ""
         clauses <- o .: "clauses"
         weight <- o .:? "weight"
         bucketBy <- o .:? "bucketBy"
@@ -254,7 +254,20 @@ data Segment = Segment
     , version :: !Natural
     , deleted :: !Bool
     }
-    deriving (Generic, FromJSON, ToJSON, Show, Eq)
+    deriving (Generic, ToJSON, Show, Eq)
+
+instance FromJSON Segment where
+    parseJSON = withObject "Segment" $ \o -> do
+        key <- o .: "key"
+        included <- o .:? "included" .!= mempty
+        includedContexts <- o .:? "includedContexts" .!= mempty
+        excluded <- o .:? "excluded" .!= mempty
+        excludedContexts <- o .:? "excludedContexts" .!= mempty
+        salt <- o .:? "salt" .!= ""
+        rules <- o .:? "rules" .!= mempty
+        version <- o .: "version"
+        deleted <- o .:? "deleted" .!= False
+        pure Segment {..}
 
 data SegmentTarget = SegmentTarget
     { values :: !(HashSet Text)
@@ -275,7 +288,7 @@ instance FromJSON Clause where
     parseJSON = withObject "Clause" $ \o -> do
         attr <- o .: "attribute"
         kind <- o .:? "contextKind"
-        negate <- o .: "negate"
+        negate <- o .:? "negate" .!= False
         op <- o .: "op"
         values <- o .: "values"
 
