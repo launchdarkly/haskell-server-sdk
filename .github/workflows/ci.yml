@@ -96,7 +96,7 @@ jobs:
         with:
           fail-on: warning
 
-      - uses: haskell-actions/run-fourmolu@5a9f41fa092841e52e6c57dde5600e586fa766a4 # v10
+      - uses: haskell-actions/run-fourmolu@1b9df64b784203126500372730b9725c97e4040b # v13
         with:
           version: "0.10.1.0"
           pattern: |
