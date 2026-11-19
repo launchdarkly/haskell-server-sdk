@@ -80,4 +80,4 @@ eventConfig (Just p) c =
                 updateConfig LD.configSetAllAttributesPrivate (getField @"allAttributesPrivate" p) $
                     updateConfig LD.configSetPrivateAttributeNames ((S.map R.makeReference) <$> getField @"globalPrivateAttributes" p) $
                         updateConfig LD.configSetOmitAnonymousContexts (getField @"omitAnonymousContexts" p) $
-                            updateConfig LD.configSetFlushIntervalSeconds (getField @"flushIntervalMs" p) c
+                            updateConfig LD.configSetFlushIntervalSeconds ((`quotNatural` 1_000) <$> getField @"flushIntervalMs" p) c
