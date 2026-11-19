@@ -159,7 +159,7 @@ processDelete dataSourceUpdates value = case eitherDecode value :: Either String
         | T.isPrefixOf "/segments/" path -> logDelete "segment" path (dataSourceUpdatesDeleteSegment dataSourceUpdates (T.drop 10 path) version)
         | otherwise -> do
             $(logError) "unknown delete path"
-            pure False
+            pure True
     Left err -> do
         $(logError) $ T.append "failed to parse delete" (T.pack err)
         pure False
