@@ -36,13 +36,12 @@ processSend manager req =
             checkAuthorization response
             let code = responseStatus response
                 serverTime = getServerTime response
-             in $(logWarn) (T.append "@@@ server time from LD was determined to be: " $ T.pack $ show serverTime)
-                    >> if code < status400
-                        then pure (True, serverTime)
-                        else
-                            if isHttpUnrecoverable $ statusCode $ code
-                                then $(logWarn) (T.append "got non recoverable event post response dropping payload: " $ T.pack $ show code) >> pure (True, serverTime)
-                                else pure (False, serverTime)
+            if code < status400
+                then pure (True, serverTime)
+                else
+                    if isHttpUnrecoverable $ statusCode $ code
+                        then $(logWarn) (T.append "got non recoverable event post response dropping payload: " $ T.pack $ show code) >> pure (True, serverTime)
+                        else pure (False, serverTime)
 
 setEventHeaders :: Request -> Request
 setEventHeaders request =
