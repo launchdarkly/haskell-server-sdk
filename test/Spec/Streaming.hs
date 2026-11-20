@@ -13,8 +13,9 @@ import Data.ByteString (ByteString)
 import qualified Data.ByteString as B
 import qualified Data.ByteString.Char8 as B8
 import qualified Data.ByteString.Lazy as L
+import Data.Generics.Product (getField)
 import Data.IORef (IORef, atomicModifyIORef', newIORef, readIORef)
-import Data.Maybe (isJust)
+import Data.Maybe (fromMaybe, isJust)
 import Data.Text (Text)
 import qualified Data.Text as T
 import Data.Text.Encoding (decodeUtf8With)
@@ -52,6 +53,7 @@ allTests =
         , TestLabel "does not retry an unauthorized SDK key" testUnauthorizedDoesNotRetry
         , TestLabel "logs an invalid stream URI and stops" testLogsInvalidUri
         , TestLabel "decodes UTF-8 split across reads" testUtf8SplitAcrossReads
+        , TestLabel "ignores a delete with an unknown path kind and keeps reading" testIgnoresDeleteWithUnknownPath
         , TestLabel "backoff stays at the cap after many attempts" testBackoffCeiling
         , TestLabel "a connection open for 60 s resets the backoff" testRetryAttempt
         ]
@@ -318,6 +320,28 @@ testUtf8SplitAcrossReads = TestCase $ do
     run <- runStream [[responseHead, chunk beforeAccent, chunk (B.take 1 fromAccent), chunk (B.drop 1 fromAccent)]]
     assertInitialized run
     assertEqual "connections" 1 (connections run)
+
+-- The patch after the delete must be applied, so the stream must keep reading after the delete.
+testIgnoresDeleteWithUnknownPath :: Test
+testIgnoresDeleteWithUnknownPath = TestCase $ do
+    patched <- newIORef []
+    bodyReads <- newIORef [deleteEvent, patchEvent]
+    let body = fromMaybe B.empty <$> pop bodyReads
+        updates =
+            DataSourceUpdates
+                { dataSourceUpdatesInit = \_ _ -> pure (Right ())
+                , dataSourceUpdatesInsertFlag = \flag -> atomicModifyIORef' patched (\keys -> (keys ++ [getField @"key" flag], Right ()))
+                , dataSourceUpdatesInsertSegment = const $ pure (Right ())
+                , dataSourceUpdatesDeleteFlag = \_ _ -> pure (Right ())
+                , dataSourceUpdatesDeleteSegment = \_ _ -> pure (Right ())
+                , dataSourceUpdatesSetStatus = const $ pure ()
+                }
+    void $ timeout 5_000_000 $ runLoggingT (readStream 1_000_000 body updates) (\_ _ _ _ -> pure ())
+    keys <- readIORef patched
+    assertEqual "flags patched after the delete" ["flag"] keys
+  where
+    deleteEvent = "event: delete\ndata: {\"path\":\"/cats/Jack\",\"version\":1}\n\n"
+    patchEvent = "event: patch\ndata: " <> L.toStrict (encode $ object ["path" .= ("/flags/flag" :: Text), "data" .= makeTestFlag "flag" 2]) <> "\n\n"
 
 testKillThreadStopsStream :: Test
 testKillThreadStopsStream = TestCase $ do
