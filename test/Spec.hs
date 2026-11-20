@@ -16,6 +16,7 @@ import qualified Spec.Integrations.FileData
 import qualified Spec.Integrations.TestData
 import qualified Spec.Operators
 import qualified Spec.PersistentDataStore
+import qualified Spec.Polling
 import qualified Spec.Reference
 import qualified Spec.Segment
 import qualified Spec.Store
@@ -41,6 +42,7 @@ main = do
                 , Spec.Segment.allTests
                 , Spec.Store.allTests
                 , Spec.PersistentDataStore.allTests
+                , Spec.Polling.allTests
                 , Spec.Streaming.allTests
                 , TestLabel "Integration.FileData" Spec.Integrations.FileData.allTests
                 , TestLabel "Integration.TestData" Spec.Integrations.TestData.allTests

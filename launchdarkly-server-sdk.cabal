@@ -146,6 +146,7 @@ test-suite haskell-server-sdk-test
       Spec.Integrations.TestData
       Spec.Operators
       Spec.PersistentDataStore
+      Spec.Polling
       Spec.Reference
       Spec.Segment
       Spec.Store

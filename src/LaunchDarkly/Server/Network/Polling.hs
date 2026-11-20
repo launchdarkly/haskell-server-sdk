@@ -1,11 +1,13 @@
 module LaunchDarkly.Server.Network.Polling (pollingThread) where
 
 import Control.Concurrent (threadDelay)
+import Control.Exception (SomeAsyncException, SomeException, fromException, tryJust)
 import Control.Monad.Catch (MonadMask, MonadThrow)
 import Control.Monad.IO.Class (MonadIO, liftIO)
 import Control.Monad.Logger (MonadLogger, logDebug, logError)
 import Data.Aeson (FromJSON (..), eitherDecode)
 import Data.Generics.Product (getField)
+import Data.Maybe (isJust)
 import Data.Text (Text)
 import qualified Data.Text as T
 import GHC.Generics (Generic)
@@ -14,7 +16,7 @@ import Network.HTTP.Types.Status (Status (statusCode), ok200)
 
 import LaunchDarkly.AesonCompat (KeyMap)
 import LaunchDarkly.Server.Features (Flag, Segment)
-import LaunchDarkly.Server.Network.Common (checkAuthorization, handleUnauthorized, isHttpUnrecoverable, tryHTTP)
+import LaunchDarkly.Server.Network.Common (checkAuthorization, handleUnauthorized, isHttpUnrecoverable)
 
 import Data.ByteString.Lazy (ByteString)
 import GHC.Natural (Natural)
@@ -29,9 +31,15 @@ data PollingResponse = PollingResponse
     }
     deriving (Generic, FromJSON, Show)
 
+-- `httpLbs` can throw exceptions that are not an `HttpException`, such as a socket reset while it reads the body.
+-- This catches all of them, so that a failed poll does not stop the polling thread.
+-- Async exceptions stay uncaught so `close` can stop the thread.
+tryPoll :: IO a -> IO (Either SomeException a)
+tryPoll = tryJust $ \e -> if isJust (fromException @SomeAsyncException e) then Nothing else Just e
+
 processPoll :: (MonadIO m, MonadLogger m, MonadMask m, MonadThrow m) => Manager -> DataSourceUpdates -> Request -> m Bool
 processPoll manager dataSourceUpdates request =
-    liftIO (tryHTTP $ httpLbs request manager) >>= \case
+    liftIO (tryPoll $ httpLbs request manager) >>= \case
         (Left err) -> do
             $(logError) (T.pack $ show err)
             pure True
