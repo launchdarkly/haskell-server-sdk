@@ -12,7 +12,7 @@ inputs:
 runs:
   using: composite
   steps:
-    - uses: haskell-actions/setup@f9150cb1d140e9a9271700670baa38991e6fa25c # v2
+    - uses: haskell-actions/setup@0f8e8c99d88aeb3fbfd523f1ef2c6f762d10d64d # v2
       with:
         ghc-version: ${{ inputs.ghc-version }}
 
