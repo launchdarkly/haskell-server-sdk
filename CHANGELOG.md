@@ -2,6 +2,17 @@
 
 All notable changes to the LaunchDarkly Haskell Server-side SDK will be documented in this file. This project adheres to [Semantic Versioning](http://semver.org).
 
+## [4.6.3](https://github.com/launchdarkly/haskell-server-sdk/compare/4.6.2...4.6.3) (2026-11-20)
+
+
+### Bug Fixes
+
+* Accept flag and segment data that omits optional properties or sets them to null ([#134](https://github.com/launchdarkly/haskell-server-sdk/issues/134)) ([73b32f1](https://github.com/launchdarkly/haskell-server-sdk/commit/73b32f15d5f115fb324bb1309ffbe4409859cca2))
+* Ignore a stream delete event with an unknown path kind instead of reconnecting ([#135](https://github.com/launchdarkly/haskell-server-sdk/issues/135)) ([07ae248](https://github.com/launchdarkly/haskell-server-sdk/commit/07ae24826472f4bda70bfebc18137e8ed975d5ac))
+* Keep polling after a connection reset while reading a poll response ([#137](https://github.com/launchdarkly/haskell-server-sdk/issues/137)) ([013fe8b](https://github.com/launchdarkly/haskell-server-sdk/commit/013fe8be18bef3266744da9d9f8b412c2abad01f))
+* Record the default value in analytics events when a typed evaluation has the wrong type ([#131](https://github.com/launchdarkly/haskell-server-sdk/issues/131)) ([6cd202a](https://github.com/launchdarkly/haskell-server-sdk/commit/6cd202a7bc95770046cb37a2b4a003546e238170))
+* Stop logging the server time as a warning on every event delivery ([#139](https://github.com/launchdarkly/haskell-server-sdk/issues/139)) ([b3171cd](https://github.com/launchdarkly/haskell-server-sdk/commit/b3171cd76b8828be0ddf67e9e367c644aacd9f61))
+
 ## [4.6.2](https://github.com/launchdarkly/haskell-server-sdk/compare/4.6.1...4.6.2) (2026-11-16)
 
 
